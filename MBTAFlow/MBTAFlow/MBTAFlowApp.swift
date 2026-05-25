@@ -6,27 +6,20 @@
 //
 
 import SwiftUI
+import ComposableArchitecture
 import SwiftData
 
 @main
-struct MBTAFlowApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+struct FoodSizer: App {
+    
+    static let store = Store(initialState: RootFeature.State()) {
+        RootFeature()
+      }
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView(store:FoodSizer.store)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: PairedScanSession.self) //initializes database for app
     }
 }
+

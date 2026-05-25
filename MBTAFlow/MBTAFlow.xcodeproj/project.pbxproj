@@ -6,14 +6,66 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		96318B542FC1FAEA00534049 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 96318B532FC1FAEA00534049 /* ComposableArchitecture */; };
+		96318B9B2FC4BC4600534049 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96318B9A2FC4BC4600534049 /* WidgetKit.framework */; };
+		96318B9D2FC4BC4600534049 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96318B9C2FC4BC4600534049 /* SwiftUI.framework */; };
+		96318BAE2FC4BC4700534049 /* MBTAFlowWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96318B982FC4BC4600534049 /* MBTAFlowWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		96318BAC2FC4BC4700534049 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96318B3A2FC1F7FA00534049 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96318B972FC4BC4600534049;
+			remoteInfo = MBTAFlowWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		96318BB32FC4BC4700534049 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				96318BAE2FC4BC4700534049 /* MBTAFlowWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		96318B422FC1F7FA00534049 /* MBTAFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MBTAFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		96318B982FC4BC4600534049 /* MBTAFlowWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MBTAFlowWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		96318B9A2FC4BC4600534049 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		96318B9C2FC4BC4600534049 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96318BAF2FC4BC4700534049 /* Exceptions for "MBTAFlowWidget" folder in "MBTAFlowWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 96318B972FC4BC4600534049 /* MBTAFlowWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		96318B442FC1F7FA00534049 /* MBTAFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MBTAFlow;
+			sourceTree = "<group>";
+		};
+		96318B9E2FC4BC4600534049 /* MBTAFlowWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96318BAF2FC4BC4700534049 /* Exceptions for "MBTAFlowWidget" folder in "MBTAFlowWidgetExtension" target */,
+			);
+			path = MBTAFlowWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +75,16 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				96318B542FC1FAEA00534049 /* ComposableArchitecture in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96318B952FC4BC4600534049 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				96318B9D2FC4BC4600534049 /* SwiftUI.framework in Frameworks */,
+				96318B9B2FC4BC4600534049 /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +95,8 @@
 			isa = PBXGroup;
 			children = (
 				96318B442FC1F7FA00534049 /* MBTAFlow */,
+				96318B9E2FC4BC4600534049 /* MBTAFlowWidget */,
+				96318B992FC4BC4600534049 /* Frameworks */,
 				96318B432FC1F7FA00534049 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +105,18 @@
 			isa = PBXGroup;
 			children = (
 				96318B422FC1F7FA00534049 /* MBTAFlow.app */,
+				96318B982FC4BC4600534049 /* MBTAFlowWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		96318B992FC4BC4600534049 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				96318B9A2FC4BC4600534049 /* WidgetKit.framework */,
+				96318B9C2FC4BC4600534049 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,20 +129,45 @@
 				96318B3E2FC1F7FA00534049 /* Sources */,
 				96318B3F2FC1F7FA00534049 /* Frameworks */,
 				96318B402FC1F7FA00534049 /* Resources */,
+				96318BB32FC4BC4700534049 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				96318BAD2FC4BC4700534049 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				96318B442FC1F7FA00534049 /* MBTAFlow */,
 			);
 			name = MBTAFlow;
 			packageProductDependencies = (
+				96318B532FC1FAEA00534049 /* ComposableArchitecture */,
 			);
 			productName = MBTAFlow;
 			productReference = 96318B422FC1F7FA00534049 /* MBTAFlow.app */;
 			productType = "com.apple.product-type.application";
+		};
+		96318B972FC4BC4600534049 /* MBTAFlowWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96318BB02FC4BC4700534049 /* Build configuration list for PBXNativeTarget "MBTAFlowWidgetExtension" */;
+			buildPhases = (
+				96318B942FC4BC4600534049 /* Sources */,
+				96318B952FC4BC4600534049 /* Frameworks */,
+				96318B962FC4BC4600534049 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				96318B9E2FC4BC4600534049 /* MBTAFlowWidget */,
+			);
+			name = MBTAFlowWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = MBTAFlowWidgetExtension;
+			productReference = 96318B982FC4BC4600534049 /* MBTAFlowWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -83,6 +182,9 @@
 					96318B412FC1F7FA00534049 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					96318B972FC4BC4600534049 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = 96318B3D2FC1F7FA00534049 /* Build configuration list for PBXProject "MBTAFlow" */;
@@ -94,18 +196,29 @@
 			);
 			mainGroup = 96318B392FC1F7FA00534049;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96318B522FC1FAEA00534049 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 96318B432FC1F7FA00534049 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				96318B412FC1F7FA00534049 /* MBTAFlow */,
+				96318B972FC4BC4600534049 /* MBTAFlowWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		96318B402FC1F7FA00534049 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96318B962FC4BC4600534049 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +235,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		96318B942FC4BC4600534049 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		96318BAD2FC4BC4700534049 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96318B972FC4BC4600534049 /* MBTAFlowWidgetExtension */;
+			targetProxy = 96318BAC2FC4BC4700534049 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		96318B4D2FC1F7FB00534049 /* Debug */ = {
@@ -273,7 +401,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -305,6 +433,66 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		96318BB12FC4BC4700534049 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3H2TK6P8A9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MBTAFlowWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MBTAFlowWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adampost.MBTAFlow.MBTAFlowWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		96318BB22FC4BC4700534049 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3H2TK6P8A9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MBTAFlowWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MBTAFlowWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adampost.MBTAFlow.MBTAFlowWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -331,7 +519,35 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		96318BB02FC4BC4700534049 /* Build configuration list for PBXNativeTarget "MBTAFlowWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96318BB12FC4BC4700534049 /* Debug */,
+				96318BB22FC4BC4700534049 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		96318B522FC1FAEA00534049 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.25.5;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		96318B532FC1FAEA00534049 /* ComposableArchitecture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96318B522FC1FAEA00534049 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			productName = ComposableArchitecture;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 96318B3A2FC1F7FA00534049 /* Project object */;
 }
