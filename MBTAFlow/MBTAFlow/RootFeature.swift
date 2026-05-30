@@ -12,25 +12,23 @@ struct RootFeature {
     @ObservableState
     struct State: Equatable {
         var starter = RouteStarterFeature.State()
-        var setter = RouteSetterFeature.State()
+      
     }
     
-    enum Tab { case starter, setter }
-    
     enum Action {
-        case starterTab(RouteStarterFeature.Action)
-        case setterTab(RouteSetterFeature.Action)
+       case starterTab(RouteStarterFeature.Action)
+        
     }
     
     var body: some ReducerOf<Self> {
         Scope(state: \.starter, action: \.starterTab) {
-            RouteStarterFeature()
-        }
-        Scope(state: \.setter, action: \.setterTab) {
-            RouteSetterFeature()
-        }
+          RouteStarterFeature()
+       }
         Reduce { state, action in
-            return .none
+            switch action{
+            case .starterTab:
+                return .none
+            }
         }
     }
 }
