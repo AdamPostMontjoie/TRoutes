@@ -1,5 +1,5 @@
 //
-//  ActiveRouteView.swift
+//  ActiveRouteDisplayView.swift
 //  MBTAFlow
 //
 //  Created by Adam Post on 5/25/26.
@@ -8,16 +8,15 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct ActiveRouteView: View {
-    let store: StoreOf<ActiveRouteFeature>
+//this needs to look at least somewhat like the liveactivity
 
+struct ActiveRouteDisplayView: View {
+    let store: StoreOf<ActiveRouteDisplayFeature>
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(store.title)
+            Text(store.route?.name ?? "")
                 .font(.headline)
-            Text(store.subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()

@@ -32,10 +32,10 @@ struct RouteStarterView: View {
                 }
 
                 if store.isActiveRoutePresented {
-                    ActiveRouteView(
+                    ActiveRouteDisplayView(
                         store: store.scope(
-                            state: \.activeRoute,
-                            action: \.activeRoute
+                            state: \.activeRouteDisplay,
+                            action: \.activeRouteDisplay
                         )
                     )
                     .padding(.top, 8)

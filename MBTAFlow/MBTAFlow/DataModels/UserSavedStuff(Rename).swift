@@ -12,6 +12,7 @@ struct Stop: Codable, Equatable,Identifiable {
     var longitude: String
     var latitude: String
     var lastStop: Bool
+    var address: String // display on review feature
 }
 
 struct RouteStruct:Equatable, Identifiable{

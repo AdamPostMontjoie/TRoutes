@@ -12,26 +12,26 @@ import Foundation
 struct RouteStarterFeature {
     @ObservableState
     struct State: Equatable {
-        var activeRoute = ActiveRouteFeature.State()
+        var activeRouteDisplay = ActiveRouteDisplayFeature.State()
         var createRoute = CreateRouteFeature.State()
         var routeSelector = SelectorFeature.State()
         var isCreateRoutePresented = false
         var isActiveRoutePresented = false
+        var activeRoute:RouteState?
     }
     
     enum Action:Equatable {
-        case activeRoute(ActiveRouteFeature.Action)
+        case activeRouteDisplay(ActiveRouteDisplayFeature.Action)
         case createRoute(CreateRouteFeature.Action)
         case onCreateButtonTapped
         case onCreateRouteDismissed
-        case onDeleteButtonTapped(UUID)
         case routeSelector(SelectorFeature.Action)
         
     }
     
     var body: some ReducerOf<Self> {
-        Scope(state: \.activeRoute, action: \.activeRoute) {
-            ActiveRouteFeature()
+        Scope(state: \.activeRouteDisplay, action: \.activeRouteDisplay) {
+            ActiveRouteDisplayFeature()
         }
         Scope(state: \.createRoute, action: \.createRoute) {
             CreateRouteFeature()
@@ -41,17 +41,20 @@ struct RouteStarterFeature {
         }
         Reduce { state, action in
             switch action {
-            case .activeRoute:
-                return .none
-            case .createRoute:
-                return .none
+            
             case .onCreateButtonTapped:
                 state.isCreateRoutePresented = true
                 return .none
             case .onCreateRouteDismissed:
                 state.isCreateRoutePresented = false
                 return .none
-            case .onDeleteButtonTapped(_):
+            //this starts the route from inside the app, most of the logic is kicked off here
+            case let .routeSelector(.delegate(.startRoute(routeId))):
+                state.isActiveRoutePresented = true
+                return .none
+            case .activeRouteDisplay:
+                return .none
+            case .createRoute:
                 return .none
             case .routeSelector:
                 return .none

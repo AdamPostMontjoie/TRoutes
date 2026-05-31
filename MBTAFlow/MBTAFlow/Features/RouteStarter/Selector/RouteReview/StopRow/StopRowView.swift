@@ -18,17 +18,19 @@ struct StopRowView: View {
                     .font(.body)
                 
                 Spacer()
-                
-                HStack(spacing: 8) { // Adds clean spacing between the two icons
+            
+                HStack(spacing: 0) { // Set spacing to 0 because the padding adds the space natively
                     // Edit Button
                     Button {
                         store.send(.editStopButtonTapped)
                     } label: {
                         Image(systemName: "pencil")
-                            .font(.title3) // Slightly larger icon
+                            .font(.title3)
                             .foregroundStyle(.blue)
+                            .padding(10) // Expands the hit target
+                            .contentShape(Rectangle()) // Makes the transparent padding clickable
                     }
-                    .buttonStyle(AnimatedIconButtonStyle())
+                    .buttonStyle(.borderless) // The SwiftUI standard for in-list buttons
                     
                     // Delete Button
                     Button {
@@ -37,35 +39,17 @@ struct StopRowView: View {
                         Image(systemName: "trash")
                             .font(.title3)
                             .foregroundStyle(.red)
+                            .padding(10)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(AnimatedIconButtonStyle())
+                    .buttonStyle(.borderless)
                 }
             }
             
-            Text("Lat: \(store.stop.latitude), Lon: \(store.stop.longitude)")
+            Text(store.stop.address)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
-    }
-}
-
-// 1. Define the custom style
-struct AnimatedIconButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            // 2. Padding INSIDE the label expands the invisible clickable area
-            .padding(10)
-            // 3. Defines the clickable shape so tapping near the icon works
-            .contentShape(Circle())
-            // 4. Subtle gray highlight behind the icon when actively pressed
-            .background(
-                Circle()
-                    .fill(Color.gray.opacity(configuration.isPressed ? 0.15 : 0.0))
-            )
-            // 5. Shrinks the button by 10% when pressed for that "bouncy" feel
-            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
-            // 6. Applies a smooth, snappy physics animation to the scale and background changes
-            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
     }
 }
