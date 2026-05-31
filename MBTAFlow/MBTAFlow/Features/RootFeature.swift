@@ -12,7 +12,7 @@ struct RootFeature {
     @ObservableState
     struct State: Equatable {
         var starter = RouteStarterFeature.State()
-      
+        
     }
     
     enum Action {

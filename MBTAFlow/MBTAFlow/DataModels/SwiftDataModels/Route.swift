@@ -13,12 +13,14 @@ final class Route{
     var stops: [Stop]
     var name: String
     var routeID: UUID
+    var timeStamp: Date
 
-    init(routeId: UUID, name: String, stops: [Stop])
+    init(routeId: UUID, name: String, stops: [Stop], timeStamp:Date)
     {
         self.routeID = routeId
         self.name = name
         self.stops = stops
+        self.timeStamp = timeStamp
     }
     
 }

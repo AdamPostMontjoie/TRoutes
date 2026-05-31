@@ -19,6 +19,7 @@ struct MBTAClient {
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { word in
+            //predictions
             return word
         },
         fetchDirections: { word in
@@ -34,7 +35,7 @@ extension MBTAClient:DependencyKey {
             return "routes"
         }
     )
-    static let testValue: Self = .liveValue //TODO figure out what the hell this is even about
+    static let testValue: Self = .liveValue //TODO figure out what the hell this is even about later
 }
 
 extension DependencyValues {

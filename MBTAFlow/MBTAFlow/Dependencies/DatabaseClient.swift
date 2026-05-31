@@ -21,9 +21,10 @@ extension DatabaseClient: DependencyKey {
         },
         editRouteName: { newName in
             
+            
         },
         deleteRoute: { routeId in
-            
+            //remove from swiftdata
         }
     )
 

@@ -13,8 +13,10 @@ struct Stop: Codable, Equatable {
     var lastStop: Bool
 }
 
-struct RouteStruct {
+struct RouteStruct:Equatable, Identifiable{
     var stops: [Stop]
+   var id: UUID { routeId }
     var routeId: UUID
     var name:String
+    var timeStamp: Date
 }
