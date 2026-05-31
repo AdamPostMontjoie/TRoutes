@@ -11,29 +11,32 @@ import SwiftUI
 struct CreateRouteView: View {
     @Bindable var store: StoreOf<CreateRouteFeature>
 
-    @Environment(\.dismiss) private var dismiss
-
+    @Environment(\.dismiss) private var dismiss //wat dis
+    
+    
+    //we might want some kind of display on how many stops are previous on the top
+    //with dots? numbers? "Stop 3"?
     var body: some View {
         NavigationStack {
             Form {
                 Section(header:
-                    HStack {
-                        Text("Mode of Transit")
-                        Spacer() // Pushes the button all the way to the right
-                            
-                        // Only show the undo button if they have already made a selection
-                        if store.selectedType != nil {
-                            Button {
-                                // Send the reset action to the Reducer
-                                store.send(.resetTypeSelection)
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                            }
-                            .textCase(nil)
+                            HStack {
+                    Text("Mode of Transit")
+                    Spacer() // Pushes the button all the way to the right
+                    
+                    // Only show the undo button if they have already made a selection
+                    if store.selectedType != nil {
+                        Button {
+                            // Send the reset action to the Reducer
+                            store.send(.resetTypeSelection)
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.blue)
                         }
+                        .textCase(nil)
                     }
+                }
                 ) {
                     Picker("Transit Type", selection: Binding(
                         get: { store.selectedType },
@@ -56,23 +59,23 @@ struct CreateRouteView: View {
                 //invisible to start, skipped on some
                 if store.currentFormStep == .selectBranch || store.selectedBranch != nil {
                     Section(header:
-                        HStack {
-                            Text("Branch") //display line on bus?
-                            Spacer() // Pushes the button all the way to the right
-                                
-                            // Only show the undo button if they have already made a selection
-                            if store.selectedBranch != nil {
-                                Button {
-                                    // Send the reset action to the Reducer
-                                    store.send(.resetBranchSelection)
-                                } label: {
-                                    Image(systemName: "arrow.uturn.backward.circle.fill")
-                                        .font(.title3)
-                                        .foregroundStyle(.blue)
-                                }
-                                .textCase(nil)
+                                HStack {
+                        Text("Branch") //display line on bus?
+                        Spacer() // Pushes the button all the way to the right
+                        
+                        // Only show the undo button if they have already made a selection
+                        if store.selectedBranch != nil {
+                            Button {
+                                // Send the reset action to the Reducer
+                                store.send(.resetBranchSelection)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
                             }
+                            .textCase(nil)
                         }
+                    }
                     ) {
                         Picker("Branch", selection: Binding(
                             get: { store.selectedBranch },
@@ -96,23 +99,23 @@ struct CreateRouteView: View {
                 //direction. Also skipped on some? Investigate
                 if store.currentFormStep == .selectDirection || store.selectedDirection != nil {
                     Section(header:
-                        HStack {
-                            Text("Direction")
-                            Spacer() // Pushes the button all the way to the right
-                                
-                            // Only show the undo button if they have already made a selection
-                            if store.selectedDirection != nil {
-                                Button {
-                                    // Send the reset action to the Reducer
-                                    store.send(.resetDirectionSelection)
-                                } label: {
-                                    Image(systemName: "arrow.uturn.backward.circle.fill")
-                                        .font(.title3)
-                                        .foregroundStyle(.blue)
-                                }
-                                .textCase(nil)
+                                HStack {
+                        Text("Direction")
+                        Spacer() // Pushes the button all the way to the right
+                        
+                        // Only show the undo button if they have already made a selection
+                        if store.selectedDirection != nil {
+                            Button {
+                                // Send the reset action to the Reducer
+                                store.send(.resetDirectionSelection)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
                             }
+                            .textCase(nil)
                         }
+                    }
                     ) {
                         Picker("Direction", selection: Binding(
                             get: { store.selectedDirection },
@@ -127,7 +130,7 @@ struct CreateRouteView: View {
                             Text("Select a direction").tag(String?.none)
                             // Loop through the array in your state
                             ForEach(store.directionOptions, id: \.self) { direction in
-
+                                
                                 Text(direction).tag(String?.some(direction))
                             }
                         }.disabled(store.selectedDirection != nil)
@@ -148,23 +151,30 @@ struct CreateRouteView: View {
                             ForEach(store.stopOptions, id: \.self) { stop in
                                 Text(stop).tag(String?.some(stop))
                             }
-                        }.disabled(store.selectedStop != nil)
+                        } //.disabled(store.selectedStop != nil)
                     }
                 }
                 
-                if store.currentFormStep == .selectStop && store.selectedStop != nil{
+                if store.currentFormStep == .selectStop && store.selectedStop != nil {
                     Section {
                         HStack {
-                            Button("add another stop") {
+                            // Secondary Action: Transparent background with a tinted border/text
+                            Button("Add Another Stop") {
                                 store.send(.addStopButtonTapped)
                             }
-
+                            .buttonStyle(.bordered)
+                            .tint(.blue)
+                            
                             Spacer()
-
-                            Button("save route") {
+                            Button("Save Route") {
                                 store.send(.saveRouteButtonTapped)
                             }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.green)
                         }
+                        
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
                     }
                 }
             }

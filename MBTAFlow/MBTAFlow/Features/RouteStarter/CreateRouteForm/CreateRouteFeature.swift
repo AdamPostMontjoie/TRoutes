@@ -39,6 +39,7 @@ struct CreateRouteFeature {
         case directionSelected(String, String)
         case stopsLoaded(String)
         case stopSelected(String)
+        
         case resetTypeSelection
         case resetBranchSelection
         case resetDirectionSelection

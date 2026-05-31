@@ -6,7 +6,8 @@
 //
 import Foundation
 
-struct Stop: Codable, Equatable {
+struct Stop: Codable, Equatable,Identifiable {
+    var id = UUID()
     var stopName: String
     var longitude: String
     var latitude: String
@@ -15,7 +16,7 @@ struct Stop: Codable, Equatable {
 
 struct RouteStruct:Equatable, Identifiable{
     var stops: [Stop]
-   var id: UUID { routeId }
+    var id: UUID { routeId }
     var routeId: UUID
     var name:String
     var timeStamp: Date
