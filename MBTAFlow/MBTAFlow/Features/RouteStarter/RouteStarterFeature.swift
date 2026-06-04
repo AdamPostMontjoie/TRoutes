@@ -29,6 +29,7 @@ struct RouteStarterFeature {
         case routeSelector(SelectorFeature.Action)
         
         case locationUpdateReceived(LocationData)
+        case apiFailed
         
     }
     
@@ -54,9 +55,9 @@ struct RouteStarterFeature {
                 state.isCreateRoutePresented = false
                 return .none
             //this starts the route from inside the app, most of the logic is kicked off here
-            case let .routeSelector(.delegate(.startRoute(routeId))):
+            case let .routeSelector(.delegate(.startRoute(id))):
                 state.isActiveRoutePresented = true
-                guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.routeId == routeId }) else {
+                guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.id == id}) else {
                     return .none
                 }
                 state.activeRoute = RouteState(route:selectedRoute)
@@ -70,11 +71,15 @@ struct RouteStarterFeature {
                     }
                 }
             //this will update both the app state and the live activity when something changes
+            //this comes from core location, so boundary has been triggered
             case let .locationUpdateReceived(newLocation):
-                // 1. Update your logic
-                // e.g., state.activeRoute.checkIfArrived(at: newLocation)
+                //we need to determine where we are and what that means for the routestate
                 
-                // 2. Push the new state to the widget
+                //if on stop, left stop, need to set to next stop, we update state.activeRoute based on that
+                
+                //most of the time, we will need to call the mbtaclient to get the next times for whatever we need
+                
+                //also update the widget
                 if let activeRoute = state.activeRoute {
                     return .run { _ in
                         await liveActivityClient.updateActivity(activeRoute)
@@ -92,6 +97,9 @@ struct RouteStarterFeature {
                     await liveActivityClient.endActivity()
                     // Location client stream will automatically cancel when the effect ends
                 }
+            case .apiFailed:
+                print("error goes here")
+                return .none
             //does nothing
             case .activeRouteDisplay:
                 return .none
@@ -99,6 +107,7 @@ struct RouteStarterFeature {
                 return .none
             case .routeSelector:
                 return .none
+            
             }
         }
     }

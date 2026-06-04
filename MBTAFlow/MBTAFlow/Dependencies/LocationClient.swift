@@ -6,6 +6,7 @@
 //
 
 import ComposableArchitecture
+import CoreLocation
 
 //will probably need this to set the corelocation boundaries for each stop
 //interact with database client? interact with extension
@@ -32,8 +33,10 @@ extension LocationClient: DependencyKey {
             }
         },
         startMonitoring: { route in
+            
         },
         stopMonitoring: {
+            
         }
     )
 

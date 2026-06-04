@@ -35,8 +35,7 @@ enum TransitType: String, Codable, CaseIterable {
     
     var apiStrategy: RouteFetchStrategy {
         switch self {
-        // Group 1: The "Skip" types (Single Routes)
-        // You already know the exact Route ID the API needs. Skip to Direction.
+        // Routes that do not require branch definition (change route ids)
         case .redLine:
             return .skipToDirection(routeId: "Red")
         case .orangeLine:
@@ -46,8 +45,7 @@ enum TransitType: String, Codable, CaseIterable {
         case .mattapan:
             return .skipToDirection(routeId: "Mattapan")
             
-        // Group 2: The "Fetch" types (Route Groups)
-        // You need the API to give you the specific Route IDs to display to the user.
+        // Routes that require branches to be defined
         case .greenLine:
             return .fetchRoutes(filterKey: "filter[type]", filterValue: "0")
         case .commuterRail:
