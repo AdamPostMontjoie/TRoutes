@@ -60,7 +60,10 @@ struct AddLegFeature {
         enum Alert: Equatable {
             case apiFailure //alert
         }
-       
+        case delegate(Delegate)
+        enum Delegate: Equatable {
+            case submitLeg(Leg)
+        }
         
     }
     
@@ -194,6 +197,8 @@ struct AddLegFeature {
                 return .none
             case .destination:
                 return .none
+            case .delegate:
+                return .none
             }
         }
         ._printChanges()
@@ -211,13 +216,13 @@ extension AddLegFeature {
 extension AddLegFeature.Destination.State: Equatable {}
 extension AddLegFeature.Destination.Action: Equatable {}
 
-//enum FormStep: Equatable {
-//    case selectType
-//    case selectBranch
-//    case selectDirection
-//    case selectStartStop
-//    case selectEndStop
-//}
+enum FormStep: Equatable {
+    case selectType
+    case selectBranch
+    case selectDirection
+    case selectStartStop
+    case selectEndStop
+}
 
 extension AlertState where Action == AddLegFeature.Action.Alert {
     static func apiFailure() -> Self {
