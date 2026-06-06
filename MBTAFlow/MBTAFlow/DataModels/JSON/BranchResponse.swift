@@ -19,8 +19,8 @@ struct RouteListData: Codable {
 
 // 1. Update the JSON decoding structs to capture the new fields
 struct RouteListAttributes: Codable {
-    let shortName: String
-    let longName: String
+    let shortName: String?
+    let longName: String?
     let directionNames: [String]? // e.g., ["Outbound", "Inbound"]
     let directionDestinations: [String]? // e.g., ["Boston College", "Government Center"]
 }

@@ -69,9 +69,8 @@ struct CreateRouteFeature {
             case let .transitTypeSelected(type):
                 state.selectedType = type
                 switch type.apiStrategy {
+                    // there is only 1 path
                     case let .skipToDirection(mbtaRouteId):
-                        // (Red Line Path)
-                        // We already know the ID. Save it, and jump the UI straight to Step 3.
                         state.mbtaRouteId = mbtaRouteId
                         state.currentFormStep = .selectDirection
                         //fetch direction
@@ -107,6 +106,7 @@ struct CreateRouteFeature {
                 return .none
             case let .branchSelected(branch):
                 state.selectedBranch = branch
+                state.mbtaRouteId = branch.id
                 if state.selectedBranch?.directions == nil {
                     return .run { send in
                         do {

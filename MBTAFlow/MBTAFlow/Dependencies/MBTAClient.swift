@@ -156,8 +156,8 @@ extension MBTAClient:DependencyKey {
                 
                 // Map the raw JSON data into the clean struct for the UI
                 let branches = routeResponse.data.map { route in
-                    
-                    let display = route.attributes.shortName.isEmpty ? route.attributes.longName : route.attributes.shortName
+                    let short = route.attributes.shortName ?? ""
+                    let display = short.isEmpty ? (route.attributes.longName ?? "Route") : short
                     
                     // Safely extract the directions. MBTA always returns 0 first, then 1.
                     var mappedDirections: [TransitDirection] = []
@@ -210,9 +210,9 @@ extension MBTAClient:DependencyKey {
                                     id: UUID(),
                                     mbtaStopId: stopData.id,
                                     mbtaRouteId: routeId,
-                                    stopName: stopData.attributes.name,
-                                    longitude: stopData.attributes.longitude,
-                                    latitude: stopData.attributes.latitude,
+                                    stopName: stopData.attributes.name ?? "stop",
+                                    longitude: stopData.attributes.longitude ?? 0.0,
+                                    latitude: stopData.attributes.latitude ?? 0.0,
                                     lastStop: false, //needs to be set true by user saving
                                     // Address is often null for subway stations, fallback prevents decoding crashes
                                     address: stopData.attributes.address ?? "Boston, MA"

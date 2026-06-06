@@ -15,8 +15,8 @@ struct StopData: Codable {
 }
 
 struct StopAttributes: Codable {
-    let name: String
-    let latitude: Double
-    let longitude: Double
+    let name: String?
+    let latitude: Double?
+    let longitude: Double?
     let address: String?
 }
