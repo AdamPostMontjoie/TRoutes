@@ -16,10 +16,10 @@ struct CreateRouteFeature {
         var typeOptions: [TransitType] = TransitType.allCases
         var selectedType: TransitType?
         //TODO define
-        var branchOptions: [TransitBranch] = [] // we only want to display the names but we can hold all
+        var branchOptions: [TransitBranch]? // we only want to display the names but we can hold all
         var selectedBranch: TransitBranch?
         //TODO define
-        var directionOptions: [Int] = [0,1] //we are going to need to pass through the names
+        var directionOptions: [TransitDirection]? //we are going to need to pass through the names
         var selectedDirection: Int?
         //TODO define
         var stopOptions: [Stop] = []
@@ -36,7 +36,7 @@ struct CreateRouteFeature {
     enum Action: Equatable {
         case createButtonTapped
         case transitTypeSelected(TransitType)
-        case branchesLoaded(String)
+        case branchesLoaded([TransitBranch])
         case branchSelected(TransitBranch)
         case directionsLoaded([TransitDirection])
         case directionSelected(Int, String)
@@ -81,6 +81,7 @@ struct CreateRouteFeature {
                                 await send(.directionsLoaded(directions))
                             }
                             catch {
+                                print(error)
                                 await send(.apiFailure)
                             }
                         }
@@ -90,17 +91,19 @@ struct CreateRouteFeature {
                         // We need more info. Show a loading state and ask the dumb API client for the data.
                         return .run { send in
                             do {
-                                let branches = try await mbtaClient.fetchRoutes(filterKey, filterValue)
+                                let branches = try await mbtaClient.fetchBranches(filterKey, filterValue)
                                 await send(.branchesLoaded(branches))
                             }
                             catch {
+                                print(error)
                                 await send(.apiFailure)
                             }
                             
                     }
                 }
-            case .branchesLoaded:
+            case let .branchesLoaded(options):
                 state.currentFormStep = .selectBranch
+                state.branchOptions = options
                 return .none
             case let .branchSelected(branch):
                 state.selectedBranch = branch
@@ -111,6 +114,7 @@ struct CreateRouteFeature {
                             await send(.directionsLoaded(directions))
                         }
                         catch {
+                            print(error)
                             await send(.apiFailure)
                         }
                     }
@@ -118,8 +122,9 @@ struct CreateRouteFeature {
                 } else {
                     return .send(.directionsLoaded(state.selectedBranch!.directions))
                 }
-            case .directionsLoaded:
+            case let .directionsLoaded(options):
                 state.currentFormStep = .selectDirection
+                state.directionOptions = options
                 return .none
             case let .directionSelected(direction, mbtaRouteId):
                 state.selectedDirection = direction
@@ -129,11 +134,13 @@ struct CreateRouteFeature {
                         await send(.stopsLoaded(stops))
                     }
                     catch {
+                        print(error)
                         await send(.apiFailure)
                     }
                 }
-            case .stopsLoaded:
+            case let .stopsLoaded(options):
                 state.currentFormStep = .selectStop
+                state.stopOptions = options
                 return .none
             case let .stopSelected(stop):
                 state.selectedStop = stop
@@ -176,6 +183,7 @@ struct CreateRouteFeature {
                 return .none
             }
         }
+        ._printChanges()
         .ifLet(\.$destination, action: \.destination)
     }
 }

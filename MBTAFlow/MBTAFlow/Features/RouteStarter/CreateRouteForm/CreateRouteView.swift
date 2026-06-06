@@ -93,7 +93,7 @@ struct CreateRouteView: View {
                         )) {
                             Text("Select a branch").tag(TransitBranch?.none)
                             // Loop through the array in y.disabled(store.selectedBranch != nil)our state
-                            ForEach(store.branchOptions, id: \.self) { branch in
+                            ForEach(store.branchOptions ?? [], id: \.self) { branch in
                                 // type.rawValue outputs the string ("MBTA Bus", "Red Line", etc.)
                                 Text(branch.displayName).tag(TransitBranch?.some(branch))
                             }
@@ -134,9 +134,9 @@ struct CreateRouteView: View {
                             // Default empty state because selectedType is optional
                             Text("Select a direction").tag(Int?.none)
                             // Loop through the array in your state
-                            ForEach(store.directionOptions, id: \.self) { direction in
+                            ForEach(store.directionOptions ?? [], id: \.self) { direction in
                                 
-                                Text("\(direction)").tag(Int?.some(direction))
+                                Text("\(direction.directionName) - \(direction.destination)").tag(Int?.some(direction.directionId))
                             }
                         }.disabled(store.selectedDirection != nil)
                     }
@@ -184,6 +184,7 @@ struct CreateRouteView: View {
                     }
                 }
             }
+            .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
             .navigationTitle("Create Route")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

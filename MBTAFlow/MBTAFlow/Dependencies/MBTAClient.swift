@@ -13,7 +13,7 @@ struct MBTAClient {
     var fetchTransitTimes: @Sendable (Stop) async throws -> [String]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
     //for use on lines that don't have a single direction
-    var fetchBranches: @Sendable (Int, String) async throws -> [TransitBranch]
+    var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
     var fetchRoutes: @Sendable (String, String) async throws -> String
 }
@@ -104,7 +104,7 @@ extension MBTAClient:DependencyKey {
        
         fetchDirections: { routeId in
                     // If the user selected Blue Line, routeId is "Blue or sum shit"
-                    guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations") else {
+                    guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                         throw URLError(.badURL)
                     }
                     
