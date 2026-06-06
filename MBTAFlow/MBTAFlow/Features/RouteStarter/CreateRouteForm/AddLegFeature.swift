@@ -1,8 +1,8 @@
 //
-//  CreateStepFeature.swift
+//  AddLegFeature.swift
 //  MBTAFlow
 //
-//  Created by Adam Post on 5/25/26.
+//  Created by Adam Post on 6/6/26.
 //
 
 import ComposableArchitecture
@@ -10,7 +10,7 @@ import Dependencies
 import Foundation
 
 @Reducer
-struct CreateRouteFeature {
+struct AddLegFeature {
     @ObservableState
     struct State: Equatable {
         var typeOptions: [TransitType] = TransitType.allCases
@@ -77,7 +77,7 @@ struct CreateRouteFeature {
                     // there is only 1 path
                     case let .skipToDirection(mbtaRouteId):
                         state.mbtaRouteId = mbtaRouteId
-                        state.currentFormStep = .selectDirection
+                        state.currentFormStep = FormStep.selectDirection
                         //fetch direction
                         return .run { send in
                             do {
@@ -201,25 +201,25 @@ struct CreateRouteFeature {
     }
 }
 
-extension CreateRouteFeature {
+extension AddLegFeature {
     @Reducer
     enum Destination {
-        case alert(AlertState<CreateRouteFeature.Action.Alert>)
+        case alert(AlertState<AddLegFeature.Action.Alert>)
     }
 }
 
-extension CreateRouteFeature.Destination.State: Equatable {}
-extension CreateRouteFeature.Destination.Action: Equatable {}
+extension AddLegFeature.Destination.State: Equatable {}
+extension AddLegFeature.Destination.Action: Equatable {}
 
-enum FormStep: Equatable {
-    case selectType
-    case selectBranch
-    case selectDirection
-    case selectStartStop
-    case selectEndStop
-}
+//enum FormStep: Equatable {
+//    case selectType
+//    case selectBranch
+//    case selectDirection
+//    case selectStartStop
+//    case selectEndStop
+//}
 
-extension AlertState where Action == CreateRouteFeature.Action.Alert {
+extension AlertState where Action == AddLegFeature.Action.Alert {
     static func apiFailure() -> Self {
         Self {
             TextState("Something went wrong")

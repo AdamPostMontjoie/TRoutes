@@ -155,9 +155,12 @@ extension MBTAClient:DependencyKey {
                 let routeResponse = try decoder.decode(RouteListResponse.self, from: data)
                 
                 // Map the raw JSON data into the clean struct for the UI
-                let branches = routeResponse.data.map { route in
+                let branches = routeResponse.data.compactMap{ route -> TransitBranch? in
                     let short = route.attributes.shortName ?? ""
                     let display = short.isEmpty ? (route.attributes.longName ?? "Route") : short
+                    if display == "Mattapan Line" {
+                        return nil
+                    }
                     
                     // Safely extract the directions. MBTA always returns 0 first, then 1.
                     var mappedDirections: [TransitDirection] = []
@@ -187,7 +190,7 @@ extension MBTAClient:DependencyKey {
             }
         },
         fetchStops: { directionId, routeId in
-            
+            //we are going to want to configure this based on direction, flip stop order and stuff
             
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw URLError(.badURL)

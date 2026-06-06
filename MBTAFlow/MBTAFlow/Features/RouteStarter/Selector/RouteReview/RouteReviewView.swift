@@ -21,7 +21,7 @@ struct RouteReviewView: View {
             }
             
             // The Stops List
-            Section(header: Text("Leg stops")) {
+            Section(header: Text("start stop -> end stop")) {
                 // Point the id directly to the unique string variable inside your Stop struct
                 ForEach(
                     store.scope(state: \.stops, action: \.stops)

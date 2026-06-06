@@ -1,15 +1,15 @@
 //
-//  CreateStepView.swift
+//  AddLegView.swift
 //  MBTAFlow
 //
-//  Created by Adam Post on 5/25/26.
+//  Created by Adam Post on 6/6/26.
 //
 
 import ComposableArchitecture
 import SwiftUI
 
-struct CreateRouteView: View {
-    @Bindable var store: StoreOf<CreateRouteFeature>
+struct AddLegView: View {
+    @Bindable var store: StoreOf<AddLegFeature>
 
     @Environment(\.dismiss) private var dismiss //wat dis
 
@@ -31,7 +31,7 @@ struct CreateRouteView: View {
                 routeActionSection
             }
             .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
-            .navigationTitle("Create Route")
+            .navigationTitle("Add Leg to Route")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -144,7 +144,7 @@ struct CreateRouteView: View {
 
                     Spacer()
 
-                    Button("Save Route") {
+                    Button("Complete Route") {
                         store.send(.saveRouteButtonTapped)
                     }
                     .buttonStyle(.borderedProminent)
@@ -159,7 +159,7 @@ struct CreateRouteView: View {
     private func resetHeader(
         title: String,
         isResetVisible: Bool,
-        action: CreateRouteFeature.Action
+        action: AddLegFeature.Action
     ) -> some View {
         HStack {
             Text(title)

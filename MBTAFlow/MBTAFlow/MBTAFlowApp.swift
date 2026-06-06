@@ -19,7 +19,7 @@ struct FoodSizer: App {
         WindowGroup {
             RootView(store:FoodSizer.store)
         }
-      //  .modelContainer(for: PairedScanSession.self) //initializes database for app
+        .modelContainer(for: Route.self) //initializes database for app
     }
 }
 
