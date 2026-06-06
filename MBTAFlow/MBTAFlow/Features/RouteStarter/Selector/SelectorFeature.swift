@@ -15,58 +15,64 @@ struct SelectorFeature {
     struct State: Equatable {
         var userRoutes: IdentifiedArrayOf<RouteStruct> = [
             RouteStruct(
-                stops: [
-                    Stop(
-                        id: UUID(),
-                        mbtaStopId: "place-alfcl",
+                legs: [
+                    Leg(
+                        startStop: Stop(
+                            id: UUID(),
+                            mbtaStopId: "place-alfcl",
+                            mbtaRouteId: "Red",
+                            stopName: "Alewife",
+                            longitude: -71.1429,
+                            latitude: 42.3954,
+                            lastStop: false,
+                            address: "Alewife Brook Parkway, Cambridge, MA"
+                        ),
+                        endStop: Stop(
+                            id: UUID(),
+                            mbtaStopId: "place-sstat",
+                            mbtaRouteId: "Red",
+                            stopName: "South Station",
+                            longitude: -71.0552,
+                            latitude: 42.3523,
+                            lastStop: true,
+                            address: "700 Atlantic Ave, Boston, MA"
+                        ),
                         mbtaRouteId: "Red",
-                        stopName: "Alewife",
-                        longitude: -71.1429,
-                        latitude: 42.3954,
-                        lastStop: false,
-                        address: "123 Seasame Street"
-                    ),
-                    Stop(
-                        id: UUID(),
-                        mbtaStopId: "place-sstat",
-                        mbtaRouteId: "Red",
-                        stopName: "South Station",
-                        longitude: -71.0552,
-                        latitude: 42.3523,
-                        lastStop: true,
-                        address: "123 Seasame Street"
+                        transitType: .redLine
                     )
                 ],
                 id: UUID(),
-                mbtaRouteId: "Red",
                 name: "Morning Red Line",
                 timeStamp: Date()
             ),
             RouteStruct(
-                stops: [
-                    Stop(
-                        id: UUID(),
-                        mbtaStopId: "place-ogmnl",
+                legs: [
+                    Leg(
+                        startStop: Stop(
+                            id: UUID(),
+                            mbtaStopId: "place-ogmnl",
+                            mbtaRouteId: "Orange",
+                            stopName: "Oak Grove",
+                            longitude: -71.0711,
+                            latitude: 42.4367,
+                            lastStop: false,
+                            address: "Washington St, Malden, MA"
+                        ),
+                        endStop: Stop(
+                            id: UUID(),
+                            mbtaStopId: "place-bbsta",
+                            mbtaRouteId: "Orange",
+                            stopName: "Back Bay",
+                            longitude: -71.0757,
+                            latitude: 42.3473,
+                            lastStop: true,
+                            address: "145 Dartmouth St, Boston, MA"
+                        ),
                         mbtaRouteId: "Orange",
-                        stopName: "Oak Grove",
-                        longitude: -71.0711,
-                        latitude: 42.4367,
-                        lastStop: false,
-                        address: "123 Seasame Street"
-                    ),
-                    Stop(
-                        id: UUID(),
-                        mbtaStopId: "place-bbsta",
-                        mbtaRouteId: "Orange",
-                        stopName: "Back Bay",
-                        longitude: -71.0757,
-                        latitude: 42.3473,
-                        lastStop: true,
-                        address: "123 Seasame Street"
+                        transitType: .orangeLine
                     )
                 ],
                 id: UUID(),
-                mbtaRouteId: "Orange",
                 name: "Orange Line Commute",
                 timeStamp: Date()
             )

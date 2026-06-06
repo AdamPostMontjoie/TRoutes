@@ -75,11 +75,10 @@ struct RouteStarterFeature {
             case let .beginRoute(route):
                 state.isActiveRoutePresented = true
                 state.activeRoute = RouteState(route:route)
-                guard let firstStop = route.stops.first else {
-                    //this should never happen
+                
+                guard let firstStop = route.legs.first?.startStop else {
                     return .none
                 }
-                
                 return .run { send in
                     // Fire the API call for the first stop
                     do {
@@ -102,7 +101,7 @@ struct RouteStarterFeature {
                 }
             case let .mbtaApiResponseReceived(upcomingTimes):
                 // 1. Mutate the state safely
-                state.activeRoute?.currentStop.nextTimes = upcomingTimes
+                state.activeRoute?.currentLeg.currentStop.nextTimes = upcomingTimes
                 
                 // 2. Now that the state has real times, launch the Lock Screen widget!
                 if let activeRoute = state.activeRoute {

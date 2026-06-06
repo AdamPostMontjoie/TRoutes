@@ -7,16 +7,25 @@
 
 struct RouteState: Equatable {
     var route: RouteStruct
-    var numberOfStops: Int
-    var currentStop:StopState
+    var numberOfLegs: Int
+    var currentLeg:LegState
     
     init(route: RouteStruct) {
         self.route = route
-        self.numberOfStops = route.stops.count
-        self.currentStop = StopState(stop:route.stops.first!)
+        self.numberOfLegs = route.legs.count
+        self.currentLeg = LegState.init(leg: route.legs.first!, stops: [])
 
     }
     
+}
+
+struct LegState:Equatable {
+    var leg: Leg
+    var currentStop:StopState
+    init(leg: Leg, stops: [StopState]) {
+        self.leg = leg
+        self.currentStop = StopState.init(stop: leg.startStop)
+    }
 }
 
 struct StopState:Equatable {

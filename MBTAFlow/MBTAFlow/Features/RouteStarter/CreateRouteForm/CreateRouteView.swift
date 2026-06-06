@@ -12,177 +12,23 @@ struct CreateRouteView: View {
     @Bindable var store: StoreOf<CreateRouteFeature>
 
     @Environment(\.dismiss) private var dismiss //wat dis
-    
-    
+
     //we might want some kind of display on how many stops are previous on the top
     //with dots? numbers? "Stop 3"?
-    
+
     //this whole form needs to be modularized so we can reuse it to edit a single stop in a route.
     //some things will be creation specific "add stop", and "save route" will be "save stop", etc.
     //do later, unimportant until we have real saving mechanism
-    
+
     var body: some View {
         NavigationStack {
             Form {
-                Section(header:
-                            HStack {
-                    Text("Mode of Transit")
-                    Spacer() // Pushes the button all the way to the right
-                    
-                    // Only show the undo button if they have already made a selection
-                    if store.selectedType != nil {
-                        Button {
-                            // Send the reset action to the Reducer
-                            store.send(.resetTypeSelection)
-                        } label: {
-                            Image(systemName: "arrow.uturn.backward.circle.fill")
-                                .font(.title3)
-                                .foregroundStyle(.blue)
-                        }
-                        .textCase(nil)
-                    }
-                }
-                ) {
-                    Picker("Transit Type", selection: Binding(
-                        get: { store.selectedType },
-                        set: { newValue in
-                            // When the user picks an option, explicitly send your action
-                            if let newValue {
-                                store.send(.transitTypeSelected(newValue))
-                            }
-                        }
-                    )) {
-                        // Default empty state because selectedType is optional
-                        Text("Select a mode").tag(TransitType?.none)
-                        // Loop through the array in your state
-                        ForEach(store.typeOptions, id: \.self) { type in
-                            // type.rawValue outputs the string ("MBTA Bus", "Red Line", etc.)
-                            Text(type.rawValue).tag(TransitType?.some(type))
-                        }
-                    }.disabled(store.selectedType != nil)
-                }
-                //invisible to start, skipped on some
-                if store.currentFormStep == .selectBranch || store.selectedBranch != nil {
-                    Section(header:
-                                HStack {
-                        Text("Branch") //display line on bus?
-                        Spacer() // Pushes the button all the way to the right
-                        
-                        // Only show the undo button if they have already made a selection
-                        if store.selectedBranch != nil {
-                            Button {
-                                // Send the reset action to the Reducer
-                                store.send(.resetBranchSelection)
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                            }
-                            .textCase(nil)
-                        }
-                    }
-                    ) {
-                        Picker("Branch", selection: Binding(
-                            get: { store.selectedBranch },
-                            set: { newValue in
-                                // When the user picks an option, explicitly send your action
-                                if let newValue {
-                                    store.send(.branchSelected(newValue))
-                                }
-                            }
-                        )) {
-                            Text("Select a branch").tag(TransitBranch?.none)
-                            // Loop through the array in y.disabled(store.selectedBranch != nil)our state
-                            ForEach(store.branchOptions ?? [], id: \.self) { branch in
-                                // type.rawValue outputs the string ("MBTA Bus", "Red Line", etc.)
-                                Text(branch.displayName).tag(TransitBranch?.some(branch))
-                            }
-                        }.disabled(store.selectedBranch != nil)
-                    }
-                    
-                }
-                //direction. Also skipped on some? Investigate
-                if store.currentFormStep == .selectDirection || store.selectedDirection != nil {
-                    Section(header:
-                                HStack {
-                        Text("Direction")
-                        Spacer() // Pushes the button all the way to the right
-                        
-                        // Only show the undo button if they have already made a selection
-                        if store.selectedDirection != nil {
-                            Button {
-                                // Send the reset action to the Reducer
-                                store.send(.resetDirectionSelection)
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                            }
-                            .textCase(nil)
-                        }
-                    }
-                    ) {
-                        Picker("Direction", selection: Binding(
-                            get: { store.selectedDirection },
-                            set: { newValue in
-                                // When the user picks an option, explicitly send your action
-                                if let newValue {
-                                    store.send(.directionSelected(newValue, store.mbtaRouteId ?? ""))
-                                }
-                            }
-                        )) {
-                            // Default empty state because selectedType is optional
-                            Text("Select a direction").tag(Int?.none)
-                            // Loop through the array in your state
-                            ForEach(store.directionOptions ?? [], id: \.self) { direction in
-                                
-                                Text("\(direction.directionName) - \(direction.destination)").tag(Int?.some(direction.directionId))
-                            }
-                        }.disabled(store.selectedDirection != nil)
-                    }
-                }
-                //stop itself
-                if store.currentFormStep == .selectStop || store.selectedStop != nil {
-                    Section(header: Text("Stop")) {
-                        Picker("Stop", selection: Binding(
-                            get: { store.selectedStop?.id },
-                            set: { newValue in
-                                if let newValue,
-                                   let stop = store.stopOptions.first(where: { $0.id == newValue }) {
-                                    store.send(.stopSelected(stop))
-                                }
-                            }
-                        )) {
-                            Text("Select a stop").tag(UUID?.none)
-                            ForEach(store.stopOptions, id: \.id) { stop in
-                                Text(stop.stopName).tag(UUID?.some(stop.id))
-                            }
-                        } //.disabled(store.selectedStop != nil)
-                    }
-                }
-                
-                if store.currentFormStep == .selectStop && store.selectedStop != nil {
-                    Section {
-                        HStack {
-                            // Secondary Action: Transparent background with a tinted border/text
-                            Button("Add Another Stop") {
-                                store.send(.addStopButtonTapped)
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.blue)
-                            
-                            Spacer()
-                            Button("Save Route") {
-                                store.send(.saveRouteButtonTapped)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.green)
-                        }
-                        
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                    }
-                }
+                transitTypeSection
+                branchSection
+                directionSection
+                startStopSection
+                endStopSection
+                routeActionSection
             }
             .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
             .navigationTitle("Create Route")
@@ -197,5 +43,195 @@ struct CreateRouteView: View {
                 }
             }
         }
+    }
+    
+    @ViewBuilder
+    private var transitTypeSection: some View {
+        Section(header: resetHeader(
+            title: "Mode of Transit",
+            isResetVisible: store.selectedType != nil,
+            action: .resetTypeSelection
+        )) {
+            Picker("Transit Type", selection: transitTypeSelection) {
+                Text("Select a mode").tag(TransitType?.none)
+                ForEach(store.typeOptions, id: \.self) { type in
+                    Text(type.rawValue).tag(TransitType?.some(type))
+                }
+            }
+            .disabled(store.selectedType != nil)
+        }
+    }
+
+    @ViewBuilder
+    private var branchSection: some View {
+        if store.currentFormStep == .selectBranch || store.selectedBranch != nil {
+            Section(header: resetHeader(
+                title: "Branch",
+                isResetVisible: store.selectedBranch != nil,
+                action: .resetBranchSelection
+            )) {
+                Picker("Branch", selection: branchSelection) {
+                    Text("Select a branch").tag(TransitBranch?.none)
+                    ForEach(store.branchOptions ?? [], id: \.self) { branch in
+                        Text(branch.displayName).tag(TransitBranch?.some(branch))
+                    }
+                }
+                .disabled(store.selectedBranch != nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var directionSection: some View {
+        if store.currentFormStep == .selectDirection || store.selectedDirection != nil {
+            Section(header: resetHeader(
+                title: "Direction",
+                isResetVisible: store.selectedDirection != nil,
+                action: .resetDirectionSelection
+            )) {
+                Picker("Direction", selection: directionSelection) {
+                    Text("Select a direction").tag(TransitDirection?.none)
+                    ForEach(store.directionOptions ?? [], id: \.self) { direction in
+                        Text("\(direction.directionName) - \(direction.destination)")
+                            .tag(TransitDirection?.some(direction))
+                    }
+                }
+                .disabled(store.selectedDirection != nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var startStopSection: some View {
+        if store.currentFormStep == .selectStartStop || store.selectedStartStop != nil {
+            Section(header: Text("Stop")) {
+                Picker("Stop", selection: startStopSelection) {
+                    Text("Select a starting stop").tag(UUID?.none)
+                    ForEach(store.stopOptions, id: \.id) { stop in
+                        Text(stop.stopName).tag(UUID?.some(stop.id))
+                    }
+                }
+                .disabled(store.selectedStartStop != nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var endStopSection: some View {
+        if store.currentFormStep == .selectEndStop || store.selectedEndStop != nil {
+            Section(header: Text("Stop")) {
+                Picker("Stop", selection: endStopSelection) {
+                    Text("Select a destination stop").tag(UUID?.none)
+                    ForEach(store.stopOptions, id: \.id) { stop in
+                        Text(stop.stopName).tag(UUID?.some(stop.id))
+                    }
+                }
+                .disabled(store.selectedEndStop != nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var routeActionSection: some View {
+        if store.currentFormStep == .selectEndStop && store.selectedEndStop != nil {
+            Section {
+                HStack {
+                    Button("Add Another Stop") {
+                        store.send(.addStopButtonTapped)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
+
+                    Spacer()
+
+                    Button("Save Route") {
+                        store.send(.saveRouteButtonTapped)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+        }
+    }
+
+    private func resetHeader(
+        title: String,
+        isResetVisible: Bool,
+        action: CreateRouteFeature.Action
+    ) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+
+            if isResetVisible {
+                Button {
+                    store.send(action)
+                } label: {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.blue)
+                }
+                .textCase(nil)
+            }
+        }
+    }
+
+    private var transitTypeSelection: Binding<TransitType?> {
+        Binding(
+            get: { store.selectedType },
+            set: { newValue in
+                if let newValue {
+                    store.send(.transitTypeSelected(newValue))
+                }
+            }
+        )
+    }
+
+    private var branchSelection: Binding<TransitBranch?> {
+        Binding(
+            get: { store.selectedBranch },
+            set: { newValue in
+                if let newValue {
+                    store.send(.branchSelected(newValue))
+                }
+            }
+        )
+    }
+
+    private var directionSelection: Binding<TransitDirection?> {
+        Binding(
+            get: { store.selectedDirection },
+            set: { newValue in
+                if let newValue {
+                    store.send(.directionSelected(newValue, store.mbtaRouteId ?? ""))
+                }
+            }
+        )
+    }
+
+    private var startStopSelection: Binding<UUID?> {
+        Binding(
+            get: { store.selectedStartStop?.id },
+            set: { newValue in
+                if let newValue,
+                   let stop = store.stopOptions.first(where: { $0.id == newValue }) {
+                    store.send(.startStopSelected(stop))
+                }
+            }
+        )
+    }
+
+    private var endStopSelection: Binding<UUID?> {
+        Binding(
+            get: { store.selectedEndStop?.id },
+            set: { newValue in
+                if let newValue,
+                   let stop = store.stopOptions.first(where: { $0.id == newValue }) {
+                    store.send(.endStopSelected(stop))
+                }
+            }
+        )
     }
 }

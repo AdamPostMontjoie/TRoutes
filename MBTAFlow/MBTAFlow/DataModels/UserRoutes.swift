@@ -17,10 +17,16 @@ struct Stop: Codable, Equatable,Identifiable {
     var address: String // display on review feature
 }
 
-struct RouteStruct:Equatable, Identifiable{
-    var stops: [Stop]
-    var id: UUID
+struct Leg:Equatable, Codable{
+    var startStop:Stop
+    var endStop:Stop
     var mbtaRouteId:String
+    var transitType:TransitType
+}
+
+struct RouteStruct:Equatable, Identifiable{
+    var legs:[Leg]
+    var id: UUID
     var name:String
     var timeStamp: Date
 }

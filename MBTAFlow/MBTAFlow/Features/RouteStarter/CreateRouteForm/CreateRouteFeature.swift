@@ -20,10 +20,14 @@ struct CreateRouteFeature {
         var selectedBranch: TransitBranch?
         //TODO define
         var directionOptions: [TransitDirection]? //we are going to need to pass through the names
-        var selectedDirection: Int?
+        var selectedDirection: TransitDirection?
         //TODO define
+        
+        //later on we should refine the stop options so the user cannot select a stop that doesn't make sense with direction
         var stopOptions: [Stop] = []
-        var selectedStop: Stop?
+        var selectedStartStop: Stop?
+        
+        var selectedEndStop:Stop?
         
         var mbtaRouteId: String?
         var currentFormStep:FormStep = .selectType
@@ -39,9 +43,10 @@ struct CreateRouteFeature {
         case branchesLoaded([TransitBranch])
         case branchSelected(TransitBranch)
         case directionsLoaded([TransitDirection])
-        case directionSelected(Int, String)
+        case directionSelected(TransitDirection, String)
         case stopsLoaded([Stop])
-        case stopSelected(Stop)
+        case startStopSelected(Stop)
+        case endStopSelected(Stop)
         
         case resetTypeSelection
         case resetBranchSelection
@@ -130,7 +135,7 @@ struct CreateRouteFeature {
                 state.selectedDirection = direction
                 return .run { send in
                     do {
-                        let stops = try await mbtaClient.fetchStops(direction, mbtaRouteId)
+                        let stops = try await mbtaClient.fetchStops(direction.directionId, mbtaRouteId)
                         await send(.stopsLoaded(stops))
                     }
                     catch {
@@ -139,17 +144,23 @@ struct CreateRouteFeature {
                     }
                 }
             case let .stopsLoaded(options):
-                state.currentFormStep = .selectStop
+                state.currentFormStep = .selectStartStop
                 state.stopOptions = options
                 return .none
-            case let .stopSelected(stop):
-                state.selectedStop = stop
+            case let .startStopSelected(stop):
+                state.selectedStartStop = stop
+                state.currentFormStep = .selectEndStop
+                return .none
+            case let .endStopSelected(stop):
+                state.selectedEndStop = stop
+                
                 return .none
             case .resetTypeSelection:
                 state.selectedType = nil
                 state.selectedBranch = nil
                 state.selectedDirection = nil
-                state.selectedStop = nil
+                state.selectedStartStop = nil
+                state.selectedEndStop = nil
                 state.mbtaRouteId = nil
                 
                 state.currentFormStep = .selectType
@@ -158,14 +169,16 @@ struct CreateRouteFeature {
             case .resetBranchSelection:
                 state.selectedBranch = nil
                 state.selectedDirection = nil
-                state.selectedStop = nil
+                state.selectedStartStop = nil
+                state.selectedEndStop = nil
                 state.mbtaRouteId = nil
                 
                 state.currentFormStep = .selectBranch
                 return .none
             case .resetDirectionSelection:
                 state.selectedDirection = nil
-                state.selectedStop = nil
+                state.selectedStartStop = nil
+                state.selectedEndStop = nil
                 state.mbtaRouteId = nil
                 
                 state.currentFormStep = .selectDirection
@@ -202,7 +215,8 @@ enum FormStep: Equatable {
     case selectType
     case selectBranch
     case selectDirection
-    case selectStop
+    case selectStartStop
+    case selectEndStop
 }
 
 extension AlertState where Action == CreateRouteFeature.Action.Alert {

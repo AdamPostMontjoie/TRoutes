@@ -17,7 +17,12 @@ struct RouteReviewFeature {
         init(route: RouteStruct) {
                 self.route = route
                 self.stops = IdentifiedArray(
-                    uniqueElements: route.stops.map { StopRowFeature.State(stop: $0) }
+                    uniqueElements: route.legs.flatMap { leg in
+                        [
+                            StopRowFeature.State(stop: leg.startStop),
+                            StopRowFeature.State(stop: leg.endStop)
+                        ]
+                    }
                 )
             }
     }
@@ -45,14 +50,22 @@ struct RouteReviewFeature {
                 //pop from stack
                 return .send(.delegate(.deleteRoute(state.route.id)))
             case let .stops(.element(id: childId, action: .delegate(.deleteStop))):
-                state.route.stops.removeAll { $0.id == childId }
+                state.route.legs.removeAll {
+                    $0.startStop.id == childId || $0.endStop.id == childId
+                }
+                state.stops.remove(id: childId)
                 return .send(.delegate(.updateRoute(state.route)))
                             
-            case let .stops(.element(id:childId, action: .delegate(.stopUpdated(newStop)))):
-                //find and replace the stop locally
-                if let index = state.route.stops.firstIndex(where: { $0.id == childId}) {
-                    state.route.stops[index] = newStop
+            case let .stops(.element(id: childId, action: .delegate(.stopUpdated(newStop)))):
+                for index in state.route.legs.indices {
+                    if state.route.legs[index].startStop.id == childId {
+                        state.route.legs[index].startStop = newStop
+                    }
+                    if state.route.legs[index].endStop.id == childId {
+                        state.route.legs[index].endStop = newStop
+                    }
                 }
+                state.stops[id: childId]?.stop = newStop
                 return .send(.delegate(.updateRoute(state.route)))
             case .delegate:
                 return .none

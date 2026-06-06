@@ -187,6 +187,8 @@ extension MBTAClient:DependencyKey {
             }
         },
         fetchStops: { directionId, routeId in
+            
+            
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw URLError(.badURL)
                         }
