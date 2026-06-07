@@ -1,11 +1,11 @@
 //
-//  RouteState.swift
+//  JourneyState.swift
 //  MBTAFlow
 //
 //  Created by Adam Post on 5/31/26.
 //
 
-struct RouteState: Equatable {
+struct JourneyState: Equatable {
     var route: RouteStruct
     var numberOfLegs: Int
     var currentLeg:LegState

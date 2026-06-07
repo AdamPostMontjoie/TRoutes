@@ -21,7 +21,19 @@ struct SelectorView: View {
             List {
                 ForEach(store.userRoutes) { userRoute in
                     NavigationLink(state: RouteReviewFeature.State(route: userRoute)) {
-                        Text(userRoute.name)
+                        HStack {
+                            Text(userRoute.name)
+
+                            Spacer()
+
+                            Button {
+                                store.send(.startButtonTapped(userRoute.id))
+                            } label: {
+                                Text("Start")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                        }
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {

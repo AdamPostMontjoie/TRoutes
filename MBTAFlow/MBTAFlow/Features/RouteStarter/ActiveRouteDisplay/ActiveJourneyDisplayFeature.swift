@@ -1,5 +1,5 @@
 //
-//  ActiveRouteDisplayFeature.swift
+//  ActiveJourneyDisplayFeature.swift
 //  MBTAFlow
 //
 //  Created by Adam Post on 5/25/26.
@@ -8,10 +8,10 @@
 import ComposableArchitecture
 
 @Reducer
-struct ActiveRouteDisplayFeature {
+struct ActiveJourneyDisplayFeature {
     @ObservableState
     struct State: Equatable {
-        var route:RouteStruct? //this will be edited live, active reflection of where the user is on the route
+        var journey: JourneyState?
     }
     
     //no other actions needed, this is just a reflection

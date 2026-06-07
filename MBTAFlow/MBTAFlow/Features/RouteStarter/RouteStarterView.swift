@@ -13,34 +13,40 @@ struct RouteStarterView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-                SelectorView(
-                    store: store.scope(
-                        state: \.routeSelector,
-                        action: \.routeSelector
-                    )
-                )
-                .navigationTitle("Routes")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            store.send(.onCreateButtonTapped)
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                    }
-                }
-
-                if store.isActiveRoutePresented {
-                    ActiveRouteDisplayView(
+            VStack(spacing: 0) {
+                // The Banner now sits structurally above the list on the Y-axis
+                if store.isActiveJourneyPresented {
+                    ActiveJourneyDisplayView(
                         store: store.scope(
                             state: \.activeRouteDisplay,
                             action: \.activeRouteDisplay
                         )
                     )
                     .padding(.top, 8)
+                    .padding(.bottom, 4) // Adds breathing room between banner and list
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // The List takes up the remaining vertical space
+                SelectorView(
+                    store: store.scope(
+                        state: \.routeSelector,
+                        action: \.routeSelector
+                    )
+                )
+            }
+            .navigationTitle("Routes")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        store.send(.onCreateButtonTapped)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
                 }
             }
+            // Applying the animation to the VStack ensures the list is smoothly pushed down
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
         }
         .fullScreenCover(
             isPresented: Binding(

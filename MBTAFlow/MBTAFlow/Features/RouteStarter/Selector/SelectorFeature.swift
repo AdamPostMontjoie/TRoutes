@@ -38,7 +38,6 @@ struct SelectorFeature {
         
         enum Delegate: Equatable {
             case startRoute(UUID)
-            case deleteRoute(UUID)
         }
     }
 
@@ -78,8 +77,9 @@ struct SelectorFeature {
             case .fetchRoutesFailed:
                 return .none
 
-            case let .startButtonTapped(id):
-                return .send(.delegate(.startRoute(id)))
+            case let .startButtonTapped(route):
+                
+                return .send(.delegate(.startRoute(route)))
 
             case .editButtonTapped:
                 return .none

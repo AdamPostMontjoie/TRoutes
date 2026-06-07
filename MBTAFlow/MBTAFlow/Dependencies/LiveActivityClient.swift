@@ -10,7 +10,7 @@ import ComposableArchitecture
 //this is the dependency that updates the widget
 struct LiveActivityClient {
     var startActivity: @Sendable (RouteStruct) async -> Void
-    var updateActivity: @Sendable (RouteState) async -> Void
+    var updateActivity: @Sendable (JourneyState) async -> Void
     var endActivity: @Sendable () async -> Void
 }
 
@@ -18,7 +18,7 @@ extension LiveActivityClient: DependencyKey {
     static let liveValue = Self(
         startActivity: { route in
         },
-        updateActivity: { routeState in
+        updateActivity: { JourneyState in
         },
         endActivity: {
         }
