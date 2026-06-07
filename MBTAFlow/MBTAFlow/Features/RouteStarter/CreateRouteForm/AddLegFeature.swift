@@ -55,9 +55,10 @@ struct AddLegFeature {
         case resetTypeSelection
         case resetBranchSelection
         case resetDirectionSelection
+        case resetStartStopSelection
         //we don't have a stop reset because we don't need to lock stop selection
-        case addLegButtonTapped(Leg)
-        case saveRouteButtonTapped(Leg) //triggers alert for confirmation, other action needed
+        case addLegButtonTapped
+        case saveRouteButtonTapped //triggers alert for confirmation, other action needed
         case apiFailure
         
         case destination(PresentationAction<Destination.Action>)
@@ -184,7 +185,7 @@ struct AddLegFeature {
                 state.selectedStartStop = nil
                 state.selectedEndStop = nil
                 state.mbtaRouteId = nil
-                
+                state.currentLeg = nil
                 state.currentFormStep = .selectType
                 
                 return .none
@@ -194,7 +195,7 @@ struct AddLegFeature {
                 state.selectedStartStop = nil
                 state.selectedEndStop = nil
                 state.mbtaRouteId = nil
-                
+                state.currentLeg = nil
                 state.currentFormStep = .selectBranch
                 return .none
             case .resetDirectionSelection:
@@ -202,20 +203,30 @@ struct AddLegFeature {
                 state.selectedStartStop = nil
                 state.selectedEndStop = nil
                 state.mbtaRouteId = nil
-                
+                state.currentLeg = nil
                 state.currentFormStep = .selectDirection
                 return .none
-            case let .addLegButtonTapped(currentLeg):
+            case .resetStartStopSelection:
+                state.selectedStartStop = nil
+                state.selectedEndStop = nil
+                state.currentLeg = nil
+                state.currentFormStep = .selectStartStop
+                return .none
+            case .addLegButtonTapped:
                 //hands the leg to the parent, they will wipe state
                 //we don't need to here (I think) we will include a back option if not first leg
-                
-                return .send(.delegate(.addAnotherLeg(currentLeg)))
-            case let .saveRouteButtonTapped(lastLeg):
+                guard let leg = state.currentLeg else {
+                    return .none
+                }
+                return .send(.delegate(.addAnotherLeg(leg)))
+            case .saveRouteButtonTapped:
                 //triggers alert for save confirmation
                 
                 //if the user decides to keep adding more, we will set the isLastStop to be false again
-                
-                return .send(.delegate(.completeRoute(lastLeg)))
+                guard let leg = state.currentLeg else {
+                    return .none
+                }
+                return .send(.delegate(.completeRoute(leg)))
             case .apiFailure:
                 state.destination = .alert(.apiFailure())
                 return .none

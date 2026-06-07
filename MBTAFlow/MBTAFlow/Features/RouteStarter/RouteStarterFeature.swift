@@ -55,10 +55,14 @@ struct RouteStarterFeature {
             switch action {
             
             case .onCreateButtonTapped:
+                print("tapped")
                 state.isCreateRoutePresented = true
                 return .none
-            case .onCreateRouteDismissed:
+            case .createRoute(.delegate(.routeSaved)):
                 state.isCreateRoutePresented = false
+                return .none
+            case .onCreateRouteDismissed:
+                //this handles the x out
                 return .none
             //this starts the route from inside the app, most of the logic is kicked off here
             case let .routeSelector(.delegate(.startRoute(id))):

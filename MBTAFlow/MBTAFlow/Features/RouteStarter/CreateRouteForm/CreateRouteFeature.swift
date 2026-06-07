@@ -35,16 +35,18 @@ struct CreateRouteFeature {
         enum Alert: Equatable {
             case confirmDismiss
             case confirmSave
+            case cancelSave
         }
         
         // Communication back to RouteStarterFeature
         case delegate(Delegate)
         enum Delegate: Equatable {
             case dismiss
-            case routeSaved([Leg]) // Will eventually pass the full RouteStruct
+            case routeSaved
         }
     }
-    
+
+    @Dependency(\.databaseClient) var databaseClient
     var body: some ReducerOf<Self> {
         // Scope connects the child reducer to the parent
         Scope(state: \.addLeg, action: \.addLeg) {
@@ -87,14 +89,30 @@ struct CreateRouteFeature {
                 state.destination = .alert(.saveRoute(legCount:state.completedLegs.count))
                 return .none
                 
-            // 4. Alert Confirmations
+            // Alert Confirmations
             case .destination(.presented(.alert(.confirmDismiss))):
                 return .send(.delegate(.dismiss))
                 
             case .destination(.presented(.alert(.confirmSave))):
-                // Fire the delegate so RouteStarter can trigger the DatabaseClient
-                return .send(.delegate(.routeSaved(state.completedLegs)))
+                // handle database client
                 
+                //tell the routestarter a new route is added, and swiftdata needs to be called
+                
+                return .run {[legs = state.completedLegs] send in
+                    do {
+                        try await databaseClient.saveRoute(legs)
+                        await send(.delegate(.routeSaved))
+                    } catch {
+                        print("fuck")
+                    }
+                }
+                
+            case .destination(.presented(.alert(.cancelSave))):
+                // Pop the leg so the user can modify it in the active form
+                if !state.completedLegs.isEmpty {
+                    state.completedLegs.removeLast()
+                }
+                return .none
             case .addLeg, .destination, .delegate:
                 return .none
             }
@@ -138,11 +156,11 @@ extension AlertState where Action == CreateRouteFeature.Action.Alert {
             ButtonState(action: .confirmSave) {
                 TextState("Save")
             }
-            ButtonState(role: .cancel) {
+            ButtonState(role: .cancel, action: .cancelSave) {
                 TextState("Cancel")
             }
         } message: {
-            TextState("Save this route with \(legCount) segments?")
+            TextState("Save this route with \(legCount) \(legCount > 1 ? "segments" : "segment")")
         }
     }
 }

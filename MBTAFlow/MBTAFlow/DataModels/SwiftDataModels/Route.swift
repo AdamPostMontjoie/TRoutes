@@ -9,19 +9,16 @@ import Foundation
 import SwiftData
 
 @Model
-final class Route{
-    var stops: [Stop]
+final class Route {
+    var legs: [Leg]
     var name: String
-    var localRouteId:UUID
+    var localRouteId: UUID
     var timeStamp: Date
-    
 
-    init(routeId: UUID, name: String, stops: [Stop], timeStamp:Date)
-    {
+    init(routeId: UUID, name: String, legs: [Leg], timeStamp: Date) {
         self.localRouteId = routeId
         self.name = name
-        self.stops = stops
+        self.legs = legs
         self.timeStamp = timeStamp
     }
-    
 }

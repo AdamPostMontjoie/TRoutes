@@ -87,7 +87,7 @@ struct AddLegView: View {
             Section(header: resetHeader(
                 title: "Direction",
                 isResetVisible: store.selectedDirection != nil,
-                action: .resetDirectionSelection
+                action: .resetStartStopSelection
             )) {
                 Picker("Direction", selection: directionSelection) {
                     Text("Select a direction").tag(TransitDirection?.none)
@@ -104,7 +104,11 @@ struct AddLegView: View {
     @ViewBuilder
     private var startStopSection: some View {
         if store.currentFormStep == .selectStartStop || store.selectedStartStop != nil {
-            Section(header: Text("Stop")) {
+            Section(header: resetHeader(
+                title: "Origin",
+                isResetVisible: store.selectedStartStop != nil,
+                action: .resetStartStopSelection
+            )) {
                 Picker("Stop", selection: startStopSelection) {
                     Text("Select a starting stop").tag(UUID?.none)
                     ForEach(store.stopOptions, id: \.id) { stop in
@@ -119,7 +123,7 @@ struct AddLegView: View {
     @ViewBuilder
     private var endStopSection: some View {
         if store.currentFormStep == .selectEndStop || store.selectedEndStop != nil {
-            Section(header: Text("Stop")) {
+            Section(header: Text("Destination")) {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination stop").tag(UUID?.none)
                     ForEach(store.stopOptions, id: \.id) { stop in
@@ -133,13 +137,11 @@ struct AddLegView: View {
 
     @ViewBuilder
     private var routeActionSection: some View {
-        if store.currentFormStep == .selectEndStop && store.selectedEndStop != nil {
+        if store.currentFormStep == .selectEndStop && store.selectedEndStop != nil && store.currentLeg != nil {
             Section {
                 HStack {
                     Button("Add Another Leg") {
-                        if let currentLeg = store.currentLeg {
-                            store.send(.addLegButtonTapped(currentLeg))
-                        }
+                            store.send(.addLegButtonTapped)
                     }
                     .buttonStyle(.bordered)
                     .tint(.blue)
@@ -147,9 +149,7 @@ struct AddLegView: View {
                     Spacer()
 
                     Button("Complete Route") {
-                        if let currentLeg = store.currentLeg {
-                            store.send(.saveRouteButtonTapped(currentLeg))
-                        }
+                            store.send(.saveRouteButtonTapped)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)

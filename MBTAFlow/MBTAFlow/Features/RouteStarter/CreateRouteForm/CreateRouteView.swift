@@ -15,7 +15,7 @@ struct CreateRouteView: View {
         NavigationStack {
             VStack {
                 // If they have completed legs, you can show a mini-timeline at the top here later
-                if !store.completedLegs.isEmpty {
+                if !store.completedLegs.isEmpty && store.addLeg.currentLeg == nil {
                     Text("\(store.completedLegs.count) legs added")
                         .font(.caption)
                         .foregroundStyle(.secondary)
