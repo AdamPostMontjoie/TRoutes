@@ -69,6 +69,7 @@ struct CreateRouteFeature {
             case let .addLeg(.delegate(.completeRoute(lastLeg))):
                 //we instead want to launch alert from here.
                 state.completedLegs.append(lastLeg)
+                state.completedLegs = state.completedLegs.annotatedStopSequence()
                 state.destination = .alert(.saveRoute(legCount:state.completedLegs.count))
                 return .none
             case .addLeg(.delegate(.requestDismissal)):
@@ -99,7 +100,7 @@ struct CreateRouteFeature {
                 
                 return .run {[legs = state.completedLegs] send in
                     do {
-                        try await databaseClient.saveRoute(legs)
+                        try await databaseClient.saveRoute(legs.annotatedStopSequence())
                         await send(.resetForm)
                         await send(.delegate(.routeSaved))
                     } catch {
@@ -176,5 +177,31 @@ extension AlertState where Action == CreateRouteFeature.Action.Alert {
         } message: {
             TextState("Please try again.")
         }
+    }
+}
+
+extension Array where Element == Leg {
+    func annotatedStopSequence() -> [Leg] {
+        var annotatedLegs = self
+
+        for index in annotatedLegs.indices {
+            let isLastLeg = index == annotatedLegs.indices.last
+
+            annotatedLegs[index].startStop.stopType = .boardingStop
+            annotatedLegs[index].startStop.overlapsWithNext = false
+
+            annotatedLegs[index].endStop.stopType = isLastLeg ? .finalStop : .transferStop
+
+            if !isLastLeg {
+                let nextLeg = annotatedLegs[index + 1]
+                //TODO: this should be replaced with coordinate math once we decide official region sizes
+                annotatedLegs[index].endStop.overlapsWithNext =
+                    annotatedLegs[index].endStop.mbtaStopId == nextLeg.startStop.mbtaStopId
+            } else {
+                annotatedLegs[index].endStop.overlapsWithNext = false
+            }
+        }
+
+        return annotatedLegs
     }
 }

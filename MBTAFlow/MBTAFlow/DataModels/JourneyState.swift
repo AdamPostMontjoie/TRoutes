@@ -6,35 +6,35 @@
 //
 
 struct JourneyState: Equatable {
-    var route: RouteStruct
-    var numberOfLegs: Int
-    var currentLeg:LegState
+    let route: RouteStruct
+    let stopSequence: [Stop]
+    
+    var stopIndex: Int = 0
+    var movementStatus: MovementStatus = .enRoute
+    var activePredictionTimes: [String] = []
+    
+    var currentStop: Stop {
+        return stopSequence[stopIndex]
+    }
+    
+    var isEndOfJourney: Bool {
+        return stopIndex == stopSequence.count - 1 && movementStatus == .atStop
+    }
     
     init(route: RouteStruct) {
         self.route = route
-        self.numberOfLegs = route.legs.count
-        self.currentLeg = LegState.init(leg: route.legs.first!, stops: [])
-
-    }
-    
-}
-
-struct LegState:Equatable {
-    var leg: Leg
-    var currentStop:StopState
-    init(leg: Leg, stops: [StopState]) {
-        self.leg = leg
-        self.currentStop = StopState.init(stop: leg.startStop)
+        self.stopSequence = route.legs.flatMap { [$0.startStop, $0.endStop] }
     }
 }
 
 struct StopState:Equatable {
-    var stop: Stop
-    var nextTimes: [String]?
-    var delayed: Bool = false
-    var onStop: Bool = false
-    
+    var stop:Stop
     init(stop: Stop) {
         self.stop = stop
     }
+}
+
+enum MovementStatus {
+    case enRoute
+    case atStop
 }

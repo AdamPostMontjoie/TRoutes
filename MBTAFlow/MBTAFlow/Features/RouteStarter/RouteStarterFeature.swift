@@ -29,11 +29,24 @@ struct RouteStarterFeature {
         case routeSelector(SelectorFeature.Action)
         
         case beginRoute(RouteStruct)
+        case fetchPredictions(Stop)
+        case endRoute
+       
+        // widget actions
+        case refreshRoutes
+        case forcedArrival //at stop button, bypasses region did enter
+        case forcedDeparture // next stop button, bypasses region did exit
+        
+        
+        case locationUpdateReceived(LocationEvent)
         case mbtaApiResponseReceived([String])
         
-        case refreshRoutes
-        //remove?
-        case locationUpdateReceived(LocationEvent)
+        //handlers for the possible location events
+        case enteredStop
+        case exitedStop
+        case authorizationDenied
+        case locationError
+        
         
         case apiFailed
         
@@ -71,9 +84,6 @@ struct RouteStarterFeature {
                 } else {
                     return .none
                 }
-                
-            case .refreshRoutes:
-                return .none
             //this starts the route from inside the app, most of the logic is kicked off here
             case let .routeSelector(.delegate(.startRoute(id))):
                 
@@ -95,18 +105,9 @@ struct RouteStarterFeature {
                     return .none
                 }
                 return .run { send in
-                    // Fire the API call for the first stop
-                    do {
-                        let times = try await mbtaClient.fetchTransitTimes(firstStop)
-                        // Send the data back into the reducer
-                        await send(.mbtaApiResponseReceived(times))
+                    await send(.fetchPredictions(firstStop))
             
-                    } catch {
-                        await send(.apiFailed)
-                    }
-                    
-                    // Start the GPS (Turn on the faucet)
-                    var stream = try await locationClient.startMonitoring(route)
+                    let stream = try await locationClient.startMonitoring(firstStop)
                     
                     // Listen to the GPS (Wait at the pipe)
                     // This loop runs infinitely in the background until the effect is cancelled
@@ -114,37 +115,71 @@ struct RouteStarterFeature {
                         await send(.locationUpdateReceived(location))
                     }
                 }
+            //this will be called on natural end or forceful cancelation
+            case .endRoute:
+                state.isActiveJourneyPresented = false
+                state.activeJourney = nil
+                return .run { send in
+                    try await locationClient.stopMonitoring()
+                }
+            case let .fetchPredictions(stop):
+                return .run { send in
+                    do {
+                        let times = try await mbtaClient.fetchTransitTimes(stop)
+                        // Send the data back into the reducer
+                        await send(.mbtaApiResponseReceived(times))
+                    }
+                    catch {
+                        await send(.apiFailed)
+                    }
+                }
             case let .mbtaApiResponseReceived(upcomingTimes):
                 // 1. Mutate the state safely
-                state.activeJourney?.currentLeg.currentStop.nextTimes = upcomingTimes
+                state.activeJourney?.activePredictionTimes = upcomingTimes
                 state.activeRouteDisplay.journey = state.activeJourney
-                
-                // 2. Now that the state has real times, launch the Lock Screen widget!
-                if let activeJourney = state.activeJourney {
-                    return .run { _ in
-                        await liveActivityClient.startActivity(activeJourney.route)
-                    }
-                }
                 return .none
-                
-                
-            //this will update both the app state and the live activity when something changes
-            //this comes from core location, so boundary has been triggered
-            case let .locationUpdateReceived(newLocation):
-                //we need to determine where we are and what that means for the JourneyState
-                
-                //if on stop, left stop, need to set to next stop, we update state.activeJourney based on that
-                
-                //most of the time, we will need to call the mbtaclient to get the next times for whatever we need
-                
-                //also update the widget
-                if let activeJourney = state.activeJourney {
-                    return .run { _ in
-                        await liveActivityClient.updateActivity(activeJourney)
-                    }
+            case .refreshRoutes:
+                guard let currentStop = state.activeJourney?.currentStop else {
+                    return .none
                 }
+                return .send(.fetchPredictions(currentStop))
+            //these will tell the location client it's time to force switch regions or whatever
+            //location client will then send locationEvent into stream
+            case .forcedArrival:
                 return .none
-                    
+            case .forcedDeparture:
+                return .none
+            //determine what the location event actually was
+            //send the action that corresponds to that update.
+            //those actions will update the state to correspond
+            case let .locationUpdateReceived(locationEvent):
+                switch locationEvent {
+                    case .enteredStop:
+                        return .send(.enteredStop)
+                    case .exitedStop:
+                        return .send(.exitedStop)
+                    case .authorizationDenied:
+                        return .send(.authorizationDenied)
+                    case .monitoringFailed:
+                        return .send(.locationError)
+                }
+            
+            //handles what to do with state when user arrives at stop
+            case .enteredStop:
+                return .none
+            case .exitedStop:
+                return .none
+            //kill the route, tell the user to navigate to settings
+            case .authorizationDenied:
+                return .run { send in
+                    await send(.endRoute)
+                    // send alert that tells the user they have to go to settings
+                    // this should also display if they try and hit start while it's disabled every time
+                    print("User must enable location services in settings")
+                    // add a link/way for the user to navigate to settings page
+                }
+            case .locationError:
+                return .none
             //also can trigger from widget?? figure out how later
             case .activeRouteDisplay(.delegate(.cancelRoute)):
                 // Kill the tracking session
@@ -160,11 +195,7 @@ struct RouteStarterFeature {
                 print("error goes here")
                 return .none
             //does nothing
-            case .activeRouteDisplay:
-                return .none
-            case .createRoute:
-                return .none
-            case .routeSelector:
+            case .activeRouteDisplay, .createRoute, .routeSelector:
                 return .none
             
             }
