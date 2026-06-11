@@ -13,7 +13,15 @@ import Dependencies
 struct RouteStarterFeature {
     @ObservableState
     struct State: Equatable {
-        var activeRouteDisplay = ActiveJourneyDisplayFeature.State()
+        var activeRouteDisplay: ActiveJourneyDisplayFeature.State {
+            get {
+                ActiveJourneyDisplayFeature.State(journey: activeJourney)
+            }
+            set {
+                // Intentionally blank to satisfy WritableKeyPath requirement
+                // without allowing child mutations.
+            }
+        }
         var createRoute = CreateRouteFeature.State()
         var routeSelector = SelectorFeature.State()
         var isCreateRoutePresented = false
@@ -31,7 +39,7 @@ struct RouteStarterFeature {
         case beginRoute(RouteStruct)
         case fetchPredictions(Stop)
         case endRoute
-       
+        
         // widget actions
         case refreshRoutes
         case forcedArrival //at stop button, bypasses region did enter
@@ -42,6 +50,7 @@ struct RouteStarterFeature {
         case mbtaApiResponseReceived([String])
         
         //handlers for the possible location events
+        //we may want to take in stop id and compare to avoid any cases with erroneously saved stuff
         case enteredStop
         case exitedStop
         case authorizationDenied
@@ -106,7 +115,7 @@ struct RouteStarterFeature {
                 }
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
-            
+                    
                     let stream = try await locationClient.startMonitoring(firstStop)
                     
                     // Listen to the GPS (Wait at the pipe)
@@ -123,10 +132,12 @@ struct RouteStarterFeature {
                     try await locationClient.stopMonitoring()
                 }
             case let .fetchPredictions(stop):
+                //we should probably clear all predictions instead of fetching new if en route to certain stops
                 return .run { send in
                     do {
                         let times = try await mbtaClient.fetchTransitTimes(stop)
                         // Send the data back into the reducer
+                        print(times)
                         await send(.mbtaApiResponseReceived(times))
                     }
                     catch {
@@ -134,7 +145,7 @@ struct RouteStarterFeature {
                     }
                 }
             case let .mbtaApiResponseReceived(upcomingTimes):
-                // 1. Mutate the state safely
+               
                 state.activeJourney?.activePredictionTimes = upcomingTimes
                 state.activeRouteDisplay.journey = state.activeJourney
                 return .none
@@ -154,21 +165,75 @@ struct RouteStarterFeature {
             //those actions will update the state to correspond
             case let .locationUpdateReceived(locationEvent):
                 switch locationEvent {
-                    case .enteredStop:
-                        return .send(.enteredStop)
-                    case .exitedStop:
-                        return .send(.exitedStop)
-                    case .authorizationDenied:
-                        return .send(.authorizationDenied)
-                    case .monitoringFailed:
-                        return .send(.locationError)
+                case .enteredStop:
+                    return .send(.enteredStop)
+                case .exitedStop:
+                    return .send(.exitedStop)
+                case .authorizationDenied:
+                    return .send(.authorizationDenied)
+                case .monitoringFailed:
+                    return .send(.locationError)
                 }
-            
             //handles what to do with state when user arrives at stop
             case .enteredStop:
-                return .none
+                //ignore if already at stop
+                guard state.activeJourney?.movementStatus == .enRoute else { return .none }
+                guard let currentStop = state.activeJourney?.currentStop else {
+                    return .none
+                }
+                switch currentStop.stopType {
+                case .transferStop:
+                    //run effect
+                    state.activeJourney?.stopIndex += 1
+                    guard let newStop = state.activeJourney?.currentStop else {
+                        return .none
+                    }
+                    //if they overlap, we're already at the next stop. if not, user is en route to the next stop
+                    if currentStop.overlapsWithNext {
+                        state.activeJourney?.movementStatus = .atStop
+                    } else {
+                        state.activeJourney?.movementStatus = .enRoute
+                    }
+                    return .run { send in
+                        try await locationClient.registerNextStopRegion(newStop)
+                        //get times for the new stop
+                        await send(.fetchPredictions(newStop))
+                    }
+                    //fire did exit as either way, we're dropping bounds
+                case .boardingStop:
+                    //get new times, don't update current stop
+                    state.activeJourney?.movementStatus = .atStop
+                    return .send(.fetchPredictions(currentStop))
+                    
+                case .finalStop:
+                    //user can dismiss via widget or leaving
+                    state.activeJourney?.movementStatus = .atStop
+                    return .none
+                }
             case .exitedStop:
-                return .none
+                guard let currentStop = state.activeJourney?.currentStop else {
+                    return .none
+                }
+                switch currentStop.stopType {
+                case .transferStop:
+                    //this probably shouldn't happen? we should have already dropped monitoring here
+                    return .none
+                case .boardingStop:
+                    //get new times, don't update current stop
+                    state.activeJourney?.movementStatus = .enRoute
+                    state.activeJourney?.stopIndex += 1
+                    guard let newStop = state.activeJourney?.currentStop else {
+                        return .none
+                    }
+                    return .run { send in
+                        try await locationClient.registerNextStopRegion(newStop)
+                        //we probably don't need predictions, because next stop with be transfer or final
+                      //  await send(.fetchPredictions(newStop))
+                    }
+                case .finalStop:
+                    //kill route if they wander off
+                    return .send(.endRoute)
+                }
             //kill the route, tell the user to navigate to settings
             case .authorizationDenied:
                 return .run { send in

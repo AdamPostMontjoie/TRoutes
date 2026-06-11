@@ -13,30 +13,25 @@ struct ActiveJourneyDisplayView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Live Activity style icon/indicator
-            Image(systemName: "tram.fill")
+            Image(systemName: movementIconName)
                 .font(.title2)
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
-                .background(Color.blue) // Will map to your AccentColor later
+                .background(movementIconColor)
                 .clipShape(Circle())
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.journey?.route.name ?? "Active Route")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.journey?.currentStop.stopName ?? "Active Journey")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 
-                // Placeholder for actual live data later
-                Text("Fetching next stop...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                predictionTimesView
             }
             
             Spacer()
             
-            // Cancel button to end the journey and kill the location stream
             Button {
-                store.send(.delegate(.cancelRoute))
+                store.send(.cancelButtonTapped)
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title2)
@@ -49,5 +44,41 @@ struct ActiveJourneyDisplayView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
         .padding(.horizontal)
+    }
+    
+    private var movementIconName: String {
+        switch store.journey?.movementStatus {
+        case .atStop:
+            return "mappin.circle.fill"
+        case .enRoute, .none:
+            return "arrow.right.circle.fill"
+        }
+    }
+    
+    private var movementIconColor: Color {
+        switch store.journey?.movementStatus {
+        case .atStop:
+            return .red
+        case .enRoute, .none:
+            return .blue
+        }
+    }
+    
+    @ViewBuilder
+    private var predictionTimesView: some View {
+        if let predictionTimes = store.journey?.activePredictionTimes, !predictionTimes.isEmpty {
+            Text(predictionTimes.joined(separator: "  •  "))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading predictions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }

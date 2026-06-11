@@ -11,15 +11,17 @@ import ComposableArchitecture
 struct ActiveJourneyDisplayFeature {
     @ObservableState
     struct State: Equatable {
+        //direct reflection of activeJourney in RouteStartFeature
         var journey: JourneyState?
     }
-    
-    //no other actions needed, this is just a reflection
+
     enum Action: Equatable {
         case cancelButtonTapped
         case delegate(Delegate)
         enum Delegate:Equatable {
-            case cancelRoute //kills the active route
+            case cancelRoute
+            case atStop
+            case nextStop
         }
     }
     
