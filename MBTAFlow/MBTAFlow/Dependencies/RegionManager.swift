@@ -64,7 +64,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         )
         region.notifyOnEntry = true
         region.notifyOnExit = true
-        
+        guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else {
+                    print("⚠️ CoreLocation: Monitoring NOT available on this device/simulator.")
+                    return
+                }
+                
+        locationManager.startMonitoring(for: region)
+        print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: 100m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
     }

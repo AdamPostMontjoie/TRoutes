@@ -13,7 +13,15 @@ import Dependencies
 struct RouteStarterFeature {
     @ObservableState
     struct State: Equatable {
-        var activeRouteDisplay = ActiveJourneyDisplayFeature.State()
+        var activeRouteDisplay: ActiveJourneyDisplayFeature.State {
+            get {
+                ActiveJourneyDisplayFeature.State(journey: activeJourney)
+            }
+            set {
+                // Intentionally blank to satisfy WritableKeyPath requirement
+                // without allowing child mutations.
+            }
+        }
         var createRoute = CreateRouteFeature.State()
         var routeSelector = SelectorFeature.State()
         var isCreateRoutePresented = false
@@ -42,6 +50,7 @@ struct RouteStarterFeature {
         case mbtaApiResponseReceived([String])
         
         //handlers for the possible location events
+        //we may want to take in stop id and compare to avoid any cases with erroneously saved stuff
         case enteredStop
         case exitedStop
         case authorizationDenied
@@ -123,10 +132,12 @@ struct RouteStarterFeature {
                     try await locationClient.stopMonitoring()
                 }
             case let .fetchPredictions(stop):
+                //we should probably clear all predictions instead of fetching new if en route to certain stops
                 return .run { send in
                     do {
                         let times = try await mbtaClient.fetchTransitTimes(stop)
                         // Send the data back into the reducer
+                        print(times)
                         await send(.mbtaApiResponseReceived(times))
                     }
                     catch {
@@ -134,7 +145,7 @@ struct RouteStarterFeature {
                     }
                 }
             case let .mbtaApiResponseReceived(upcomingTimes):
-                // 1. Mutate the state safely
+               
                 state.activeJourney?.activePredictionTimes = upcomingTimes
                 state.activeRouteDisplay.journey = state.activeJourney
                 return .none
@@ -163,7 +174,6 @@ struct RouteStarterFeature {
                 case .monitoringFailed:
                     return .send(.locationError)
                 }
-            
             //handles what to do with state when user arrives at stop
             case .enteredStop:
                 //ignore if already at stop
@@ -185,7 +195,6 @@ struct RouteStarterFeature {
                         state.activeJourney?.movementStatus = .enRoute
                     }
                     return .run { send in
-                        
                         try await locationClient.registerNextStopRegion(newStop)
                         //get times for the new stop
                         await send(.fetchPredictions(newStop))
@@ -194,7 +203,7 @@ struct RouteStarterFeature {
                 case .boardingStop:
                     //get new times, don't update current stop
                     state.activeJourney?.movementStatus = .atStop
-                    return .send(.fetchPredictions(state.activeJourney!.currentStop))
+                    return .send(.fetchPredictions(currentStop))
                     
                 case .finalStop:
                     //user can dismiss via widget or leaving
@@ -225,7 +234,6 @@ struct RouteStarterFeature {
                     //kill route if they wander off
                     return .send(.endRoute)
                 }
-                return .none
             //kill the route, tell the user to navigate to settings
             case .authorizationDenied:
                 return .run { send in
