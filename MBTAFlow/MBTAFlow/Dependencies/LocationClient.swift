@@ -51,8 +51,10 @@ private actor LocationActor {
         await manager.registerRegion(for: stop)
     }
     
-    func stop() {
-        manager = nil // triggers onTermination which calls stopAll()
+    func stop() async {
+        guard let manager else { return }
+        await manager.stopAll()
+        self.manager = nil
     }
 }
 

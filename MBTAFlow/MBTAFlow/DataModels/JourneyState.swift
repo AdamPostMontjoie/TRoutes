@@ -13,7 +13,10 @@ struct JourneyState: Equatable {
     var movementStatus: MovementStatus = .enRoute
     var activePredictionTimes: [String] = []
     
-    var currentStop: Stop {
+    var currentStop: Stop? {
+        guard stopSequence.indices.contains(stopIndex) else {
+            return nil
+        }
         return stopSequence[stopIndex]
     }
     
@@ -24,6 +27,16 @@ struct JourneyState: Equatable {
     init(route: RouteStruct) {
         self.route = route
         self.stopSequence = route.legs.flatMap { [$0.startStop, $0.endStop] }
+    }
+    
+    mutating func advanceToNextStop() -> Stop? {
+        let nextIndex = stopIndex + 1
+        guard stopSequence.indices.contains(nextIndex) else {
+            return nil
+        }
+
+        stopIndex = nextIndex
+        return stopSequence[stopIndex]
     }
 }
 

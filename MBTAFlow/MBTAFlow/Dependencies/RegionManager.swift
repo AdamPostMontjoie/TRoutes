@@ -20,7 +20,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
             self?.continuation = continuation
             continuation.onTermination = { [weak self] _ in
                 Task {
-                    await self?.stopAll()
+                    print("stream termination")
+                    await self?.clearMonitoredRegions()
                 }
             }
         }
@@ -50,9 +51,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     func registerRegion(for stop: Stop) {
         //remove all regions, 1 monitored maximum
-        locationManager.monitoredRegions.forEach {
-                locationManager.stopMonitoring(for: $0)
-        }
+        clearMonitoredRegions()
         let coordinate = CLLocationCoordinate2D(
             latitude: stop.latitude,
             longitude: stop.longitude
@@ -68,8 +67,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
                     print("⚠️ CoreLocation: Monitoring NOT available on this device/simulator.")
                     return
                 }
-                
-        locationManager.startMonitoring(for: region)
+        
         print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: 100m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
@@ -80,19 +78,26 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
        // self.stopAll()
     }
     
-    private func stopAll() {
-        locationManager.monitoredRegions.forEach {
-            locationManager.stopMonitoring(for: $0)
-        }
+    func stopAll() {
+        clearMonitoredRegions()
         continuation?.finish()
     }
+    private func clearMonitoredRegions(){
+        locationManager.monitoredRegions.forEach {
+            print("Removing montitored region")
+            locationManager.stopMonitoring(for: $0)
+        }
+    }
+    
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        print("entered region")
         continuation?.yield(.enteredStop(stopId: region.identifier))
     }
     
     //on exit
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        print("exited region")
         continuation?.yield(.exitedStop(stopId: region.identifier))
         
         // Stop monitoring the region we just left

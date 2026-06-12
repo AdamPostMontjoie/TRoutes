@@ -56,7 +56,8 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop in
-            // 1. Construct the URL using the correct MBTA identifiers
+            //it seems as if the predictions endpoint will return outdated times. potential solution is to pull more than 3
+            //filter out any that are in past and then return next 3.
             guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=3") else {
                 throw URLError(.badURL)
             }
