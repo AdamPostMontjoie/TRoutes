@@ -37,7 +37,7 @@ struct ActiveJourneyDisplayView: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(store.journey?.currentStop?.stopName ?? "Active Journey")
+                Text(stopDisplayText)
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 
@@ -71,6 +71,19 @@ struct ActiveJourneyDisplayView: View {
         }
     }
     
+    private var stopDisplayText: String {
+            guard let journey = store.journey, let stopName = journey.currentStop?.stopName else {
+                return ""
+            }
+            
+            switch journey.movementStatus {
+            case .atStop:
+                return "At: \(stopName)"
+            case .enRoute:
+                return "En route to: \(stopName)"
+            }
+        }
+    
     @ViewBuilder
     private var predictionTimesView: some View {
         if let predictionTimes = store.journey?.activePredictionTimes, !predictionTimes.isEmpty {
@@ -78,7 +91,7 @@ struct ActiveJourneyDisplayView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-        } else {
+        } else if store.journey?.needTimes != false {
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.small)
