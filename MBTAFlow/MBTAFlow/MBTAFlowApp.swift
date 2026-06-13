@@ -10,16 +10,16 @@ import ComposableArchitecture
 import SwiftData
 
 @main
-struct FoodSizer: App {
+struct MBTAFlow: App {
     
     static let store = Store(initialState: RootFeature.State()) {
         RootFeature()
       }
+    
     var body: some Scene {
         WindowGroup {
-            RootView(store:FoodSizer.store)
+            RootView(store:MBTAFlow.store)
         }
-        .modelContainer(for: Route.self) //initializes database for app
     }
 }
 

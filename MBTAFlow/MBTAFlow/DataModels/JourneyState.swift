@@ -12,8 +12,12 @@ struct JourneyState: Equatable {
     var stopIndex: Int = 0
     var movementStatus: MovementStatus = .enRoute
     var activePredictionTimes: [String] = []
+    var needTimes:Bool = true
     
-    var currentStop: Stop {
+    var currentStop: Stop? {
+        guard stopSequence.indices.contains(stopIndex) else {
+            return nil
+        }
         return stopSequence[stopIndex]
     }
     
@@ -23,7 +27,39 @@ struct JourneyState: Equatable {
     
     init(route: RouteStruct) {
         self.route = route
-        self.stopSequence = route.legs.flatMap { [$0.startStop, $0.endStop] }
+        var sequence: [Stop] = []
+        
+        for index in route.legs.indices {
+            let isLastLeg = index == route.legs.indices.last
+            var startStop = route.legs[index].startStop
+            var endStop = route.legs[index].endStop
+            
+            startStop.stopType = .boardingStop
+            startStop.overlapsWithNext = false
+            endStop.stopType = isLastLeg ? .finalStop : .transferStop
+            
+            if !isLastLeg {
+                let nextStartStop = route.legs[index + 1].startStop
+                endStop.overlapsWithNext = endStop.mbtaStopId == nextStartStop.mbtaStopId
+            } else {
+                endStop.overlapsWithNext = false
+            }
+            
+            sequence.append(startStop)
+            sequence.append(endStop)
+        }
+        
+        self.stopSequence = sequence
+    }
+    
+    mutating func advanceToNextStop() -> Stop? {
+        let nextIndex = stopIndex + 1
+        guard stopSequence.indices.contains(nextIndex) else {
+            return nil
+        }
+
+        stopIndex = nextIndex
+        return stopSequence[stopIndex]
     }
 }
 

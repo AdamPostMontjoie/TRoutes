@@ -13,15 +13,31 @@ struct ActiveJourneyDisplayView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: movementIconName)
-                .font(.title2)
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(movementIconColor)
-                .clipShape(Circle())
+            //stop action button
+            if store.shouldShowStopActionButton {
+                Button {
+                    switch store.journey?.movementStatus {
+                    case .enRoute:
+                        store.send(.atStopButtonTapped)
+                    case .atStop:
+                        store.send(.nextStopButtonTapped)
+                    case .none:
+                        break
+                    }
+                } label: {
+                    Image(systemName: store.movementIconName)
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(movementIconColor)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+            }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(store.journey?.currentStop.stopName ?? "Active Journey")
+                Text(stopDisplayText)
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 
@@ -46,23 +62,27 @@ struct ActiveJourneyDisplayView: View {
         .padding(.horizontal)
     }
     
-    private var movementIconName: String {
+    private var movementIconColor: Color {
         switch store.journey?.movementStatus {
-        case .atStop:
-            return "mappin.circle.fill"
         case .enRoute, .none:
-            return "arrow.right.circle.fill"
+            return .red     // manual "I'm at the stop"
+        case .atStop:
+            return .blue    // manual "go to next stop"
         }
     }
     
-    private var movementIconColor: Color {
-        switch store.journey?.movementStatus {
-        case .atStop:
-            return .red
-        case .enRoute, .none:
-            return .blue
+    private var stopDisplayText: String {
+            guard let journey = store.journey, let stopName = journey.currentStop?.stopName else {
+                return ""
+            }
+            
+            switch journey.movementStatus {
+            case .atStop:
+                return "At: \(stopName)"
+            case .enRoute:
+                return "En route to: \(stopName)"
+            }
         }
-    }
     
     @ViewBuilder
     private var predictionTimesView: some View {
@@ -71,7 +91,7 @@ struct ActiveJourneyDisplayView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-        } else {
+        } else if store.journey?.needTimes != false {
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.small)

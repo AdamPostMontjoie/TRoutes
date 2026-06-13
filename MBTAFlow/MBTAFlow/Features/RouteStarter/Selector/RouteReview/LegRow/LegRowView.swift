@@ -15,12 +15,19 @@ struct LegRowView: View {
         HStack(spacing: 12) {
             Text(store.leg.startStop.stopName)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
+                
             Image(systemName: "arrow.right")
                 .foregroundStyle(.secondary)
 
             Text(store.leg.endStop.stopName)
                 .frame(maxWidth: .infinity, alignment: .trailing)
+
+            Button {
+                store.send(.editButtonTapped)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
         }
     }
 }

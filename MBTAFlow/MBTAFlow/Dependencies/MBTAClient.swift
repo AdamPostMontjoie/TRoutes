@@ -56,8 +56,9 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop in
-            // 1. Construct the URL using the correct MBTA identifiers
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=3") else {
+            //it seems as if the predictions endpoint will return outdated times. potential solution is to pull more than 3
+            //filter out any that are in past and then return next 3.
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
                 throw URLError(.badURL)
             }
             
@@ -82,20 +83,26 @@ extension MBTAClient:DependencyKey {
                 let displayFormatter = DateFormatter()
                 displayFormatter.timeStyle = .short
                 
+                let calendarComparator = Calendar.current
                 for prediction in predictionResponse.data {
                     // If it's the first stop on a route, arrivalTime is null, so fallback to departureTime
+                    
                     if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
                        let date = isoFormatter.date(from: timeString) {
+                        let now = Date()
+                        //filter out any times in the past
+                        if calendarComparator.isDate(date, equalTo: now, toGranularity: .minute) || date > now {
+                            let readableTime = displayFormatter.string(from: date)
+                            upcomingTimes.append(readableTime)
+                        }
                         
-                        let readableTime = displayFormatter.string(from: date)
-                        upcomingTimes.append(readableTime)
                         
                     } else if let status = prediction.attributes.status {
                         // Fallback: If there is no exact time, the MBTA might just provide a status like "Approaching"
                         upcomingTimes.append(status)
                     }
                 }
-                return upcomingTimes
+                return Array(upcomingTimes.prefix(3))
             } catch {
                 throw MBTAError.decodingError
             }

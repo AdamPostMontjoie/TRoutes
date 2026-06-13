@@ -13,7 +13,7 @@ import Dependencies
 struct RouteStarterFeature {
     @ObservableState
     struct State: Equatable {
-        var activeRouteDisplay: ActiveJourneyDisplayFeature.State {
+        var activeJourneyDisplay: ActiveJourneyDisplayFeature.State {
             get {
                 ActiveJourneyDisplayFeature.State(journey: activeJourney)
             }
@@ -30,7 +30,7 @@ struct RouteStarterFeature {
     }
     
     enum Action:Equatable {
-        case activeRouteDisplay(ActiveJourneyDisplayFeature.Action)
+        case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
         case createRoute(CreateRouteFeature.Action)
         case onCreateButtonTapped
         case onCreateRouteDismissed(Bool)
@@ -65,7 +65,7 @@ struct RouteStarterFeature {
     @Dependency(\.liveActivityClient) var liveActivityClient
     @Dependency(\.mbtaClient) var mbtaClient
     var body: some ReducerOf<Self> {
-        Scope(state: \.activeRouteDisplay, action: \.activeRouteDisplay) {
+        Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {
             ActiveJourneyDisplayFeature()
         }
         Scope(state: \.createRoute, action: \.createRoute) {
@@ -93,6 +93,12 @@ struct RouteStarterFeature {
                 } else {
                     return .none
                 }
+            case .activeJourneyDisplay(.delegate(.cancelRoute)):
+                return .send(.endRoute)
+            case .activeJourneyDisplay(.delegate(.manualAtStop)):
+                return .send(.enteredStop)
+            case .activeJourneyDisplay(.delegate(.manualNextStop)):
+                return .send(.exitedStop)
             //this starts the route from inside the app, most of the logic is kicked off here
             case let .routeSelector(.delegate(.startRoute(id))):
                 
@@ -106,17 +112,20 @@ struct RouteStarterFeature {
                 
             // starts the route
             case let .beginRoute(route):
-                state.isActiveJourneyPresented = true
-                state.activeJourney = JourneyState(route: route)
-                state.activeRouteDisplay.journey = state.activeJourney
-                
-                guard let firstStop = route.legs.first?.startStop else {
+                let journey = JourneyState(route: route)
+                guard let firstStop = journey.currentStop else {
                     return .none
                 }
+
+                state.isActiveJourneyPresented = true
+                state.activeJourney = journey
+               // state.activeJourneyDisplay.journey = state.activeJourney
+                
+                let startMonitoring = locationClient.startMonitoring
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
                     
-                    let stream = try await locationClient.startMonitoring(firstStop)
+                    let stream = try await startMonitoring(firstStop)
                     
                     // Listen to the GPS (Wait at the pipe)
                     // This loop runs infinitely in the background until the effect is cancelled
@@ -126,16 +135,19 @@ struct RouteStarterFeature {
                 }
             //this will be called on natural end or forceful cancelation
             case .endRoute:
+                print("end route")
                 state.isActiveJourneyPresented = false
                 state.activeJourney = nil
+                let stopMonitoring = locationClient.stopMonitoring
                 return .run { send in
-                    try await locationClient.stopMonitoring()
+                    try await stopMonitoring()
                 }
             case let .fetchPredictions(stop):
                 //we should probably clear all predictions instead of fetching new if en route to certain stops
+                let fetchTransitTimes = mbtaClient.fetchTransitTimes
                 return .run { send in
                     do {
-                        let times = try await mbtaClient.fetchTransitTimes(stop)
+                        let times = try await fetchTransitTimes(stop)
                         // Send the data back into the reducer
                         print(times)
                         await send(.mbtaApiResponseReceived(times))
@@ -143,11 +155,11 @@ struct RouteStarterFeature {
                     catch {
                         await send(.apiFailed)
                     }
-                }
+                }.cancellable(id: CancelID.apiFetch, cancelInFlight: true)
             case let .mbtaApiResponseReceived(upcomingTimes):
                
                 state.activeJourney?.activePredictionTimes = upcomingTimes
-                state.activeRouteDisplay.journey = state.activeJourney
+             //   state.activeRouteDisplay.journey = state.activeJourney
                 return .none
             case .refreshRoutes:
                 guard let currentStop = state.activeJourney?.currentStop else {
@@ -157,9 +169,9 @@ struct RouteStarterFeature {
             //these will tell the location client it's time to force switch regions or whatever
             //location client will then send locationEvent into stream
             case .forcedArrival:
-                return .none
+                return .send(.enteredStop)
             case .forcedDeparture:
-                return .none
+                return .send(.exitedStop)
             //determine what the location event actually was
             //send the action that corresponds to that update.
             //those actions will update the state to correspond
@@ -184,8 +196,8 @@ struct RouteStarterFeature {
                 switch currentStop.stopType {
                 case .transferStop:
                     //run effect
-                    state.activeJourney?.stopIndex += 1
-                    guard let newStop = state.activeJourney?.currentStop else {
+                   
+                    guard let newStop = state.activeJourney?.advanceToNextStop() else {
                         return .none
                     }
                     //if they overlap, we're already at the next stop. if not, user is en route to the next stop
@@ -194,8 +206,10 @@ struct RouteStarterFeature {
                     } else {
                         state.activeJourney?.movementStatus = .enRoute
                     }
+                    state.activeJourney?.needTimes = true
+                    let registerNextStopRegion = locationClient.registerNextStopRegion
                     return .run { send in
-                        try await locationClient.registerNextStopRegion(newStop)
+                        try await registerNextStopRegion(newStop)
                         //get times for the new stop
                         await send(.fetchPredictions(newStop))
                     }
@@ -203,6 +217,8 @@ struct RouteStarterFeature {
                 case .boardingStop:
                     //get new times, don't update current stop
                     state.activeJourney?.movementStatus = .atStop
+                    state.activeJourney?.needTimes = true
+                    
                     return .send(.fetchPredictions(currentStop))
                     
                 case .finalStop:
@@ -219,14 +235,17 @@ struct RouteStarterFeature {
                     //this probably shouldn't happen? we should have already dropped monitoring here
                     return .none
                 case .boardingStop:
-                    //get new times, don't update current stop
                     state.activeJourney?.movementStatus = .enRoute
                     state.activeJourney?.stopIndex += 1
                     guard let newStop = state.activeJourney?.currentStop else {
                         return .none
                     }
+                    //we're on way to transfer or final stop, need no new times
+                    state.activeJourney?.activePredictionTimes = []
+                    state.activeJourney?.needTimes = false
+                    let registerNextStopRegion = locationClient.registerNextStopRegion
                     return .run { send in
-                        try await locationClient.registerNextStopRegion(newStop)
+                        try await registerNextStopRegion(newStop)
                         //we probably don't need predictions, because next stop with be transfer or final
                       //  await send(.fetchPredictions(newStop))
                     }
@@ -245,25 +264,17 @@ struct RouteStarterFeature {
                 }
             case .locationError:
                 return .none
-            //also can trigger from widget?? figure out how later
-            case .activeRouteDisplay(.delegate(.cancelRoute)):
-                // Kill the tracking session
-                state.activeJourney = nil
-                state.activeRouteDisplay.journey = nil
-                state.isActiveJourneyPresented = false
-                
-                return .run { _ in
-                    await liveActivityClient.endActivity()
-                    // Location client stream will automatically cancel when the effect ends
-                }
             case .apiFailed:
                 print("error goes here")
+                state.activeJourney?.needTimes = false
                 return .none
             //does nothing
-            case .activeRouteDisplay, .createRoute, .routeSelector:
+            case .activeJourneyDisplay, .createRoute, .routeSelector:
                 return .none
             
             }
         }
     }
 }
+
+private enum CancelID { case apiFetch }

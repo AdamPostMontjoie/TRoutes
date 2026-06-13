@@ -10,10 +10,32 @@ import Foundation
 
 @Reducer
 struct RouteReviewFeature {
+    private func defaultRouteName(for legs: [Leg]) -> String? {
+        guard let firstLeg = legs.first,
+              let lastLeg = legs.last else {
+            return nil
+        }
+
+        return "\(firstLeg.startStop.stopName) to \(lastLeg.endStop.stopName)"
+    }
+    //renames routes if they're default and stops have changed, does not if customizing or customized
+    private func routeWithUpdatedDefaultName(previousRoute: RouteStruct?, updatedRoute: RouteStruct) -> RouteStruct {
+        guard let previousRoute,
+              previousRoute.name == defaultRouteName(for: previousRoute.legs),
+              updatedRoute.name == previousRoute.name,
+              let updatedDefaultName = defaultRouteName(for: updatedRoute.legs) else {
+            return updatedRoute
+        }
+
+        var route = updatedRoute
+        route.name = updatedDefaultName
+        return route
+    }
     @ObservableState
     struct State: Equatable {
         var route: RouteStruct
         var legRows: IdentifiedArrayOf<LegRowFeature.State> = []
+        @Presents var destination: Destination.State?
 
         init(route: RouteStruct) {
             self.route = route
@@ -23,11 +45,13 @@ struct RouteReviewFeature {
         }
     }
 
-    enum Action: Equatable {
-        case editNameButtonTapped(String)
+    enum Action: BindableAction, Equatable {
+        case binding(BindingAction<State>)
+        case nameEditingEnded
         case deleteRouteButtonTapped
         case delegate(Delegate)
         case legRows(IdentifiedActionOf<LegRowFeature>)
+        case destination(PresentationAction<Destination.Action>)
 
         enum Delegate: Equatable {
             case deleteRoute(UUID)
@@ -36,24 +60,57 @@ struct RouteReviewFeature {
     }
 
     var body: some ReducerOf<Self> {
+        BindingReducer()
         Reduce { state, action in
             switch action {
-            case let .editNameButtonTapped(newName):
-                state.route.name = newName
+            case .binding:
+                return .none
+
+            case .nameEditingEnded:
                 return .send(.delegate(.updateRoute(state.route)))
 
             case .deleteRouteButtonTapped:
                 return .send(.delegate(.deleteRoute(state.route.id)))
 
-            case .delegate:
+            case let .legRows(.element(id: _, action: .delegate(.editLeg(leg)))):
+                state.destination = .editLeg(EditLegFeature.State(leg: leg))
                 return .none
 
-            case .legRows:
+            case let .destination(.presented(.editLeg(.delegate(.saveEditedLeg(updatedLeg))))):
+                guard let index = state.route.legs.firstIndex(where: { $0.id == updatedLeg.id }) else {
+                    return .none
+                }
+
+                let previousRoute = state.route
+                state.route.legs[index] = updatedLeg
+                state.route = routeWithUpdatedDefaultName(previousRoute: previousRoute, updatedRoute: state.route)
+                state.legRows = IdentifiedArray(
+                    uniqueElements: state.route.legs.map { LegRowFeature.State(leg: $0) }
+                )
+                state.destination = nil
+                return .send(.delegate(.updateRoute(state.route)))
+
+            case .destination(.presented(.editLeg(.delegate(.dismiss)))):
+                state.destination = nil
+                return .none
+
+            case .delegate, .legRows, .destination:
                 return .none
             }
         }
         .forEach(\.legRows, action: \.legRows) {
             LegRowFeature()
         }
+        .ifLet(\.$destination, action: \.destination)
     }
 }
+
+extension RouteReviewFeature {
+    @Reducer
+    enum Destination {
+        case editLeg(EditLegFeature)
+    }
+}
+
+extension RouteReviewFeature.Destination.State: Equatable {}
+extension RouteReviewFeature.Destination.Action: Equatable {}

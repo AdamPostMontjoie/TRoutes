@@ -18,8 +18,8 @@ struct RouteStarterView: View {
                 if store.isActiveJourneyPresented {
                     ActiveJourneyDisplayView(
                         store: store.scope(
-                            state: \.activeRouteDisplay,
-                            action: \.activeRouteDisplay
+                            state: \.activeJourneyDisplay,
+                            action: \.activeJourneyDisplay
                         )
                     )
                     .padding(.top, 8)
