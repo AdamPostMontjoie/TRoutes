@@ -13,6 +13,13 @@ enum LegFormMode: Equatable {
     case create
     case edit
 }
+enum FormStep: Equatable {
+    case selectType
+    case selectBranch
+    case selectDirection
+    case selectStartStop
+    case selectEndStop
+}
 
 @Reducer
 struct LegFormFeature {
@@ -36,7 +43,9 @@ struct LegFormFeature {
             state.mbtaRouteId = nil
             state.currentLeg = nil
             state.currentFormStep = .selectType
-            state.hasHydratedEditOptions = false
+            state.hasHydratedEditBranchOptions = false
+            state.hasHydratedEditDirectionOptions = false
+            state.hasHydratedEditStopOptions = false
 
         case .branch:
             state.selectedBranch = nil
@@ -48,7 +57,8 @@ struct LegFormFeature {
             state.mbtaRouteId = nil
             state.currentLeg = nil
             state.currentFormStep = .selectBranch
-            state.hasHydratedEditOptions = false
+            state.hasHydratedEditDirectionOptions = false
+            state.hasHydratedEditStopOptions = false
 
         case .direction:
             state.selectedDirection = nil
@@ -57,7 +67,7 @@ struct LegFormFeature {
             state.selectedEndStop = nil
             state.currentLeg = nil
             state.currentFormStep = .selectDirection
-            state.hasHydratedEditOptions = false
+            state.hasHydratedEditStopOptions = false
 
         case .startStop:
             state.selectedStartStop = nil
@@ -66,6 +76,7 @@ struct LegFormFeature {
             state.currentFormStep = .selectStartStop
         }
     }
+    // MARK: - State
     @ObservableState
     struct State: Equatable {
         var mode: LegFormMode
@@ -82,8 +93,11 @@ struct LegFormFeature {
         var mbtaRouteId: String?
         var currentFormStep: FormStep = .selectType
         var currentLeg: Leg?
+        var editingLegId: UUID?
         
-        var hasHydratedEditOptions = false
+        var hasHydratedEditBranchOptions = false
+        var hasHydratedEditDirectionOptions = false
+        var hasHydratedEditStopOptions = false
 
         @Presents var destination: Destination.State?
 
@@ -98,6 +112,7 @@ struct LegFormFeature {
             self.selectedEndStop = leg.endStop
             self.mbtaRouteId = leg.mbtaRouteId
             self.currentLeg = leg
+            self.editingLegId = leg.id
             self.currentFormStep = .selectEndStop
 
             self.selectedBranch = leg.transitBranch
@@ -107,7 +122,7 @@ struct LegFormFeature {
             self.stopOptions = [leg.startStop, leg.endStop]
         }
     }
-
+    // MARK: - Actions
     enum Action: Equatable {
         case transitTypeSelected(TransitType)
         case branchesLoaded([TransitBranch])
@@ -115,7 +130,9 @@ struct LegFormFeature {
         case directionsLoaded([TransitDirection])
         case directionSelected(TransitDirection, String)
         case stopsLoaded([Stop])
-        case editOptionsHydrated([Stop])
+        case editBranchOptionsHydrated([TransitBranch])
+        case editDirectionOptionsHydrated([TransitDirection])
+        case editStopOptionsHydrated([Stop])
         case startStopSelected(Stop)
         case endStopSelected(Stop)
 
@@ -158,23 +175,63 @@ struct LegFormFeature {
                 return .send(.delegate(.requestDismissal))
 
             case .onAppear:
-                guard state.mode == .edit,
-                      !state.hasHydratedEditOptions,
-                      let direction = state.selectedDirection,
-                      let routeId = state.mbtaRouteId else {
+                guard state.mode == .edit else {
                     return .none
                 }
 
-                state.hasHydratedEditOptions = true
-                let fetchStops = mbtaClient.fetchStops
-                return .run { send in
-                    do {
-                        let stops = try await fetchStops(direction.directionId, routeId)
-                        await send(.editOptionsHydrated(stops))
-                    } catch {
-                        await send(.apiFailure)
-                    }
+                var effects: [Effect<Action>] = []
+
+                if !state.hasHydratedEditBranchOptions,
+                   let selectedType = state.selectedType,
+                   case let .fetchRoutes(filterKey, filterValue) = selectedType.apiStrategy {
+                    state.hasHydratedEditBranchOptions = true
+                    let fetchBranches = mbtaClient.fetchBranches
+                    effects.append(
+                        .run { send in
+                            do {
+                                let branches = try await fetchBranches(filterKey, filterValue)
+                                await send(.editBranchOptionsHydrated(branches))
+                            } catch {
+                                await send(.apiFailure)
+                            }
+                        }
+                    )
                 }
+
+                if !state.hasHydratedEditDirectionOptions,
+                   let routeId = state.mbtaRouteId {
+                    state.hasHydratedEditDirectionOptions = true
+                    let fetchDirections = mbtaClient.fetchDirections
+                    effects.append(
+                        .run { send in
+                            do {
+                                let directions = try await fetchDirections(routeId)
+                                await send(.editDirectionOptionsHydrated(directions))
+                            } catch {
+                                await send(.apiFailure)
+                            }
+                        }
+                    )
+                }
+
+                if !state.hasHydratedEditStopOptions,
+                   let direction = state.selectedDirection,
+                   let routeId = state.mbtaRouteId {
+                    state.hasHydratedEditStopOptions = true
+                    let fetchStops = mbtaClient.fetchStops
+                    effects.append(
+                        .run { send in
+                            do {
+                                let stops = try await fetchStops(direction.directionId, routeId)
+                                await send(.editStopOptionsHydrated(stops))
+                            } catch {
+                                await send(.apiFailure)
+                            }
+                        }
+                    )
+                }
+
+                return .merge(effects)
 
             case let .transitTypeSelected(type):
                 state.selectedType = type
@@ -247,22 +304,48 @@ struct LegFormFeature {
             case let .stopsLoaded(options):
                 state.currentFormStep = .selectStartStop
                 state.stopOptions = options
-                state.hasHydratedEditOptions = true
+                state.hasHydratedEditStopOptions = true
                 return .none
 
-            case let .editOptionsHydrated(options):
+            case let .editBranchOptionsHydrated(options):
+                var hydratedBranches = options
+                if let savedBranch = state.selectedBranch {
+                    if let freshBranch = hydratedBranches.first(where: { $0.id == savedBranch.id }) {
+                        state.selectedBranch = freshBranch
+                        state.mbtaRouteId = freshBranch.id
+                    } else {
+                        hydratedBranches.append(savedBranch)
+                    }
+                }
+
+                state.branchOptions = hydratedBranches
+                state.hasHydratedEditBranchOptions = true
+                return .send(.buildLeg)
+
+            case let .editDirectionOptionsHydrated(options):
+                var hydratedDirections = options
+                if let savedDirection = state.selectedDirection {
+                    if let freshDirection = hydratedDirections.first(where: { $0.directionId == savedDirection.directionId }) {
+                        state.selectedDirection = freshDirection
+                    } else {
+                        hydratedDirections.append(savedDirection)
+                    }
+                }
+
+                state.directionOptions = hydratedDirections
+                state.hasHydratedEditDirectionOptions = true
+                return .send(.buildLeg)
+
+            case let .editStopOptionsHydrated(options):
                 var hydratedStops = options
                 if let savedStart = state.selectedStartStop {
-                        if let freshStart = hydratedStops.first(where: { $0.mbtaStopId == savedStart.mbtaStopId }) {
-                            state.selectedStartStop = freshStart
-                        } else {
-                            // Safety fallback: If API doesn't return it exactly, keep the saved one
-                            hydratedStops.append(savedStart)
-                            print("api did not return exact stop")
-                        }
+                    if let freshStart = hydratedStops.first(where: { $0.mbtaStopId == savedStart.mbtaStopId }) {
+                        state.selectedStartStop = freshStart
+                    } else {
+                        hydratedStops.append(savedStart)
                     }
+                }
 
-                    // 2. Re-align the End Stop to the fresh API instance
                 if let savedEnd = state.selectedEndStop {
                     if let freshEnd = hydratedStops.first(where: { $0.mbtaStopId == savedEnd.mbtaStopId }) {
                         state.selectedEndStop = freshEnd
@@ -270,8 +353,9 @@ struct LegFormFeature {
                         hydratedStops.append(savedEnd)
                     }
                 }
+
                 state.stopOptions = hydratedStops
-                state.hasHydratedEditOptions = true
+                state.hasHydratedEditStopOptions = true
                 return .send(.buildLeg)
 
             case let .startStopSelected(stop):
@@ -293,7 +377,7 @@ struct LegFormFeature {
                 }
 
                 state.currentLeg = Leg(
-                    id: state.currentLeg?.id ?? UUID(),
+                    id: state.editingLegId ?? state.currentLeg?.id ?? UUID(),
                     startStop: startStop,
                     endStop: endStop,
                     mbtaRouteId: mbtaRouteId,

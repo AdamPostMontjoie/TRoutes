@@ -42,7 +42,7 @@ struct RouteReviewView: View {
         .sheet(
             item: $store.scope(state: \.destination?.editLeg, action: \.destination.editLeg)
         ) { editLegStore in
-            LegFormView(store: editLegStore)
+            EditLegView(store: editLegStore)
         }
     }
 }

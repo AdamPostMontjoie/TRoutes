@@ -114,7 +114,7 @@ struct LegFormView: View {
             )) {
                 Picker("Stop", selection: startStopSelection) {
                     Text("Select a starting stop").tag(UUID?.none)
-                    ForEach(store.stopOptions, id: \.id) { stop in
+                    ForEach(store.stopOptions.dropLast(), id: \.id) { stop in
                         Text(stop.stopName).tag(UUID?.some(stop.id))
                     }
                 }
@@ -129,7 +129,13 @@ struct LegFormView: View {
             Section(header: Text("Destination")) {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination stop").tag(UUID?.none)
-                    ForEach(store.stopOptions, id: \.id) { stop in
+                    //prevents going backwards on a route
+                    let validEndStops = Array(
+                        store.stopOptions
+                            .drop(while: { $0.mbtaStopId != store.selectedStartStop?.mbtaStopId })
+                            .dropFirst()
+                    )
+                    ForEach(validEndStops, id: \.id) { stop in
                         Text(stop.stopName).tag(UUID?.some(stop.id))
                     }
                 }

@@ -23,12 +23,18 @@ struct LegRowFeature {
 
     enum Action: Equatable {
         case editButtonTapped
+        case delegate(Delegate)
+        enum Delegate: Equatable {
+            case editLeg(Leg)
+        }
     }
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .editButtonTapped:
+                return .send(.delegate(.editLeg(state.leg)))
+            case .delegate:
                 return .none
             }
         }
