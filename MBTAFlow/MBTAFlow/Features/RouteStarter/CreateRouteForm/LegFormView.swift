@@ -1,15 +1,15 @@
 //
-//  AddLegView.swift
+//  LegFormView.swift
 //  MBTAFlow
 //
-//  Created by Adam Post on 6/6/26.
+//  Created by Adam Post on 6/12/26.
 //
 
 import ComposableArchitecture
 import SwiftUI
 
-struct AddLegView: View {
-    @Bindable var store: StoreOf<AddLegFeature>
+struct LegFormView: View {
+    @Bindable var store: StoreOf<LegFormFeature>
 
     @Environment(\.dismiss) private var dismiss //wat dis
 
@@ -30,8 +30,11 @@ struct AddLegView: View {
                 endStopSection
                 routeActionSection
             }
+            .onAppear {
+                store.send(.onAppear)
+            }
             .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
-            .navigationTitle("Add Leg to Route")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -139,31 +142,40 @@ struct AddLegView: View {
     private var routeActionSection: some View {
         if store.currentFormStep == .selectEndStop && store.selectedEndStop != nil && store.currentLeg != nil {
             Section {
-                HStack {
-                    Button("Add Another Leg") {
-                            store.send(.addLegButtonTapped)
+                if store.mode == .create {
+                    HStack {
+                        Button("Add Another Leg") {
+                            store.send(.primaryButtonTapped)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.blue)
+
+                        Spacer()
+                        
+                        Button(saveButtonText) {
+                            store.send(.saveButtonTapped)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.blue)
-
-                    Spacer()
-
-                    Button("Complete Route") {
-                            store.send(.saveRouteButtonTapped)
+                } else {
+                    Button(saveButtonText) {
+                        store.send(.saveButtonTapped)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
     }
 
     private func resetHeader(
         title: String,
         isResetVisible: Bool,
-        action: AddLegFeature.Action
+        action: LegFormFeature.Action
     ) -> some View {
         HStack {
             Text(title)
@@ -238,4 +250,20 @@ struct AddLegView: View {
             }
         )
     }
+    private var saveButtonText: String {
+        if store.mode == .create {
+            return "Complete Route"
+        } else {
+            return "Save Changes"
+        }
+    }
+
+    private var navigationTitle: String {
+        if store.mode == .create {
+            return "Add Leg to Route"
+        } else {
+            return "Edit Leg"
+        }
+    }
 }
+

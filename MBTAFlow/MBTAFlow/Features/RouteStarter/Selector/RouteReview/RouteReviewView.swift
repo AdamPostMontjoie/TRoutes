@@ -10,12 +10,24 @@ import SwiftUI
 
 struct RouteReviewView: View {
     @Bindable var store: StoreOf<RouteReviewFeature>
+    
+    //might want to add leave without saving confirmation here
+    @FocusState private var isNameFocused: Bool
 
     var body: some View {
         List {
             Section {
-                Text(store.route.name)
+                TextField("Route Name", text: $store.route.name)
                     .font(.headline)
+                    .focused($isNameFocused)
+                    .onChange(of: isNameFocused) { oldValue, newValue in
+                        if newValue == false {
+                            store.send(.nameEditingEnded)
+                        }
+                    }
+                    .onSubmit {
+                        isNameFocused = false
+                    }
             }
 
             Section(header: Text("Legs")) {
@@ -27,5 +39,10 @@ struct RouteReviewView: View {
             }
         }
         .navigationTitle("Review Route")
+        .sheet(
+            item: $store.scope(state: \.destination?.editLeg, action: \.destination.editLeg)
+        ) { editLegStore in
+            LegFormView(store: editLegStore)
+        }
     }
 }

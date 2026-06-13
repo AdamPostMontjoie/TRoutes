@@ -49,11 +49,23 @@ struct SelectorFeature {
             switch action {
             case .selected:
                 return .none
-
-            case .fetchRoutesFromDisk:
+            
+            case let .path(.element(id: _, action: .delegate(.updateRoute(route)))):
+                let updateRoute = databaseClient.updateRoute
                 return .run { send in
                     do {
-                        let routes = try await databaseClient.fetchSavedRoutes()
+                        try await updateRoute(route)
+                        await send(.fetchRoutesFromDisk)
+                    } catch {
+                        //update routes failed
+                        await send(.fetchRoutesFailed)
+                    }
+                }
+            case .fetchRoutesFromDisk:
+                let fetchSavedRoutes = databaseClient.fetchSavedRoutes
+                return .run { send in
+                    do {
+                        let routes = try await fetchSavedRoutes()
                         await send(.routesFetched(routes))
                     } catch {
                         await send(.fetchRoutesFailed)
@@ -61,9 +73,10 @@ struct SelectorFeature {
                 }
 
             case let .deleteRouteFromDisk(routeId):
+                let deleteRoute = databaseClient.deleteRoute
                 return .run { send in
                     do {
-                        try await databaseClient.deleteRoute(routeId)
+                        try await deleteRoute(routeId)
                         await send(.fetchRoutesFromDisk)
                     } catch {
                         await send(.fetchRoutesFailed)
@@ -78,7 +91,6 @@ struct SelectorFeature {
                 return .none
 
             case let .startButtonTapped(route):
-                
                 return .send(.delegate(.startRoute(route)))
 
             case .editButtonTapped:

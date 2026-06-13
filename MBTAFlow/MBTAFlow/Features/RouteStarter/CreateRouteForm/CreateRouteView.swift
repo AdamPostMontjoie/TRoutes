@@ -15,7 +15,7 @@ struct CreateRouteView: View {
         NavigationStack {
             VStack {
                 // If they have completed legs, you can show a mini-timeline at the top here later
-                if !store.completedLegs.isEmpty && store.addLeg.currentLeg == nil {
+                if !store.completedLegs.isEmpty && store.legForm.currentLeg == nil {
                     Text("\(store.completedLegs.count) legs added")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -23,10 +23,10 @@ struct CreateRouteView: View {
                 }
                 
                 // Inject the isolated child form
-                AddLegView(
+                LegFormView(
                     store: store.scope(
-                        state: \.addLeg,
-                        action: \.addLeg
+                        state: \.legForm,
+                        action: \.legForm
                     )
                 )
             }

@@ -15,15 +15,22 @@ struct LegRowFeature {
         var id: UUID
         var leg: Leg
 
-        init(id: UUID = UUID(), leg: Leg) {
-            self.id = id
+        init(leg: Leg) {
+            self.id = leg.id
             self.leg = leg
         }
     }
 
-    enum Action: Equatable {}
+    enum Action: Equatable {
+        case editButtonTapped
+    }
 
     var body: some ReducerOf<Self> {
-        EmptyReducer()
+        Reduce { state, action in
+            switch action {
+            case .editButtonTapped:
+                return .none
+            }
+        }
     }
 }
