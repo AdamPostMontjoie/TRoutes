@@ -8,6 +8,7 @@
 import ComposableArchitecture
 import Foundation
 import Dependencies
+import CoreLocation
 
 @Reducer
 struct RouteStarterFeature {
@@ -27,6 +28,10 @@ struct RouteStarterFeature {
         var isCreateRoutePresented = false
         var isActiveJourneyPresented = false
         var activeJourney:JourneyState?
+        //holds route while user tries to setup location permissions
+        var pendingRoute:RouteStruct?
+        
+        @Presents var destination: Destination.State?
     }
     
     enum Action:Equatable {
@@ -36,9 +41,16 @@ struct RouteStarterFeature {
         case onCreateRouteDismissed(Bool)
         case routeSelector(SelectorFeature.Action)
         
+        case locationAuthorizationStatusReceived(RouteStruct, CLAuthorizationStatus)
         case beginRoute(RouteStruct)
         case fetchPredictions(Stop)
         case endRoute
+        
+        case destination(PresentationAction<Destination.Action>)
+        enum Alert: Equatable {
+                    // e.g., case rateLimitAcknowledged
+                    // e.g., case openSettingsTapped
+        }
         
         // widget actions
         case refreshRoutes
@@ -56,8 +68,8 @@ struct RouteStarterFeature {
         case authorizationDenied
         case locationError
         
-        
-        case apiFailed
+    
+        case apiFailed(MBTAError)
         
     }
     
@@ -102,14 +114,35 @@ struct RouteStarterFeature {
             //this starts the route from inside the app, most of the logic is kicked off here
             case let .routeSelector(.delegate(.startRoute(id))):
                 
-                //feels like a useless guard
+                
                 guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.id == id}) else {
                     return .none
                 }
                 
-                return .send(.beginRoute(selectedRoute))
+                let status = locationClient.getCurrentAuthorization()
                 
+                return .send(.locationAuthorizationStatusReceived(selectedRoute, status))
                 
+            case let .locationAuthorizationStatusReceived(route, status):
+                print(status.rawValue)
+                switch status {
+                case .authorizedAlways, .authorizedWhenInUse:
+                    return .send(.beginRoute(route))
+
+                case .notDetermined:
+                    state.pendingRoute = route
+                    state.destination = .locationAlert(LocationAlertFeature.State(mode: .firstTime))
+                    return .none
+
+                case .denied, .restricted:
+                    state.pendingRoute = route
+                    state.destination = .locationAlert(LocationAlertFeature.State(mode: .changeSettings))
+                    return .none
+
+                @unknown default:
+                    return .none
+                }
+            
             // starts the route
             case let .beginRoute(route):
                 let journey = JourneyState(route: route)
@@ -153,14 +186,20 @@ struct RouteStarterFeature {
                         await send(.mbtaApiResponseReceived(times))
                     }
                     catch {
-                        await send(.apiFailed)
+                        let mbtaError = error as? MBTAError ?? .networkError
+                        await send(.apiFailed(mbtaError))
                     }
                 }.cancellable(id: CancelID.apiFetch, cancelInFlight: true)
             case let .mbtaApiResponseReceived(upcomingTimes):
                
                 state.activeJourney?.activePredictionTimes = upcomingTimes
-             //   state.activeRouteDisplay.journey = state.activeJourney
+                if upcomingTimes.isEmpty {
+                    state.activeJourney? .needTimes = false
+                }
+                
                 return .none
+             //   state.activeRouteDisplay.journey = state.activeJourney
+               
             case .refreshRoutes:
                 guard let currentStop = state.activeJourney?.currentStop else {
                     return .none
@@ -264,17 +303,44 @@ struct RouteStarterFeature {
                 }
             case .locationError:
                 return .none
-            case .apiFailed:
-                print("error goes here")
+            case let .apiFailed(error):
+                switch error {
+                //need disruptive alert
+                case .rateLimited:
+                    print("rate limited")
+                case .networkError, .timeoutError:
+                    state.activeJourney?.warningMessage = "Cannot reach times"
+                case .serverError:
+                    state.activeJourney?.warningMessage = "MBTA Server Issue"
+                default:
+                // For Developer Errors (Decoding, Bad Request, Forbidden)
+                    state.activeJourney?.warningMessage = "Data Unavailable"
+                }
+                
                 state.activeJourney?.needTimes = false
                 return .none
             //does nothing
-            case .activeJourneyDisplay, .createRoute, .routeSelector:
+            case .activeJourneyDisplay, .createRoute, .routeSelector, .destination:
                 return .none
-            
+           
             }
         }
+        .ifLet(\.$destination, action: \.destination)
     }
 }
+
+extension RouteStarterFeature {
+    @Reducer
+    enum Destination {
+        // Standard TCA Alert (for rate limits, timeouts, etc.)
+        case alert(AlertState<RouteStarterFeature.Action.Alert>)
+        
+        // Your custom feature alert
+        case locationAlert(LocationAlertFeature)
+    }
+}
+
+extension RouteStarterFeature.Destination.State: Equatable {}
+extension RouteStarterFeature.Destination.Action: Equatable {}
 
 private enum CancelID { case apiFetch }

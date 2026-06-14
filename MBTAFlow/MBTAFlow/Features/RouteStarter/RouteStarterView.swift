@@ -36,6 +36,7 @@ struct RouteStarterView: View {
                 )
             }
             .navigationTitle("Routes")
+            .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {

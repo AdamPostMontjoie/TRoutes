@@ -33,6 +33,7 @@ struct LocationClient {
     var startMonitoring: @Sendable (Stop) async throws -> AsyncStream<LocationEvent>
     var registerNextStopRegion: @Sendable (Stop) async throws -> Void
     var stopMonitoring: @Sendable () async throws -> Void
+    var getCurrentAuthorization:@Sendable () -> CLAuthorizationStatus
 }
 
 private actor LocationActor {
@@ -45,6 +46,7 @@ private actor LocationActor {
         await manager.startMonitoring()
         return await manager.eventStream
     }
+    
     
     func registerNextStopRegion(stop: Stop) async throws {
         guard let manager else { return }
@@ -71,6 +73,9 @@ extension LocationClient: DependencyKey {
         },
         stopMonitoring: {
             await actor.stop()
+        },
+        getCurrentAuthorization: {
+            CLLocationManager().authorizationStatus
         }
     )
 }

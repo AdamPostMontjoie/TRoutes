@@ -12,7 +12,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<LocationEvent>.Continuation?
     private var currentStop: Stop?
-    private var currentIndex: Int = 0
     
     // Stream is created once, continuation stored for delegate use
     lazy var eventStream: AsyncStream<LocationEvent> = {
@@ -51,6 +50,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     func registerRegion(for stop: Stop) {
         //remove all regions, 1 monitored maximum
+        self.currentStop = stop
         clearMonitoredRegions()
         let coordinate = CLLocationCoordinate2D(
             latitude: stop.latitude,
@@ -71,6 +71,9 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: 100m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
+        
+        //immediately request state so we can handle if we're already inside the region when we start
+        locationManager.requestState(for: region)
     }
     
     private func authorizationDenied(){
@@ -88,6 +91,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
             locationManager.stopMonitoring(for: $0)
         }
     }
+    //already inside of zone
+    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+            if state == .inside {
+                print("📍 CoreLocation: Already inside region upon registration.")
+                continuation?.yield(.enteredStop(stopId: region.identifier))
+            }
+        }
     
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
@@ -102,9 +112,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         
         // Stop monitoring the region we just left
         if let exitedRegion = manager.monitoredRegions.first(where: { $0.identifier == region.identifier }) {
+            //deprecated
             manager.stopMonitoring(for: exitedRegion)
         }
     }
+    
+    //using this from CLLocationManager might be a solution to underground gps disconnnect, worth a try
+    //func startMonitoringSignificantLocationChanges()
     
     //location permissions changed
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
