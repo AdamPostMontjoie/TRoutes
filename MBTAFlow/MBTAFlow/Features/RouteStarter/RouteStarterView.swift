@@ -49,6 +49,16 @@ struct RouteStarterView: View {
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
         }
+        .sheet(
+            item: $store.scope(
+                state: \.destination?.locationAlert,
+                action: \.destination.locationAlert
+            )
+        ) { locationAlertStore in
+            LocationAlertView(store: locationAlertStore)
+                // Prevents the user from swiping the sheet away without making a choice
+                .interactiveDismissDisabled()
+        }
         .fullScreenCover(
             isPresented: Binding(
                 get: { store.isCreateRoutePresented },

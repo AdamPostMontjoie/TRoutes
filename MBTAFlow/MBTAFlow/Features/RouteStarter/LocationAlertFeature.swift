@@ -22,15 +22,28 @@ struct LocationAlertFeature {
 
     enum Action: Equatable {
         
+        case continueButtonTapped
+        case settingsButtonTapped
+        case cancelButtonTapped
+        case delegate(Delegate)
         enum Delegate: Equatable {
-            case editLeg(Leg)
+            case requestPermissionsInApp
+            case openSettings
+            case cancel
         }
     }
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
-            
+            case .continueButtonTapped:
+                return .send(.delegate(.requestPermissionsInApp))
+            case .settingsButtonTapped:
+                return .send(.delegate(.openSettings))
+            case .cancelButtonTapped:
+                return .send(.delegate(.cancel))
+            case .delegate:
+                return .none
             }
         }
     }

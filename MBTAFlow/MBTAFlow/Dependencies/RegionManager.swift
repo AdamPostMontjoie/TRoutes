@@ -30,14 +30,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         super.init()
         self.currentStop = firstStop
         locationManager.delegate = self
-        let status = locationManager.authorizationStatus
-        if status == .notDetermined {
-            // Only ask for foreground to start the chain
-            locationManager.requestWhenInUseAuthorization()
-        } else if status == .authorizedWhenInUse {
-            // Catch-all for returning users who downgraded permissions
-            locationManager.requestAlwaysAuthorization()
-        }
+        // throw if not authorized somewhere in here, in case user disables location access mid journey
     }
     
     func startMonitoring() {

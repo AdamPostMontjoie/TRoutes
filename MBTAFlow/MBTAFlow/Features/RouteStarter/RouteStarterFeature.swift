@@ -41,7 +41,12 @@ struct RouteStarterFeature {
         case onCreateRouteDismissed(Bool)
         case routeSelector(SelectorFeature.Action)
         
+        //setup actions
+        case startRouteRequested(RouteStruct)
         case locationAuthorizationStatusReceived(RouteStruct, CLAuthorizationStatus)
+        
+        case locationPermissionRequestFinished(CLAuthorizationStatus)
+        
         case beginRoute(RouteStruct)
         case fetchPredictions(Stop)
         case endRoute
@@ -118,11 +123,14 @@ struct RouteStarterFeature {
                 guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.id == id}) else {
                     return .none
                 }
-                
+                return .send(.startRouteRequested(selectedRoute))
+            
+            //all start requests enter here
+            case let .startRouteRequested(route):
                 let status = locationClient.getCurrentAuthorization()
-                
-                return .send(.locationAuthorizationStatusReceived(selectedRoute, status))
-                
+                return .send(.locationAuthorizationStatusReceived(route, status))
+            
+            //initial status check
             case let .locationAuthorizationStatusReceived(route, status):
                 print(status.rawValue)
                 switch status {
@@ -135,13 +143,47 @@ struct RouteStarterFeature {
                     return .none
 
                 case .denied, .restricted:
-                    state.pendingRoute = route
                     state.destination = .locationAlert(LocationAlertFeature.State(mode: .changeSettings))
                     return .none
 
                 @unknown default:
                     return .none
                 }
+            case let .locationPermissionRequestFinished(status):
+                guard let pendingRoute = state.pendingRoute else { return .none }
+
+                switch status {
+                case .authorizedAlways, .authorizedWhenInUse:
+                    state.pendingRoute = nil
+                    return .send(.beginRoute(pendingRoute))
+
+                case .denied, .restricted:
+                    state.destination = .locationAlert(.init(mode: .changeSettings))
+                    return .none
+
+                case .notDetermined:
+                    return .none
+
+                @unknown default:
+                    state.pendingRoute = nil
+                    return .none
+                }
+            
+            case .destination(.presented(.locationAlert(.delegate(.requestPermissionsInApp)))):
+                state.destination = nil
+                let requestPermissions = locationClient.requestLocationAuthorization
+                let getCurrentStatus = locationClient.getCurrentAuthorization
+                return .run { send in
+                    await requestPermissions()
+                    let status = getCurrentStatus()
+                    await send(.locationPermissionRequestFinished(status))
+                }
+            case .destination(.presented(.locationAlert(.delegate(.openSettings)))):
+                return .none
+            case .destination(.presented(.locationAlert(.delegate(.cancel)))):
+                state.destination = nil
+                state.pendingRoute = nil
+                return .none
             
             // starts the route
             case let .beginRoute(route):
@@ -158,7 +200,7 @@ struct RouteStarterFeature {
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
                     
-                    let stream = try await startMonitoring(firstStop)
+                    guard let stream = try await startMonitoring() else { return }
                     
                     // Listen to the GPS (Wait at the pipe)
                     // This loop runs infinitely in the background until the effect is cancelled

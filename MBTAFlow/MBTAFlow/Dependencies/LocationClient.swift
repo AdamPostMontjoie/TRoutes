@@ -30,19 +30,26 @@ enum locationError: Error, Equatable {
 }
 
 struct LocationClient {
-    var startMonitoring: @Sendable (Stop) async throws -> AsyncStream<LocationEvent>
+    var initializeManager: @Sendable (Stop) async -> Void
+    var startMonitoring: @Sendable () async throws -> AsyncStream<LocationEvent>?
     var registerNextStopRegion: @Sendable (Stop) async throws -> Void
     var stopMonitoring: @Sendable () async throws -> Void
     var getCurrentAuthorization:@Sendable () -> CLAuthorizationStatus
+    var requestLocationAuthorization: @Sendable () async -> Void
+    var openSettings: @Sendable () -> Void
 }
 
 private actor LocationActor {
     var manager: RegionManager?
     
-    func start(firstStop:Stop) async -> AsyncStream<LocationEvent> {
-       
+    func initializeManager(firstStop:Stop) async  {
         let manager =  await RegionManager(firstStop: firstStop)
         self.manager = manager
+    }
+    
+    func start() async -> AsyncStream<LocationEvent>? {
+        guard let manager else { return nil }
+        
         await manager.startMonitoring()
         return await manager.eventStream
     }
@@ -64,8 +71,11 @@ private let actor = LocationActor()
 
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
-        startMonitoring: { stop in
-            return await actor.start(firstStop: stop)
+        initializeManager: { stop in
+            await actor.initializeManager(firstStop: stop)
+        },
+        startMonitoring: {
+            return await actor.start()
         },
         registerNextStopRegion: { stop in
            try await actor.registerNextStopRegion(stop: stop)
@@ -76,6 +86,13 @@ extension LocationClient: DependencyKey {
         },
         getCurrentAuthorization: {
             CLLocationManager().authorizationStatus
+        },
+        requestLocationAuthorization: {
+            CLLocationManager().requestWhenInUseAuthorization()
+            CLLocationManager().requestAlwaysAuthorization()
+        },
+        openSettings: {
+            print("open settings")
         }
     )
 }
