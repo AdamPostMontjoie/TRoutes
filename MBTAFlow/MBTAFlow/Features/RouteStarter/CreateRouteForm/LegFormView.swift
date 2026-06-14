@@ -126,7 +126,11 @@ struct LegFormView: View {
     @ViewBuilder
     private var endStopSection: some View {
         if store.currentFormStep == .selectEndStop || store.selectedEndStop != nil {
-            Section(header: Text("Destination")) {
+            Section(header: resetHeader(
+                title: "Destination",
+                isResetVisible: store.selectedEndStop != nil,
+                action: .resetEndStopSelection
+            )) {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination stop").tag(UUID?.none)
                     //prevents going backwards on a route

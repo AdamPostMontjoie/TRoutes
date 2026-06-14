@@ -28,6 +28,13 @@ struct LegFormFeature {
         case branch
         case direction
         case startStop
+        case endStop
+    }
+
+    private enum CancelID: Hashable {
+        case branches
+        case directions
+        case stops
     }
     private func reset(_ scope: ResetScope, state: inout State) {
         switch scope {
@@ -74,6 +81,11 @@ struct LegFormFeature {
             state.selectedEndStop = nil
             state.currentLeg = nil
             state.currentFormStep = .selectStartStop
+
+        case .endStop:
+            state.selectedEndStop = nil
+            state.currentLeg = nil
+            state.currentFormStep = .selectEndStop
         }
     }
     // MARK: - State
@@ -142,6 +154,7 @@ struct LegFormFeature {
         case resetBranchSelection
         case resetDirectionSelection
         case resetStartStopSelection
+        case resetEndStopSelection
 
         case onAppear
 
@@ -248,6 +261,7 @@ struct LegFormFeature {
                             await send(.apiFailure)
                         }
                     }
+                    .cancellable(id: CancelID.directions, cancelInFlight: true)
 
                 case let .fetchRoutes(filterKey, filterValue):
                     let fetchBranches = mbtaClient.fetchBranches
@@ -259,9 +273,14 @@ struct LegFormFeature {
                             await send(.apiFailure)
                         }
                     }
+                    .cancellable(id: CancelID.branches, cancelInFlight: true)
                 }
 
             case let .branchesLoaded(options):
+                guard state.selectedType != nil else {
+                    return .none
+                }
+
                 state.currentFormStep = .selectBranch
                 state.branchOptions = options
                 return .none
@@ -280,11 +299,16 @@ struct LegFormFeature {
                             await send(.apiFailure)
                         }
                     }
+                    .cancellable(id: CancelID.directions, cancelInFlight: true)
                 } else {
                     return .send(.directionsLoaded(branch.directions))
                 }
 
             case let .directionsLoaded(options):
+                guard state.mbtaRouteId != nil else {
+                    return .none
+                }
+
                 state.currentFormStep = .selectDirection
                 state.directionOptions = options
                 return .none
@@ -300,8 +324,14 @@ struct LegFormFeature {
                         await send(.apiFailure)
                     }
                 }
+                .cancellable(id: CancelID.stops, cancelInFlight: true)
 
             case let .stopsLoaded(options):
+                guard state.selectedDirection != nil,
+                      state.mbtaRouteId != nil else {
+                    return .none
+                }
+
                 state.currentFormStep = .selectStartStop
                 state.stopOptions = options
                 state.hasHydratedEditStopOptions = true
@@ -389,18 +419,29 @@ struct LegFormFeature {
 
             case .resetTypeSelection:
                 reset(.type, state: &state)
-                return .none
+                return .merge(
+                    .cancel(id: CancelID.branches),
+                    .cancel(id: CancelID.directions),
+                    .cancel(id: CancelID.stops)
+                )
 
             case .resetBranchSelection:
                 reset(.branch, state: &state)
-                return .none
+                return .merge(
+                    .cancel(id: CancelID.directions),
+                    .cancel(id: CancelID.stops)
+                )
 
             case .resetDirectionSelection:
                 reset(.direction, state: &state)
-                return .none
+                return .cancel(id: CancelID.stops)
 
             case .resetStartStopSelection:
                 reset(.startStop, state: &state)
+                return .none
+
+            case .resetEndStopSelection:
+                reset(.endStop, state: &state)
                 return .none
 
             case .primaryButtonTapped:

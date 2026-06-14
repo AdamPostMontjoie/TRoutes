@@ -181,7 +181,11 @@ struct RouteStarterFeature {
                     await send(.locationPermissionRequestFinished(status))
                 }
             case .destination(.presented(.locationAlert(.delegate(.openSettings)))):
-                return .none
+                let openSettings = locationClient.openSettings
+                state.destination = nil
+                return .run { send in
+                    openSettings()
+                }
             case .destination(.presented(.locationAlert(.delegate(.cancel)))):
                 state.destination = nil
                 state.pendingRoute = nil

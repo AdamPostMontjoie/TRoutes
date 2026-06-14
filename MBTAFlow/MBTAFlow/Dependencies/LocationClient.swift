@@ -7,6 +7,7 @@
 
 import ComposableArchitecture
 import CoreLocation
+import SwiftUI
 
 //this will use core location monitoring
 //it tells us where we are, if we've crossed into a region
@@ -91,7 +92,12 @@ extension LocationClient: DependencyKey {
             CLLocationManager().requestAlwaysAuthorization()
         },
         openSettings: {
-            print("open settings")
+           
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            Task {
+                await UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+            
         }
     )
 }
