@@ -80,6 +80,12 @@ struct RouteReviewFeature {
             case let .legRows(.element(id: _, action: .delegate(.editLeg(leg)))):
                 state.destination = .editLeg(EditLegFeature.State(leg: leg))
                 return .none
+            
+            //if this is the last leg, should we delete the entire route?
+            case let .legRows(.element(id: _, action: .delegate(.deleteLeg(id)))):
+                state.route.legs.removeAll() { $0.id == id }
+                state.legRows.removeAll() { $0.id == id }
+                return .send(.delegate(.updateRoute(state.route)))
 
             case let .destination(.presented(.editLeg(.delegate(.saveEditedLeg(updatedLeg))))):
                 guard let index = state.route.legs.firstIndex(where: { $0.id == updatedLeg.id }) else {
@@ -94,10 +100,6 @@ struct RouteReviewFeature {
                 )
                 return .send(.delegate(.updateRoute(state.route)))
 
-            case .destination(.presented(.editLeg(.delegate(.dismiss)))):
-                state.destination = nil
-                return .none
-
             case let .destination(.presented(.addLegs(.delegate(.appendAddedLegs(newLegs))))):
                 guard !newLegs.isEmpty else {
                     return .none
@@ -110,10 +112,6 @@ struct RouteReviewFeature {
                     uniqueElements: state.route.legs.map { LegRowFeature.State(leg: $0) }
                 )
                 return .send(.delegate(.updateRoute(state.route)))
-
-            case .destination(.presented(.addLegs(.delegate(.dismiss)))):
-                state.destination = nil
-                return .none
 
             case .delegate, .legRows, .destination:
                 return .none

@@ -28,6 +28,12 @@ struct LegRowView: View {
                 Image(systemName: "pencil")
             }
             .buttonStyle(.borderless)
+            Button {
+                store.send(.deleteButtonTapped)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
         }
     }
 }
