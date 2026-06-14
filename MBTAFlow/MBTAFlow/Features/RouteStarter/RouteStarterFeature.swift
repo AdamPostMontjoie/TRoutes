@@ -23,9 +23,7 @@ struct RouteStarterFeature {
                 // without allowing child mutations.
             }
         }
-        var createRoute = CreateRouteFeature.State()
         var routeSelector = SelectorFeature.State()
-        var isCreateRoutePresented = false
         var isActiveJourneyPresented = false
         var activeJourney:JourneyState?
         //holds route while user tries to setup location permissions
@@ -36,9 +34,7 @@ struct RouteStarterFeature {
     
     enum Action:Equatable {
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
-        case createRoute(CreateRouteFeature.Action)
         case onCreateButtonTapped
-        case onCreateRouteDismissed(Bool)
         case routeSelector(SelectorFeature.Action)
         
         //setup actions
@@ -57,7 +53,7 @@ struct RouteStarterFeature {
                     // e.g., case openSettingsTapped
         }
         
-        // widget actions
+        // manual widget actions
         case refreshRoutes
         case forcedArrival //at stop button, bypasses region did enter
         case forcedDeparture // next stop button, bypasses region did exit
@@ -85,9 +81,6 @@ struct RouteStarterFeature {
         Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {
             ActiveJourneyDisplayFeature()
         }
-        Scope(state: \.createRoute, action: \.createRoute) {
-            CreateRouteFeature()
-        }
         Scope(state: \.routeSelector, action: \.routeSelector) {
             SelectorFeature()
         }
@@ -95,21 +88,16 @@ struct RouteStarterFeature {
             switch action {
             
             case .onCreateButtonTapped:
-                print("tapped")
-                state.isCreateRoutePresented = true
+                state.destination = .createRoute(CreateRouteFeature.State())
                 return .none
-            case .createRoute(.delegate(.routeSaved)):
-                return .send(.onCreateRouteDismissed(true))
-            case .createRoute(.delegate(.dismiss)):
-                return .send(.onCreateRouteDismissed(false))
-            case let .onCreateRouteDismissed(refresh):
-                state.isCreateRoutePresented = false
-                state.createRoute = CreateRouteFeature.State()
-                if refresh {
-                    return .send(.routeSelector(.fetchRoutesFromDisk))
-                } else {
-                    return .none
-                }
+
+            case .destination(.presented(.createRoute(.delegate(.routeSaved)))):
+                state.destination = nil
+                return .send(.routeSelector(.fetchRoutesFromDisk))
+
+            case .destination(.presented(.createRoute(.delegate(.dismiss)))):
+                state.destination = nil
+                return .none
             case .activeJourneyDisplay(.delegate(.cancelRoute)):
                 return .send(.endRoute)
             case .activeJourneyDisplay(.delegate(.manualAtStop)):
@@ -368,7 +356,7 @@ struct RouteStarterFeature {
                 state.activeJourney?.needTimes = false
                 return .none
             //does nothing
-            case .activeJourneyDisplay, .createRoute, .routeSelector, .destination:
+            case .activeJourneyDisplay, .routeSelector, .destination:
                 return .none
            
             }
@@ -382,8 +370,7 @@ extension RouteStarterFeature {
     enum Destination {
         // Standard TCA Alert (for rate limits, timeouts, etc.)
         case alert(AlertState<RouteStarterFeature.Action.Alert>)
-        
-        // Your custom feature alert
+        case createRoute(CreateRouteFeature)
         case locationAlert(LocationAlertFeature)
     }
 }

@@ -49,6 +49,7 @@ struct RouteReviewFeature {
         case binding(BindingAction<State>)
         case nameEditingEnded
         case deleteRouteButtonTapped
+        case addLegButtonTapped
         case delegate(Delegate)
         case legRows(IdentifiedActionOf<LegRowFeature>)
         case destination(PresentationAction<Destination.Action>)
@@ -72,6 +73,10 @@ struct RouteReviewFeature {
             case .deleteRouteButtonTapped:
                 return .send(.delegate(.deleteRoute(state.route.id)))
 
+            case .addLegButtonTapped:
+                state.destination = .addLegs(AddLegsToRouteFeature.State())
+                return .none
+
             case let .legRows(.element(id: _, action: .delegate(.editLeg(leg)))):
                 state.destination = .editLeg(EditLegFeature.State(leg: leg))
                 return .none
@@ -87,10 +92,26 @@ struct RouteReviewFeature {
                 state.legRows = IdentifiedArray(
                     uniqueElements: state.route.legs.map { LegRowFeature.State(leg: $0) }
                 )
-                state.destination = nil
                 return .send(.delegate(.updateRoute(state.route)))
 
             case .destination(.presented(.editLeg(.delegate(.dismiss)))):
+                state.destination = nil
+                return .none
+
+            case let .destination(.presented(.addLegs(.delegate(.appendAddedLegs(newLegs))))):
+                guard !newLegs.isEmpty else {
+                    return .none
+                }
+
+                let previousRoute = state.route
+                state.route.legs.append(contentsOf: newLegs)
+                state.route = routeWithUpdatedDefaultName(previousRoute: previousRoute, updatedRoute: state.route)
+                state.legRows = IdentifiedArray(
+                    uniqueElements: state.route.legs.map { LegRowFeature.State(leg: $0) }
+                )
+                return .send(.delegate(.updateRoute(state.route)))
+
+            case .destination(.presented(.addLegs(.delegate(.dismiss)))):
                 state.destination = nil
                 return .none
 
@@ -109,6 +130,7 @@ extension RouteReviewFeature {
     @Reducer
     enum Destination {
         case editLeg(EditLegFeature)
+        case addLegs(AddLegsToRouteFeature)
     }
 }
 

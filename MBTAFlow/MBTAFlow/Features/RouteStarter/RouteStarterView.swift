@@ -60,22 +60,13 @@ struct RouteStarterView: View {
                 .interactiveDismissDisabled()
         }
         .fullScreenCover(
-            isPresented: Binding(
-                get: { store.isCreateRoutePresented },
-                set: { isPresented in
-                    if !isPresented {
-                        store.send(.onCreateRouteDismissed(false))
-                    }
-                }
+            item: $store.scope(
+                state: \.destination?.createRoute,
+                action: \.destination.createRoute
             )
-        ) {
-            CreateRouteView(
-                store: store.scope(
-                    state: \.createRoute,
-                    action: \.createRoute
-                )
-            )
-            .interactiveDismissDisabled(true)
+        ) { createRouteStore in
+            CreateRouteView(store: createRouteStore)
+                .interactiveDismissDisabled(true)
         }
     }
 }

@@ -36,6 +36,21 @@ struct RouteReviewView: View {
                 ) { childStore in
                     LegRowView(store: childStore)
                 }
+
+                Button {
+                    store.send(.addLegButtonTapped)
+                } label: {
+                    HStack {
+                        Spacer()
+                        Label("Add Leg", systemImage: "plus.circle.fill")
+                            .font(.headline)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
             }
         }
         .navigationTitle("Review Route")
@@ -43,6 +58,11 @@ struct RouteReviewView: View {
             item: $store.scope(state: \.destination?.editLeg, action: \.destination.editLeg)
         ) { editLegStore in
             EditLegView(store: editLegStore)
+        }
+        .sheet(
+            item: $store.scope(state: \.destination?.addLegs, action: \.destination.addLegs)
+        ) { addLegsStore in
+            AddLegsToRouteView(store: addLegsStore)
         }
     }
 }

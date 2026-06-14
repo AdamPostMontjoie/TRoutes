@@ -12,6 +12,7 @@ import Foundation
 enum LegFormMode: Equatable {
     case create
     case edit
+    case addToExisting
 }
 enum FormStep: Equatable {
     case selectType
@@ -175,6 +176,7 @@ struct LegFormFeature {
             case addAnotherLeg(Leg)
             case completeRoute(Leg)
             case saveEditedLeg(Leg)
+            case addLeg(Leg)
             case requestDismissal
         }
     }
@@ -450,7 +452,7 @@ struct LegFormFeature {
                 }
 
                 switch state.mode {
-                case .create:
+                case .create, .addToExisting:
                     return .send(.delegate(.addAnotherLeg(leg)))
                 case .edit:
                     return .none
@@ -466,6 +468,8 @@ struct LegFormFeature {
                     return .send(.delegate(.completeRoute(leg)))
                 case .edit:
                     return .send(.delegate(.saveEditedLeg(leg)))
+                case .addToExisting:
+                    return .send(.delegate(.addLeg(leg)))
                 }
 
             case .apiFailure:
