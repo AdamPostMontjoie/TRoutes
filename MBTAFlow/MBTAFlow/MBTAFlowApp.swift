@@ -9,8 +9,21 @@ import SwiftUI
 import ComposableArchitecture
 import SwiftData
 
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        
+        return true
+    }
+}
+
+
+
 @main
 struct MBTAFlow: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let notificationDelegate = NotificationDelegate()
         
     init() {

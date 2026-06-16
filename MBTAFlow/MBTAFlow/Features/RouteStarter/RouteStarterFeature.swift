@@ -198,14 +198,11 @@ struct RouteStarterFeature {
 
                 state.isActiveJourneyPresented = true
                 state.activeJourney = journey
-                
-                //likely needs to be reworked once we create static manager, works for now
-                let initializeManager = locationClient.initializeManager
+    
                 let startMonitoring = locationClient.startMonitoring
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
-                    await initializeManager(firstStop)
-                    guard let stream = try await startMonitoring() else { return }
+                    guard let stream = try await startMonitoring(firstStop) else { return }
                     
                     // Listen to the GPS (Wait at the pipe)
                     // This loop runs infinitely in the background until the effect is cancelled

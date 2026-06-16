@@ -9,17 +9,13 @@ import ComposableArchitecture
 import CoreLocation
 import SwiftUI
 
-//this will use core location monitoring
-//it tells us where we are, if we've crossed into a region
-//we tell it when to setup and teardown regions
-
+// This uses Core Location condition monitoring. It tells us when the user
+// enters or exits the currently active stop region.
 enum LocationEvent: Equatable {
-    case enteredStop(stopId: String) //may need to change from stopId
+    case enteredStop(stopId: String)
     case exitedStop(stopId: String)
     case authorizationDenied
     case monitoringFailed(stopId: String, error: locationError)
-    
-    //add other
 }
 
 enum locationError: Error, Equatable {
@@ -31,64 +27,121 @@ enum locationError: Error, Equatable {
 }
 
 struct LocationClient {
-    var initializeManager: @Sendable (Stop) async -> Void
-    var startMonitoring: @Sendable () async throws -> AsyncStream<LocationEvent>?
+    var startMonitoring: @Sendable (Stop) async throws -> AsyncStream<LocationEvent>?
     var registerNextStopRegion: @Sendable (Stop) async throws -> Void
     var stopMonitoring: @Sendable () async throws -> Void
-    var getCurrentAuthorization:@Sendable () -> CLAuthorizationStatus
+    var getCurrentAuthorization: @Sendable () -> CLAuthorizationStatus
     var requestLocationAuthorization: @Sendable () async -> Void
     var openSettings: @Sendable () -> Void
 }
 
-private actor LocationActor {
-    var manager: RegionManager?
-    
-    
-    func initializeManager(firstStop:Stop, fireDebugNotif: @escaping @Sendable(String) async -> Void) async  {
-        let manager =  await RegionManager(firstStop: firstStop)
-        await MainActor.run {
-                    manager.fireDebugNotif = fireDebugNotif
-                }
-        self.manager = manager
-    }
-    
-    func start() async -> AsyncStream<LocationEvent>? {
-        guard let manager else { return nil }
+private actor LocationMonitorActor {
+    private let monitorName = "MBTAFlowMonitor"
+    private let radius: CLLocationDistance = 100
+
+    private var monitor: CLMonitor?
+    private var continuation: AsyncStream<LocationEvent>.Continuation?
+    private var serviceSession: CLServiceSession?
+
+    func startMonitoring(firstStop: Stop) async -> AsyncStream<LocationEvent> {
+        let monitor = await monitor()
+        await registerRegion(for: firstStop)
+        if self.serviceSession == nil {
+            self.serviceSession = CLServiceSession(authorization: .always)
+        }
+
+        return AsyncStream<LocationEvent> { continuation in
+            // Stream is created once, continuation stored for delegate use
+            self.continuation = continuation
         
-        await manager.startMonitoring()
-        return await manager.eventStream
+            
+            let monitoringTask = Task {
+                do {
+                    for try await event in await monitor.events {
+                        if event.authorizationDenied || event.authorizationDeniedGlobally || event.authorizationRestricted {
+                            continuation.yield(.authorizationDenied)
+                            continue
+                        }
+                        if event.conditionUnsupported || event.conditionLimitExceeded || event.persistenceUnavailable {
+                            continuation.yield(.monitoringFailed(stopId: event.identifier, error: .unknown))
+                            continue
+                        }
+                        switch event.state {
+                        case .satisfied:
+                            continuation.yield(.enteredStop(stopId: event.identifier))
+                        case .unsatisfied:
+                            continuation.yield(.exitedStop(stopId: event.identifier))
+                        default:
+                            break
+                        }
+                    }
+                } catch {
+                    print("CoreLocation: CLMonitor event stream failed: \(error)")
+                    continuation.finish()
+                }
+            }
+            continuation.onTermination = { _ in
+                monitoringTask.cancel()
+            }
+        }
     }
-    
-    
-    func registerNextStopRegion(stop: Stop) async throws {
-        guard let manager else { return }
-        await manager.registerRegion(for: stop)
+
+    func registerRegion(for stop: Stop) async {
+        let monitor = await monitor()
+        await removeAllRegions(from: monitor)
+
+        let center = CLLocationCoordinate2D(
+            latitude: stop.latitude,
+            longitude: stop.longitude
+        )
+        let condition = CLMonitor.CircularGeographicCondition(
+            center: center,
+            radius: radius
+        )
+
+        await monitor.add(condition, identifier: stop.stopName, assuming: .unsatisfied)
+        print("CoreLocation: registered CLMonitor condition for \(stop.stopName) (Radius: \(Int(radius))m)")
     }
-    
-    func stop() async {
-        guard let manager else { return }
-        await manager.stopAll()
-        self.manager = nil
+
+    func stopMonitoring() async {
+        if let monitor {
+            await removeAllRegions(from: monitor)
+        }
+        serviceSession = nil
+        continuation?.finish()
+        continuation = nil
+    }
+
+    private func monitor() async -> CLMonitor {
+        if let monitor {
+            return monitor
+        }
+
+        let monitor = await CLMonitor(monitorName)
+        self.monitor = monitor
+        return monitor
+    }
+
+    private func removeAllRegions(from monitor: CLMonitor) async {
+        for identifier in await monitor.identifiers {
+            await monitor.remove(identifier)
+            print("removed region for \(identifier)")
+        }
     }
 }
 
-private let actor = LocationActor()
+private let locationMonitorActor = LocationMonitorActor()
 
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
-        initializeManager: { stop in
-            @Dependency(\.notificationsClient) var notificationsClient
-            await actor.initializeManager(firstStop: stop, fireDebugNotif: notificationsClient.debugStringNotification)
-        },
-        startMonitoring: {
-            return await actor.start()
+        startMonitoring: { stop in
+            await locationMonitorActor.startMonitoring(firstStop: stop)
         },
         registerNextStopRegion: { stop in
-           try await actor.registerNextStopRegion(stop: stop)
-            //error handling
+            await locationMonitorActor.registerRegion(for: stop)
         },
         stopMonitoring: {
-            await actor.stop()
+            await locationMonitorActor.stopMonitoring()
         },
         getCurrentAuthorization: {
             CLLocationManager().authorizationStatus
@@ -97,12 +150,10 @@ extension LocationClient: DependencyKey {
             CLLocationManager().requestAlwaysAuthorization()
         },
         openSettings: {
-           
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             Task {
                 await UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
-            
         }
     )
 }
