@@ -14,6 +14,9 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     private var continuation: AsyncStream<LocationEvent>.Continuation?
     private var currentStop: Stop?
     
+    //guards against double state notifications
+    private var lastKnownState: CLRegionState?
+    
     var fireDebugNotif: ( @Sendable(String) async -> Void)?
     // Stream is created once, continuation stored for delegate use
     lazy var eventStream: AsyncStream<LocationEvent> = {
@@ -46,6 +49,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     func registerRegion(for stop: Stop) {
         //remove all regions, 1 monitored maximum
         self.currentStop = stop
+        self.lastKnownState = nil
         clearMonitoredRegions()
         let coordinate = CLLocationCoordinate2D(
             latitude: stop.latitude,
@@ -66,9 +70,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: 100m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
-        
-        //immediately request state so we can handle if we're already inside the region when we start
-        locationManager.requestState(for: region)
     }
     
     private func authorizationDenied(){
@@ -86,22 +87,34 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
             locationManager.stopMonitoring(for: $0)
         }
     }
-    //already inside of zone
+    
+    func locationManager( _ manager: CLLocationManager, didStartMonitoringFor region: CLRegion)
+    {
+        //when we setup secondary regions, we will need a way to check which one this is
+        
+        //request state only once we know that we're monitoring so we can avoid false unknowns during monitoring start
+        locationManager.requestState(for: region)
+    }
+    //checks if we're already inside of the zone
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        //iOS may automatically fire did determine state on start monitoring, ignore if no change
+        guard state != lastKnownState else { return }
+        lastKnownState = state
             switch state {
             case .inside:
                 Task {
-                await fireDebugNotif?("Inside")
+                await fireDebugNotif?("Inside \(region.identifier)")
                 print("📍 CoreLocation: Already inside region upon registration.")
                 continuation?.yield(.enteredStop(stopId: region.identifier))
             }
             case .outside:
                 Task {
-                    await fireDebugNotif?("outside")
+                    await fireDebugNotif?("outside \(region.identifier)")
             }
             case .unknown:
+                //we will need to handle unknown location with a fallback
                 Task {
-                    await fireDebugNotif?("unkown")
+                    await fireDebugNotif?("unkown \(region.identifier)")
             }
             default:
                 Task {
@@ -114,12 +127,18 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         print("entered region")
+        Task {
+            await fireDebugNotif?("Entered Region \(region.identifier)")
+        }
         continuation?.yield(.enteredStop(stopId: region.identifier))
     }
     
     //on exit
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         print("exited region")
+        Task {
+            await fireDebugNotif?("Exited Region \(region.identifier)")
+        }
         continuation?.yield(.exitedStop(stopId: region.identifier))
         
         // Stop monitoring the region we just left
@@ -154,6 +173,9 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
                 } else {
                     mappedError = .unknown
                 }
+            Task {
+                await fireDebugNotif?("Debug Error: \(error)")
+            }
             continuation?.yield(.monitoringFailed(stopId: id, error: mappedError ))
         }
     }
