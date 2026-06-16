@@ -105,6 +105,11 @@ struct RouteStarterFeature {
                 return .send(.enteredStop)
             case .activeJourneyDisplay(.delegate(.manualNextStop)):
                 return .send(.exitedStop)
+            case .activeJourneyDisplay(.delegate(.refreshTimes)):
+                guard let currentStop = state.activeJourney?.currentStop else {
+                    return .none
+                }
+                return .send(.fetchPredictions(currentStop))
             //this starts the route from inside the app, most of the logic is kicked off here
             case let .routeSelector(.delegate(.startRoute(id))):
                 

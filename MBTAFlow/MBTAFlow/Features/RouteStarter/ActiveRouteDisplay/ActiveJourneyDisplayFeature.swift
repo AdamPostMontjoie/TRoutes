@@ -32,11 +32,13 @@ struct ActiveJourneyDisplayFeature {
         case cancelButtonTapped
         case nextStopButtonTapped
         case atStopButtonTapped
+        case refreshButtonTapped
         case delegate(Delegate)
         enum Delegate:Equatable {
             case cancelRoute
             case manualAtStop
             case manualNextStop
+            case refreshTimes
         }
     }
     
@@ -49,6 +51,8 @@ struct ActiveJourneyDisplayFeature {
                 return .send(.delegate(.manualAtStop))
             case .nextStopButtonTapped:
                 return .send(.delegate(.manualNextStop))
+            case .refreshButtonTapped:
+                return .send(.delegate(.refreshTimes))
             case .delegate:
                 return .none
             }
