@@ -12,6 +12,11 @@ import CoreLocation
 
 @Reducer
 struct RouteStarterFeature {
+    private enum CancelID {
+        case apiFetch
+        case locationStream // Add this
+    }
+    
     @ObservableState
     struct State: Equatable {
         var activeJourneyDisplay: ActiveJourneyDisplayFeature.State {
@@ -209,16 +214,19 @@ struct RouteStarterFeature {
                     for await location in stream{
                         await send(.locationUpdateReceived(location))
                     }
-                }
+                }.cancellable(id: CancelID.locationStream, cancelInFlight: true)
             //this will be called on natural end or forceful cancelation
             case .endRoute:
                 print("end route")
                 state.isActiveJourneyPresented = false
                 state.activeJourney = nil
                 let stopMonitoring = locationClient.stopMonitoring
-                return .run { send in
-                    try await stopMonitoring()
-                }
+                return .merge(
+                        .cancel(id: CancelID.locationStream),
+                        .run { _ in
+                            try await stopMonitoring()
+                        }
+                    )
             case let .fetchPredictions(stop):
                 //we should probably clear all predictions instead of fetching new if en route to certain stops
                 let fetchTransitTimes = mbtaClient.fetchTransitTimes
@@ -387,4 +395,3 @@ extension RouteStarterFeature {
 extension RouteStarterFeature.Destination.State: Equatable {}
 extension RouteStarterFeature.Destination.Action: Equatable {}
 
-private enum CancelID { case apiFetch }
