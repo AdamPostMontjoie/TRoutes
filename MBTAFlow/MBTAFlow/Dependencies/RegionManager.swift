@@ -31,14 +31,34 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         }
     }()
     
-    init(firstStop:Stop) {
+    static let shared = RegionManager()
+    
+    override init() {
         super.init()
-        self.currentStop = firstStop
         locationManager.delegate = self
         // throw if not authorized somewhere in here, in case user disables location access mid journey
     }
     
-    func startMonitoring() {
+    var authorizationStatus: CLAuthorizationStatus {
+        locationManager.authorizationStatus
+    }
+    
+    func requestAlwaysAuthorization() {
+        locationManager.requestAlwaysAuthorization()
+    }
+    
+    func handleLocationLaunch() {
+        locationManager.delegate = self
+        Task {
+            await fireDebugNotif?("App launched for CoreLocation event")
+        }
+        locationManager.monitoredRegions.forEach { region in
+            locationManager.requestState(for: region)
+        }
+    }
+    
+    func startMonitoring(firstStop:Stop) {
+        self.currentStop = firstStop
         if currentStop != nil{
             registerRegion(for: currentStop!)
         } else {

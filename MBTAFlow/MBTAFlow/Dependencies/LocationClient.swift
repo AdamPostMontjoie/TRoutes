@@ -31,44 +31,42 @@ enum locationError: Error, Equatable {
 }
 
 struct LocationClient {
-    var initializeManager: @Sendable (Stop) async -> Void
-    var startMonitoring: @Sendable () async throws -> AsyncStream<LocationEvent>?
+    var initializeManager: @Sendable () async -> Void
+    var startMonitoring: @Sendable (Stop) async throws -> AsyncStream<LocationEvent>?
     var registerNextStopRegion: @Sendable (Stop) async throws -> Void
     var stopMonitoring: @Sendable () async throws -> Void
-    var getCurrentAuthorization:@Sendable () -> CLAuthorizationStatus
+    var getCurrentAuthorization: @Sendable () async -> CLAuthorizationStatus
     var requestLocationAuthorization: @Sendable () async -> Void
     var openSettings: @Sendable () -> Void
 }
 
 private actor LocationActor {
-    var manager: RegionManager?
+
     
     
-    func initializeManager(firstStop:Stop, fireDebugNotif: @escaping @Sendable(String) async -> Void) async  {
-        let manager =  await RegionManager(firstStop: firstStop)
+    func initializeManager(fireDebugNotif: @escaping @Sendable(String) async -> Void) async  {
         await MainActor.run {
-                    manager.fireDebugNotif = fireDebugNotif
-                }
-        self.manager = manager
+            RegionManager.shared.fireDebugNotif = fireDebugNotif
+        }
+        
     }
     
-    func start() async -> AsyncStream<LocationEvent>? {
-        guard let manager else { return nil }
+    func start(firstStop:Stop) async -> AsyncStream<LocationEvent>? {
+
         
-        await manager.startMonitoring()
-        return await manager.eventStream
+        await RegionManager.shared.startMonitoring(firstStop:  firstStop)
+        return await RegionManager.shared.eventStream
     }
     
     
     func registerNextStopRegion(stop: Stop) async throws {
-        guard let manager else { return }
-        await manager.registerRegion(for: stop)
+       
+        await RegionManager.shared.registerRegion(for: stop)
     }
     
     func stop() async {
-        guard let manager else { return }
-        await manager.stopAll()
-        self.manager = nil
+        await RegionManager.shared.stopAll()
+        
     }
 }
 
@@ -76,12 +74,12 @@ private let actor = LocationActor()
 
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
-        initializeManager: { stop in
+        initializeManager: { 
             @Dependency(\.notificationsClient) var notificationsClient
-            await actor.initializeManager(firstStop: stop, fireDebugNotif: notificationsClient.debugStringNotification)
+            await actor.initializeManager( fireDebugNotif: notificationsClient.debugStringNotification)
         },
-        startMonitoring: {
-            return await actor.start()
+        startMonitoring: { stop in
+            return await actor.start(firstStop: stop)
         },
         registerNextStopRegion: { stop in
            try await actor.registerNextStopRegion(stop: stop)
@@ -91,10 +89,14 @@ extension LocationClient: DependencyKey {
             await actor.stop()
         },
         getCurrentAuthorization: {
-            CLLocationManager().authorizationStatus
+            await MainActor.run {
+                RegionManager.shared.authorizationStatus
+            }
         },
         requestLocationAuthorization: {
-            CLLocationManager().requestAlwaysAuthorization()
+            await MainActor.run {
+                RegionManager.shared.requestAlwaysAuthorization()
+            }
         },
         openSettings: {
            

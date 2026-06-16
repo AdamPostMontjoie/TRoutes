@@ -121,8 +121,11 @@ struct RouteStarterFeature {
             
             //all start requests enter here
             case let .startRouteRequested(route):
-                let status = locationClient.getCurrentAuthorization()
-                return .send(.locationAuthorizationStatusReceived(route, status))
+                let getCurrentAuthorization = locationClient.getCurrentAuthorization
+                return .run { send in
+                    let status = await getCurrentAuthorization()
+                    await send(.locationAuthorizationStatusReceived(route, status))
+                }
             
             //initial status check
             case let .locationAuthorizationStatusReceived(route, status):
@@ -174,7 +177,7 @@ struct RouteStarterFeature {
                 return .run { send in
                     await requestLocationPermissions()
                     await requestNotificationPermissions()
-                    let status = getCurrentStatus()
+                    let status = await getCurrentStatus()
                     await send(.locationPermissionRequestFinished(status))
                 }
             case .destination(.presented(.locationAlert(.delegate(.openSettings)))):
@@ -204,8 +207,9 @@ struct RouteStarterFeature {
                 let startMonitoring = locationClient.startMonitoring
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
-                    await initializeManager(firstStop)
-                    guard let stream = try await startMonitoring() else { return }
+                    await initializeManager()
+
+                    guard let stream = try await startMonitoring(firstStop) else { return }
                     
                     // Listen to the GPS (Wait at the pipe)
                     // This loop runs infinitely in the background until the effect is cancelled

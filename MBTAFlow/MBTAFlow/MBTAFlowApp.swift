@@ -8,9 +8,26 @@
 import SwiftUI
 import ComposableArchitecture
 import SwiftData
+import UIKit
+import UserNotifications
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        guard launchOptions?[.location] != nil else {
+            return true
+        }
+        
+        let regionManager = RegionManager.shared
+        regionManager.fireDebugNotif = NotificationsClient.liveValue.debugStringNotification
+        regionManager.handleLocationLaunch()
+        
+        return true
+    }
+}
 
 @main
 struct MBTAFlow: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let notificationDelegate = NotificationDelegate()
         
     init() {
