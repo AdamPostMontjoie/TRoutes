@@ -126,7 +126,11 @@ struct LegFormView: View {
     @ViewBuilder
     private var endStopSection: some View {
         if store.currentFormStep == .selectEndStop || store.selectedEndStop != nil {
-            Section(header: Text("Destination")) {
+            Section(header: resetHeader(
+                title: "Destination",
+                isResetVisible: store.selectedEndStop != nil,
+                action: .resetEndStopSelection
+            )) {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination stop").tag(UUID?.none)
                     //prevents going backwards on a route
@@ -148,7 +152,7 @@ struct LegFormView: View {
     private var routeActionSection: some View {
         if store.currentFormStep == .selectEndStop && store.selectedEndStop != nil && store.currentLeg != nil {
             Section {
-                if store.mode == .create {
+                if store.mode == .create || store.mode == .addToExisting {
                     HStack {
                         Button("Add Another Leg") {
                             store.send(.primaryButtonTapped)
@@ -257,17 +261,21 @@ struct LegFormView: View {
         )
     }
     private var saveButtonText: String {
-        if store.mode == .create {
+        switch store.mode {
+        case .create:
             return "Complete Route"
-        } else {
+        case .edit:
             return "Save Changes"
+        case .addToExisting:
+            return "Add Leg"
         }
     }
 
     private var navigationTitle: String {
-        if store.mode == .create {
+        switch store.mode {
+        case .create, .addToExisting:
             return "Add Leg to Route"
-        } else {
+        case .edit:
             return "Edit Leg"
         }
     }

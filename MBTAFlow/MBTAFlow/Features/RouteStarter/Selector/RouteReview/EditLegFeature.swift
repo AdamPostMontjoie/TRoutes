@@ -53,7 +53,7 @@ struct EditLegFeature {
             case dismiss
         }
     }
-
+    @Dependency(\.dismiss) var dismiss
     var body: some ReducerOf<Self> {
         Scope(state: \.legForm, action: \.legForm) {
             LegFormFeature()
@@ -73,7 +73,7 @@ struct EditLegFeature {
 
             case .legForm(.delegate(.requestDismissal)):
                 guard hasMeaningfulChanges(from: state.originalLeg, to: state.legForm.currentLeg) else {
-                    return .send(.delegate(.dismiss))
+                    return .run { _ in await self.dismiss() }
                 }
 
                 state.destination = .alert(.confirmDismiss())
@@ -81,9 +81,8 @@ struct EditLegFeature {
 
             case .destination(.presented(.alert(.confirmDismiss))):
                 state.pendingEditedLeg = nil
-                return .run { send in
-                    await send(.delegate(.dismiss))
-                }
+                state.destination = nil
+                return .run { _ in await self.dismiss() }
 
             case .destination(.presented(.alert(.confirmSave))):
                 guard let updatedLeg = state.pendingEditedLeg else {
@@ -92,9 +91,13 @@ struct EditLegFeature {
                 }
 
                 state.pendingEditedLeg = nil
+                
                 return .run { send in
                     await send(.delegate(.saveEditedLeg(updatedLeg)))
+                    await self.dismiss()
+                    
                 }
+                
                
 
             case .destination(.presented(.alert(.cancelSave))):

@@ -7,6 +7,7 @@
 
 import ComposableArchitecture
 import CoreLocation
+import SwiftUI
 
 //this will use core location monitoring
 //it tells us where we are, if we've crossed into a region
@@ -30,21 +31,30 @@ enum locationError: Error, Equatable {
 }
 
 struct LocationClient {
-    var startMonitoring: @Sendable (Stop) async throws -> AsyncStream<LocationEvent>
+    var initializeManager: @Sendable (Stop) async -> Void
+    var startMonitoring: @Sendable () async throws -> AsyncStream<LocationEvent>?
     var registerNextStopRegion: @Sendable (Stop) async throws -> Void
     var stopMonitoring: @Sendable () async throws -> Void
+    var getCurrentAuthorization:@Sendable () -> CLAuthorizationStatus
+    var requestLocationAuthorization: @Sendable () async -> Void
+    var openSettings: @Sendable () -> Void
 }
 
 private actor LocationActor {
     var manager: RegionManager?
     
-    func start(firstStop:Stop) async -> AsyncStream<LocationEvent> {
-       
+    func initializeManager(firstStop:Stop) async  {
         let manager =  await RegionManager(firstStop: firstStop)
         self.manager = manager
+    }
+    
+    func start() async -> AsyncStream<LocationEvent>? {
+        guard let manager else { return nil }
+        
         await manager.startMonitoring()
         return await manager.eventStream
     }
+    
     
     func registerNextStopRegion(stop: Stop) async throws {
         guard let manager else { return }
@@ -62,8 +72,11 @@ private let actor = LocationActor()
 
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
-        startMonitoring: { stop in
-            return await actor.start(firstStop: stop)
+        initializeManager: { stop in
+            await actor.initializeManager(firstStop: stop)
+        },
+        startMonitoring: {
+            return await actor.start()
         },
         registerNextStopRegion: { stop in
            try await actor.registerNextStopRegion(stop: stop)
@@ -71,6 +84,20 @@ extension LocationClient: DependencyKey {
         },
         stopMonitoring: {
             await actor.stop()
+        },
+        getCurrentAuthorization: {
+            CLLocationManager().authorizationStatus
+        },
+        requestLocationAuthorization: {
+            CLLocationManager().requestAlwaysAuthorization()
+        },
+        openSettings: {
+           
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            Task {
+                await UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+            
         }
     )
 }

@@ -12,6 +12,7 @@ struct JourneyState: Equatable {
     var stopIndex: Int = 0
     var movementStatus: MovementStatus = .enRoute
     var activePredictionTimes: [String] = []
+    var warningMessage: String?
     var needTimes:Bool = true
     
     var currentStop: Stop? {

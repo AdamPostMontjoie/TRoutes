@@ -26,6 +26,7 @@ enum MBTAError: Error, Equatable {
     case forbidden
     case rateLimited
     case serverError(Int)
+    case timeoutError
     case decodingError
     case networkError
 }
@@ -59,7 +60,7 @@ extension MBTAClient:DependencyKey {
             //it seems as if the predictions endpoint will return outdated times. potential solution is to pull more than 3
             //filter out any that are in past and then return next 3.
             guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
-                throw URLError(.badURL)
+                throw MBTAError.networkError
             }
             
             // data and response type
@@ -73,8 +74,6 @@ extension MBTAClient:DependencyKey {
             do {
                 let predictionResponse = try decoder.decode(PredictionResponse.self, from: data)
                 
-                // 5. Format the output
-                var upcomingTimes: [String] = []
                 
                 // MBTA returns ISO8601 formatted strings (e.g., "2026-06-04T15:38:58-04:00")
                 let isoFormatter = ISO8601DateFormatter()
@@ -84,23 +83,29 @@ extension MBTAClient:DependencyKey {
                 displayFormatter.timeStyle = .short
                 
                 let calendarComparator = Calendar.current
-                for prediction in predictionResponse.data {
-                    // If it's the first stop on a route, arrivalTime is null, so fallback to departureTime
-                    
-                    if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
-                       let date = isoFormatter.date(from: timeString) {
-                        let now = Date()
-                        //filter out any times in the past
-                        if calendarComparator.isDate(date, equalTo: now, toGranularity: .minute) || date > now {
-                            let readableTime = displayFormatter.string(from: date)
-                            upcomingTimes.append(readableTime)
-                        }
-                        
-                        
-                    } else if let status = prediction.attributes.status {
-                        // Fallback: If there is no exact time, the MBTA might just provide a status like "Approaching"
-                        upcomingTimes.append(status)
+                let now = Date()
+                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> String? in
+                    // 1. Physical signs prioritize specific statuses over timestamps
+                    if let status = prediction.attributes.status {
+                        return status
                     }
+                    
+                    // 2. If no status, calculate the "minutes away" countdown
+                    if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
+                       let date = isoFormatter.date(from: timeString),
+                       date >= now { // Filter out past times
+                        
+                        let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
+                        
+                        if minutesAway <= 0 {
+                            return "Arriving"
+                        } else {
+                            return "\(minutesAway) min"
+                        }
+                    }
+                    
+                    // Returning nil automatically drops the item from the final array
+                    return nil
                 }
                 return Array(upcomingTimes.prefix(3))
             } catch {
@@ -112,7 +117,7 @@ extension MBTAClient:DependencyKey {
         fetchDirections: { routeId in
                     // If the user selected Blue Line, routeId is "Blue or sum shit"
                     guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
-                        throw URLError(.badURL)
+                        throw MBTAError.networkError
                     }
                     
                     let (data, response) = try await URLSession.shared.data(from: url)
@@ -149,7 +154,7 @@ extension MBTAClient:DependencyKey {
         fetchBranches: { filterKey, filterValue in
             // Added direction_names and direction_destinations to the fields filter
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
-                throw URLError(.badURL)
+                throw MBTAError.networkError
             }
             
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -200,7 +205,7 @@ extension MBTAClient:DependencyKey {
             //we are going to want to configure this based on direction, flip stop order and stuff
             
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
-                            throw URLError(.badURL)
+                            throw MBTAError.networkError
                         }
                         
                         let (data, response) = try await URLSession.shared.data(from: url)

@@ -45,7 +45,7 @@ struct CreateRouteFeature {
             case routeSaved
         }
     }
-
+    @Dependency(\.dismiss) var dismiss
     @Dependency(\.databaseClient) var databaseClient
     var body: some ReducerOf<Self> {
         Scope(state: \.legForm, action: \.legForm) {
@@ -66,7 +66,9 @@ struct CreateRouteFeature {
 
             case .legForm(.delegate(.requestDismissal)):
                 if state.completedLegs.isEmpty && state.legForm.selectedType == nil {
-                    return .send(.delegate(.dismiss))
+                    return .run { _ in
+                        await dismiss()
+                    }
                 } else {
                     state.destination = .alert(.confirmDismiss())
                     return .none
@@ -80,7 +82,7 @@ struct CreateRouteFeature {
             case .destination(.presented(.alert(.confirmDismiss))):
                 return .run { send in
                     await send(.resetForm)
-                    await send(.delegate(.dismiss))
+                    await dismiss()
                 }
                 
             case .destination(.presented(.alert(.confirmSave))):

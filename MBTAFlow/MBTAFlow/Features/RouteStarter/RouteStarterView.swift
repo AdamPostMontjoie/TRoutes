@@ -36,6 +36,7 @@ struct RouteStarterView: View {
                 )
             }
             .navigationTitle("Routes")
+            .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -48,23 +49,24 @@ struct RouteStarterView: View {
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
         }
+        .sheet(
+            item: $store.scope(
+                state: \.destination?.locationAlert,
+                action: \.destination.locationAlert
+            )
+        ) { locationAlertStore in
+            LocationAlertView(store: locationAlertStore)
+                // Prevents the user from swiping the sheet away without making a choice
+                .interactiveDismissDisabled()
+        }
         .fullScreenCover(
-            isPresented: Binding(
-                get: { store.isCreateRoutePresented },
-                set: { isPresented in
-                    if !isPresented {
-                        store.send(.onCreateRouteDismissed(false))
-                    }
-                }
+            item: $store.scope(
+                state: \.destination?.createRoute,
+                action: \.destination.createRoute
             )
-        ) {
-            CreateRouteView(
-                store: store.scope(
-                    state: \.createRoute,
-                    action: \.createRoute
-                )
-            )
-            .interactiveDismissDisabled(true)
+        ) { createRouteStore in
+            CreateRouteView(store: createRouteStore)
+                .interactiveDismissDisabled(true)
         }
     }
 }
