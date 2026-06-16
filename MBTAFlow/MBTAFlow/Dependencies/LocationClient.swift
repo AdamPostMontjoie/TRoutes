@@ -43,8 +43,12 @@ struct LocationClient {
 private actor LocationActor {
     var manager: RegionManager?
     
-    func initializeManager(firstStop:Stop) async  {
+    
+    func initializeManager(firstStop:Stop, fireDebugNotif: @escaping @Sendable(String) async -> Void) async  {
         let manager =  await RegionManager(firstStop: firstStop)
+        await MainActor.run {
+                    manager.fireDebugNotif = fireDebugNotif
+                }
         self.manager = manager
     }
     
@@ -73,7 +77,8 @@ private let actor = LocationActor()
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
         initializeManager: { stop in
-            await actor.initializeManager(firstStop: stop)
+            @Dependency(\.notificationsClient) var notificationsClient
+            await actor.initializeManager(firstStop: stop, fireDebugNotif: notificationsClient.debugStringNotification)
         },
         startMonitoring: {
             return await actor.start()
