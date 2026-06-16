@@ -6,6 +6,7 @@
 //
 
 import CoreLocation
+import ComposableArchitecture
 
 @MainActor
 class RegionManager: NSObject, CLLocationManagerDelegate {
@@ -13,6 +14,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     private var continuation: AsyncStream<LocationEvent>.Continuation?
     private var currentStop: Stop?
     
+    var fireDebugNotif: ( @Sendable(String) async -> Void)?
     // Stream is created once, continuation stored for delegate use
     lazy var eventStream: AsyncStream<LocationEvent> = {
         AsyncStream { [weak self] continuation in
@@ -86,9 +88,26 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
     //already inside of zone
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
-            if state == .inside {
+            switch state {
+            case .inside:
+                Task {
+                await fireDebugNotif?("Inside")
                 print("📍 CoreLocation: Already inside region upon registration.")
                 continuation?.yield(.enteredStop(stopId: region.identifier))
+            }
+            case .outside:
+                Task {
+                    await fireDebugNotif?("outside")
+            }
+            case .unknown:
+                Task {
+                    await fireDebugNotif?("unkown")
+            }
+            default:
+                Task {
+                    await fireDebugNotif?("d falt")
+            }
+                
             }
         }
     

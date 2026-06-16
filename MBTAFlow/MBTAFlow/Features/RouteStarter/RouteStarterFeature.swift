@@ -75,6 +75,7 @@ struct RouteStarterFeature {
     }
     
     @Dependency(\.locationClient) var locationClient
+    @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.liveActivityClient) var liveActivityClient
     @Dependency(\.mbtaClient) var mbtaClient
     var body: some ReducerOf<Self> {
@@ -161,10 +162,13 @@ struct RouteStarterFeature {
             
             case .destination(.presented(.locationAlert(.delegate(.requestPermissionsInApp)))):
                 state.destination = nil
-                let requestPermissions = locationClient.requestLocationAuthorization
+                let requestLocationPermissions = locationClient.requestLocationAuthorization
+                let requestNotificationPermissions = notificationsClient.requestAuthorization
+                
                 let getCurrentStatus = locationClient.getCurrentAuthorization
                 return .run { send in
-                    await requestPermissions()
+                    await requestLocationPermissions()
+                    await requestNotificationPermissions()
                     let status = getCurrentStatus()
                     await send(.locationPermissionRequestFinished(status))
                 }
@@ -189,12 +193,13 @@ struct RouteStarterFeature {
 
                 state.isActiveJourneyPresented = true
                 state.activeJourney = journey
-               // state.activeJourneyDisplay.journey = state.activeJourney
                 
+                //likely needs to be reworked once we create static manager, works for now
+                let initializeManager = locationClient.initializeManager
                 let startMonitoring = locationClient.startMonitoring
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
-                    
+                    await initializeManager(firstStop)
                     guard let stream = try await startMonitoring() else { return }
                     
                     // Listen to the GPS (Wait at the pipe)
