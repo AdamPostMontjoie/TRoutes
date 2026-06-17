@@ -24,7 +24,7 @@ extension NotificationsClient: DependencyKey {
             }
         },
         debugStringNotification: { log in
-            guard UserDefaults.standard.bool(forKey: "enableDebugNotifications") else {
+            guard UserDefaultsClient.liveValue.areDebugNotificationsEnabled() else {
                 print("🔕 Debug Notif Suppressed: \(log)")
                 return
             }
@@ -51,7 +51,7 @@ extension NotificationsClient: DependencyKey {
             }
         },
         setDevMode: { enabled in
-            UserDefaults.standard.set(enabled, forKey: "enableDebugNotifications")
+            UserDefaultsClient.liveValue.setDebugNotifications(enabled)
         }
     )
 

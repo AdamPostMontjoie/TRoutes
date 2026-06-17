@@ -84,7 +84,7 @@ struct Leg: Equatable, Codable, Identifiable {
     }
 }
 
-struct RouteStruct: Equatable, Identifiable {
+struct RouteStruct: Codable, Equatable, Identifiable {
     var legs: [Leg]
     var id: UUID
     var name: String
