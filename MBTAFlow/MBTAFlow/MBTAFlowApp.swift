@@ -13,15 +13,27 @@ import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        
         guard launchOptions?[.location] != nil else {
+            print("non location launch")
             return true
         }
-        
+        print("location launch")
         let regionManager = RegionManager.shared
         regionManager.fireDebugNotif = NotificationsClient.liveValue.debugStringNotification
         regionManager.handleLocationLaunch()
         
         return true
+    }
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        Task {
+            await NotificationsClient.liveValue.debugStringNotification("Memory warning received")
+        }
+    }
+    func applicationWillTerminate(_ application: UIApplication) {
+        Task {
+            await NotificationsClient.liveValue.debugStringNotification("App will terminate")
+        }
     }
 }
 

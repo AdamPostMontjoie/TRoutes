@@ -45,16 +45,25 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     func requestAlwaysAuthorization() {
         locationManager.requestAlwaysAuthorization()
+        //potential fallback
+     //   locationManager.startMonitoringSignificantLocationChanges()
     }
     
+    //on launch
     func handleLocationLaunch() {
         locationManager.delegate = self
         Task {
             await fireDebugNotif?("App launched for CoreLocation event")
         }
-        locationManager.monitoredRegions.forEach { region in
-            locationManager.requestState(for: region)
-        }
+        //load last saved active journey state
+        
+        //determine what state we're currently at, which region has been tripped (eg secondary or primary)
+    //    locationManager.monitoredRegions.forEach { region in
+     //       locationManager.requestState(for: region)
+    //    }
+        //transition to next state, use a helper to determine what that might be
+        
+        //
     }
     
     func startMonitoring(firstStop:Stop) {
@@ -100,6 +109,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     func stopAll() {
         clearMonitoredRegions()
         continuation?.finish()
+        //clear persisted user defaults
     }
     private func clearMonitoredRegions(){
         locationManager.monitoredRegions.forEach {
