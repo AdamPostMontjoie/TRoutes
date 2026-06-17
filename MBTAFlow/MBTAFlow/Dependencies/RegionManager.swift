@@ -19,21 +19,22 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     var fireDebugNotif: ( @Sendable(String) async -> Void)?
     // Stream is created once, continuation stored for delegate use
-    lazy var eventStream: AsyncStream<LocationEvent> = {
-        AsyncStream { [weak self] continuation in
-            self?.continuation = continuation
-            continuation.onTermination = { [weak self] _ in
-                Task {
-                    print("stream termination")
-                    await self?.clearMonitoredRegions()
-                }
-            }
-        }
-    }()
+    let eventStream: AsyncStream<LocationEvent>
     
     static let shared = RegionManager()
     
     override init() {
+        
+        var extractedContinuation: AsyncStream<LocationEvent>.Continuation?
+        self.eventStream = AsyncStream { continuation in
+            extractedContinuation = continuation
+            
+            continuation.onTermination = { _ in
+                print("stream termination")
+            }
+        }
+        self.continuation = extractedContinuation
+        
         super.init()
         locationManager.delegate = self
         // throw if not authorized somewhere in here, in case user disables location access mid journey
@@ -47,23 +48,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.requestAlwaysAuthorization()
         //potential fallback
      //   locationManager.startMonitoringSignificantLocationChanges()
-    }
-    
-    //on launch
-    func handleLocationLaunch() {
-        locationManager.delegate = self
-        Task {
-            await fireDebugNotif?("App launched for CoreLocation event")
-        }
-        //load last saved active journey state
-        
-        //determine what state we're currently at, which region has been tripped (eg secondary or primary)
-    //    locationManager.monitoredRegions.forEach { region in
-     //       locationManager.requestState(for: region)
-    //    }
-        //transition to next state, use a helper to determine what that might be
-        
-        //
     }
     
     func startMonitoring(firstStop:Stop) {

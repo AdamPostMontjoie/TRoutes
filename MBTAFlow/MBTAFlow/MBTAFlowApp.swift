@@ -14,14 +14,13 @@ import UserNotifications
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         
-        guard launchOptions?[.location] != nil else {
-            print("non location launch")
-            return true
-        }
-        print("location launch")
+        //JourneyEngine.shared.startListeningToLocationEvents()
+        //region manager just needs to be created for it to handle did enter did exit
         let regionManager = RegionManager.shared
+        //this needs to be removed later
         regionManager.fireDebugNotif = NotificationsClient.liveValue.debugStringNotification
-        regionManager.handleLocationLaunch()
+        
+        //may need to ensure stream is being listened to
         
         return true
     }
@@ -45,7 +44,7 @@ struct MBTAFlow: App {
     init() {
         // Attach the delegate on boot
         UNUserNotificationCenter.current().delegate = notificationDelegate
-        UserDefaults.standard.set(true, forKey: "enableDebugNotifications")
+        UserDefaultsClient.liveValue.setDebugNotifications(true)
     }
     
     static let store = Store(initialState: RootFeature.State()) {

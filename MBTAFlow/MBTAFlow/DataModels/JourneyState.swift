@@ -5,7 +5,7 @@
 //  Created by Adam Post on 5/31/26.
 //
 
-struct JourneyState: Equatable {
+struct JourneyState: Equatable, Codable {
     let route: RouteStruct
     let stopSequence: [Stop]
     
@@ -64,14 +64,7 @@ struct JourneyState: Equatable {
     }
 }
 
-struct StopState:Equatable {
-    var stop:Stop
-    init(stop: Stop) {
-        self.stop = stop
-    }
-}
-
-enum MovementStatus {
+enum MovementStatus:Codable {
     case enRoute
     case atStop
 }
