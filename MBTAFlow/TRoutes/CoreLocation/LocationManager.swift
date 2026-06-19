@@ -23,7 +23,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     static let shared = RegionManager()
     
     override init() {
-        
         var extractedContinuation: AsyncStream<LocationEvent>.Continuation?
         self.eventStream = AsyncStream { continuation in
             extractedContinuation = continuation

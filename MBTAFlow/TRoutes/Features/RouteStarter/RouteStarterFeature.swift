@@ -74,7 +74,7 @@ struct RouteStarterFeature {
         
     }
     
-    @Dependency(\.locationClient) var locationClient
+    @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.liveActivityClient) var liveActivityClient
     @Dependency(\.mbtaClient) var mbtaClient
@@ -121,7 +121,7 @@ struct RouteStarterFeature {
             
             //all start requests enter here
             case let .startRouteRequested(route):
-                let getCurrentAuthorization = locationClient.getCurrentAuthorization
+                let getCurrentAuthorization = JourneyClient.getCurrentAuthorization
                 return .run { send in
                     let status = await getCurrentAuthorization()
                     await send(.locationAuthorizationStatusReceived(route, status))
@@ -170,10 +170,10 @@ struct RouteStarterFeature {
             
             case .destination(.presented(.locationAlert(.delegate(.requestPermissionsInApp)))):
                 state.destination = nil
-                let requestLocationPermissions = locationClient.requestLocationAuthorization
+                let requestLocationPermissions = JourneyClient.requestLocationAuthorization
                 let requestNotificationPermissions = notificationsClient.requestAuthorization
                 
-                let getCurrentStatus = locationClient.getCurrentAuthorization
+                let getCurrentStatus = JourneyClient.getCurrentAuthorization
                 return .run { send in
                     await requestLocationPermissions()
                     await requestNotificationPermissions()
@@ -181,7 +181,7 @@ struct RouteStarterFeature {
                     await send(.locationPermissionRequestFinished(status))
                 }
             case .destination(.presented(.locationAlert(.delegate(.openSettings)))):
-                let openSettings = locationClient.openSettings
+                let openSettings = JourneyClient.openSettings
                 state.destination = nil
                 return .run { send in
                     openSettings()
@@ -203,8 +203,8 @@ struct RouteStarterFeature {
                 state.activeJourney = journey
                 
                 //likely needs to be reworked once we create static manager, works for now
-                let initializeManager = locationClient.initializeManager
-                let startMonitoring = locationClient.startMonitoring
+                let initializeManager = JourneyClient.initializeManager
+                let startMonitoring = JourneyClient.startMonitoring
                 return .run { send in
                     await send(.fetchPredictions(firstStop))
                     await initializeManager()
@@ -222,7 +222,7 @@ struct RouteStarterFeature {
                 print("end route")
                 state.isActiveJourneyPresented = false
                 state.activeJourney = nil
-                let stopMonitoring = locationClient.stopMonitoring
+                let stopMonitoring = JourneyClient.stopMonitoring
                 return .run { send in
                     try await stopMonitoring()
                 }
@@ -296,7 +296,7 @@ struct RouteStarterFeature {
                         state.activeJourney?.movementStatus = .enRoute
                     }
                     state.activeJourney?.needTimes = true
-                    let registerNextStopRegion = locationClient.registerNextStopRegion
+                    let registerNextStopRegion = JourneyClient.registerNextStopRegion
                     return .run { send in
                         try await registerNextStopRegion(newStop)
                         //get times for the new stop
@@ -332,7 +332,7 @@ struct RouteStarterFeature {
                     //we're on way to transfer or final stop, need no new times
                     state.activeJourney?.activePredictionTimes = []
                     state.activeJourney?.needTimes = false
-                    let registerNextStopRegion = locationClient.registerNextStopRegion
+                    let registerNextStopRegion = JourneyClient.registerNextStopRegion
                     return .run { send in
                         try await registerNextStopRegion(newStop)
                         //we probably don't need predictions, because next stop with be transfer or final

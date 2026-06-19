@@ -65,3 +65,16 @@ extension DependencyValues {
         set { self[NotificationsClient.self] = newValue }
     }
 }
+
+class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    
+    // This function intercepts the notification right before it displays
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Force iOS to show the banner and play the sound even if the app is foregrounded
+        completionHandler([.banner, .sound])
+    }
+}
