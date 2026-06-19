@@ -14,11 +14,15 @@ import UserNotifications
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         
-        //JourneyEngine.shared.startListeningToLocationEvents()
+        
         //region manager just needs to be created for it to handle did enter did exit
         let regionManager = RegionManager.shared
         //this needs to be removed later
         regionManager.fireDebugNotif = NotificationsClient.liveValue.debugStringNotification
+        //put this before or after the region manager creation?
+        Task {
+            await JourneyEngine.shared.startListeningToLocationEvents()
+        }
         
         //may need to ensure stream is being listened to
         
@@ -37,7 +41,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 @main
-struct MBTAFlow: App {
+struct TRoutes: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let notificationDelegate = NotificationDelegate()
         
@@ -53,7 +57,7 @@ struct MBTAFlow: App {
     
     var body: some Scene {
         WindowGroup {
-            RootView(store:MBTAFlow.store)
+            RootView(store:TRoutes.store)
         }
     }
 }

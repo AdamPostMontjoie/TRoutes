@@ -14,10 +14,9 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     private var continuation: AsyncStream<LocationEvent>.Continuation?
     private var currentStop: Stop?
     
-    //guards against double state notifications
+    // Guards against double state events.
     private var lastKnownState: CLRegionState?
     
-    var fireDebugNotif: ( @Sendable(String) async -> Void)?
     // Stream is created once, continuation stored for delegate use
     let eventStream: AsyncStream<LocationEvent>
     
@@ -71,7 +70,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         let region = CLCircularRegion(
             center: coordinate,
             radius: 100,
-            identifier: stop.stopName
+            identifier: stop.mbtaStopId
         )
         region.notifyOnEntry = true
         region.notifyOnExit = true
@@ -116,54 +115,31 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         lastKnownState = state
             switch state {
             case .inside:
-                Task {
-                await fireDebugNotif?("Inside \(region.identifier)")
                 print("📍 CoreLocation: Already inside region upon registration.")
                 continuation?.yield(.enteredStop(stopId: region.identifier))
-            }
             case .outside:
-                Task {
-                    await fireDebugNotif?("outside \(region.identifier)")
-            }
+                break
             case .unknown:
                 //we will need to handle unknown location with a fallback
-                Task {
-                    await fireDebugNotif?("unkown \(region.identifier)")
-            }
+                break
             default:
-                Task {
-                    await fireDebugNotif?("d falt")
-            }
-                
+                break
             }
         }
     
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         print("entered region")
-        Task {
-            await fireDebugNotif?("Entered Region \(region.identifier)")
-        }
         continuation?.yield(.enteredStop(stopId: region.identifier))
     }
     
     //on exit
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         print("exited region")
-        Task {
-            await fireDebugNotif?("Exited Region \(region.identifier)")
-        }
         continuation?.yield(.exitedStop(stopId: region.identifier))
         
-        // Stop monitoring the region we just left
-        if let exitedRegion = manager.monitoredRegions.first(where: { $0.identifier == region.identifier }) {
-            //deprecated
-            manager.stopMonitoring(for: exitedRegion)
-        }
+        //stopping monitoring should be handled when new region is registered
     }
-    
-    //using this from CLLocationManager might be a solution to underground gps disconnnect, worth a try
-    //func startMonitoringSignificantLocationChanges()
     
     
     
@@ -187,9 +163,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
                 } else {
                     mappedError = .unknown
                 }
-            Task {
-                await fireDebugNotif?("Debug Error: \(error)")
-            }
             continuation?.yield(.monitoringFailed(stopId: id, error: mappedError ))
         }
     }
