@@ -13,7 +13,7 @@ struct JourneyState: Equatable, Codable {
     var movementStatus: MovementStatus = .enRoute
     var activePredictionTimes: [String] = []
     var warningMessage: String?
-    var needTimes:Bool = true
+    var needTimes: Bool = true
     
     var currentStop: Stop? {
         guard stopSequence.indices.contains(stopIndex) else {
@@ -35,15 +35,15 @@ struct JourneyState: Equatable, Codable {
             var startStop = route.legs[index].startStop
             var endStop = route.legs[index].endStop
             
-            startStop.stopType = .boardingStop
-            startStop.overlapsWithNext = false
-            endStop.stopType = isLastLeg ? .finalStop : .transferStop
+            startStop.journeyRole = .boarding
             
-            if !isLastLeg {
-                let nextStartStop = route.legs[index + 1].startStop
-                endStop.overlapsWithNext = endStop.mbtaStopId == nextStartStop.mbtaStopId
+            if isLastLeg {
+                endStop.journeyRole = .final
             } else {
-                endStop.overlapsWithNext = false
+                let nextStartStop = route.legs[index + 1].startStop
+                endStop.journeyRole = .transfer(
+                    overlapsNext: endStop.mbtaStopId == nextStartStop.mbtaStopId
+                )
             }
             
             sequence.append(startStop)
@@ -62,9 +62,10 @@ struct JourneyState: Equatable, Codable {
         stopIndex = nextIndex
         return stopSequence[stopIndex]
     }
+
 }
 
-enum MovementStatus:Codable {
+enum MovementStatus: Codable {
     case enRoute
     case atStop
 }

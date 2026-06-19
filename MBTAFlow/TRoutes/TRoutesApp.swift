@@ -16,9 +16,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         
         //region manager just needs to be created for it to handle did enter did exit
-        let regionManager = RegionManager.shared
-        //this needs to be removed later
-        regionManager.fireDebugNotif = NotificationsClient.liveValue.debugStringNotification
+        _ = RegionManager.shared
         //put this before or after the region manager creation?
         Task {
             await JourneyEngine.shared.startListeningToLocationEvents()

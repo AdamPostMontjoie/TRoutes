@@ -14,8 +14,65 @@ struct Stop: Codable, Equatable, Identifiable {
     var longitude: Double
     var latitude: Double
     var address: String // display on review feature
-    var stopType: StopType = .boardingStop //default
-    var overlapsWithNext: Bool = false // Default to false
+    var journeyRole: JourneyStopRole = .boarding
+
+    var stopType: StopType {
+        get {
+            switch journeyRole {
+            case .boarding:
+                return .boardingStop
+            case .transfer:
+                return .transferStop
+            case .final:
+                return .finalStop
+            }
+        }
+        set {
+            switch newValue {
+            case .boardingStop:
+                journeyRole = .boarding
+            case .transferStop:
+                journeyRole = .transfer(overlapsNext: overlapsWithNext)
+            case .finalStop:
+                journeyRole = .final
+            }
+        }
+    }
+
+    var overlapsWithNext: Bool {
+        get {
+            guard case let .transfer(overlapsNext) = journeyRole else {
+                return false
+            }
+            return overlapsNext
+        }
+        set {
+            guard case .transfer = journeyRole else {
+                return
+            }
+            journeyRole = .transfer(overlapsNext: newValue)
+        }
+    }
+
+    init(
+        id: UUID = UUID(),
+        mbtaStopId: String,
+        mbtaRouteId: String,
+        stopName: String,
+        longitude: Double,
+        latitude: Double,
+        address: String,
+        journeyRole: JourneyStopRole = .boarding
+    ) {
+        self.id = id
+        self.mbtaStopId = mbtaStopId
+        self.mbtaRouteId = mbtaRouteId
+        self.stopName = stopName
+        self.longitude = longitude
+        self.latitude = latitude
+        self.address = address
+        self.journeyRole = journeyRole
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -25,7 +82,27 @@ struct Stop: Codable, Equatable, Identifiable {
         case longitude
         case latitude
         case address
+        case journeyRole
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        mbtaStopId = try container.decode(String.self, forKey: .mbtaStopId)
+        mbtaRouteId = try container.decode(String.self, forKey: .mbtaRouteId)
+        stopName = try container.decode(String.self, forKey: .stopName)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        address = try container.decode(String.self, forKey: .address)
+        journeyRole = try container.decodeIfPresent(JourneyStopRole.self, forKey: .journeyRole) ?? .boarding
+    }
+}
+
+enum JourneyStopRole: Codable, Equatable {
+    case boarding
+    case transfer(overlapsNext: Bool)
+    case final
 }
 
 enum StopType: Codable, Equatable {

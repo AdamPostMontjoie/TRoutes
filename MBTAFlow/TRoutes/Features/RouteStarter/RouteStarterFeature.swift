@@ -286,8 +286,6 @@ struct RouteStarterFeature {
                 }
                 switch currentStop.stopType {
                 case .transferStop:
-                    //run effect
-                   
                     guard let newStop = state.activeJourney?.advanceToNextStop() else {
                         return .none
                     }

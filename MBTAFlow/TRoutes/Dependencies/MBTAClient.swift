@@ -231,9 +231,7 @@ extension MBTAClient:DependencyKey {
                                     longitude: stopData.attributes.longitude ?? 0.0,
                                     latitude: stopData.attributes.latitude ?? 0.0,
                                     address: stopData.attributes.address ?? "Boston, MA",
-                                    stopType: .boardingStop,
-                                    // Address is often null for subway stations, fallback prevents decoding crashes
-                                    overlapsWithNext: false
+                                    journeyRole: .boarding
                                 )
                                 stops.append(stop)
                             }

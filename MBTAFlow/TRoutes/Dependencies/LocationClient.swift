@@ -33,37 +33,7 @@ struct LocationClient {
     var openSettings: @Sendable () -> Void
 }
 
-private actor LocationActor {
 
-    
-    
-    func initializeManager(fireDebugNotif: @escaping @Sendable(String) async -> Void) async  {
-        await MainActor.run {
-            RegionManager.shared.fireDebugNotif = fireDebugNotif
-        }
-        
-    }
-    
-    func start(firstStop:Stop) async -> AsyncStream<LocationEvent>? {
-
-        
-        await RegionManager.shared.startMonitoring(firstStop:  firstStop)
-        return await RegionManager.shared.eventStream
-    }
-    
-    
-    func registerNextStopRegion(stop: Stop) async throws {
-       
-        await RegionManager.shared.registerRegion(for: stop)
-    }
-    
-    func stop() async {
-        await RegionManager.shared.stopAll()
-        
-    }
-}
-
-private let actor = LocationActor()
 
 extension LocationClient: DependencyKey {
     static let liveValue = Self(
@@ -72,14 +42,14 @@ extension LocationClient: DependencyKey {
             await actor.initializeManager( fireDebugNotif: notificationsClient.debugStringNotification)
         },
         startMonitoring: { stop in
-            return await actor.start(firstStop: stop)
+       //     return await actor.start(firstStop: stop)
         },
         registerNextStopRegion: { stop in
-           try await actor.registerNextStopRegion(stop: stop)
+      //     try await actor.registerNextStopRegion(stop: stop)
             //error handling
         },
         stopMonitoring: {
-            await actor.stop()
+      //      await actor.stop()
         },
         getCurrentAuthorization: {
             await MainActor.run {

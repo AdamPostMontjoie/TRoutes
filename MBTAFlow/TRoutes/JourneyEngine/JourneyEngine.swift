@@ -71,130 +71,75 @@ actor JourneyEngine {
     //did we already receive this valid command from a different source and make the change?
     
     func journeyEventDeterminitor(_ event:JourneyCommand) async{
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else {return}
+        guard let currentJourney = userDefaultsClient.loadActiveJourney() else {return}
         switch event {
             case let .executeEntry(stopId:id):
                 //ok, this is a new update
                 if currentJourney.movementStatus == .enRoute && currentJourney.currentStop?.mbtaStopId == id {
-                    //set this to block any new mutuations
-                    currentJourney.movementStatus = .atStop
-                    userDefaultsClient.saveActiveJourney(currentJourney)
-                    await self.enteredStop()
+                    await handle(.arriveAtStop)
                 }
             case let .executeExit(stopId:id):
             if currentJourney.movementStatus == .atStop && currentJourney.currentStop?.mbtaStopId == id {
-                //set this to block any new mutuations
-                currentJourney.movementStatus = .enRoute
-                userDefaultsClient.saveActiveJourney(currentJourney)
-                await self.exitedStop()
+                await handle(.departFromStop)
             }
         }
     }
     
-    func enteredStop() async{
+    private func handle(_ action: JourneyAction) async {
         guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
-        guard var currentStop = currentJourney.currentStop else {
-            return
-        }
-        switch currentStop.stopType {
-        case .transferStop:
-
-            var times:[String] = []
-            //we overlap, so we need to skip exit of the transfer stop
-            if currentStop.overlapsWithNext {
-                guard let newStop = currentJourney.advanceToNextStop() else {
-                    return
-                }
-                currentJourney.needTimes = true
-                currentJourney.activePredictionTimes = []
-                currentStop = newStop
-                userDefaultsClient.saveActiveJourney(currentJourney)
-                await RegionManager.shared.registerRegion(for: newStop)
-                do {
-                    times = try await mbtaClient.fetchTransitTimes( newStop)
-                } catch {
-                    //this will set the display for times unavaible, mbta down, etc depending on error
-                }
-                guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-                guard freshJourney.currentStop?.mbtaStopId == currentStop.mbtaStopId else {
-                        print("User manually advanced route during API call. Discarding stale times.")
-                        return
-                }
-                currentJourney = freshJourney
+        let effects = action.reduce(state: &currentJourney)
+        userDefaultsClient.saveActiveJourney(currentJourney)
+        await run(effects)
+    }
+    
+    func enteredStop() async{
+        await handle(.arriveAtStop)
+    }
+    
+    func exitedStop() async{
+        await handle(.departFromStop)
+    }
+    
+    private func run(_ effects: [JourneyEffect]) async {
+        for effect in effects {
+            switch effect {
+            case let .registerRegion(stop):
+                await RegionManager.shared.registerRegion(for: stop)
+                
+            case let .fetchPredictions(stop):
+                await fetchPredictions(for: stop)
+                
+            case let .sendNotification(message):
+                await sendNotificaition(message: message)
+                
+            case .endRoute:
+                endRoute()
             }
-            currentJourney.activePredictionTimes = times
-            currentJourney.needTimes = false
-            userDefaultsClient.saveActiveJourney(currentJourney)
-            
-        case .boardingStop:
-            currentJourney.needTimes = true
-            userDefaultsClient.saveActiveJourney(currentJourney)
-            var times:[String] = []
-            do {
-                times = try await mbtaClient.fetchTransitTimes(currentStop)
-            } catch {
-                //this will set the display for times unavaible, mbta down, etc depending on error
-            }
-            guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-            guard freshJourney.currentStop?.mbtaStopId == currentStop.mbtaStopId else {
-                    print("User manually advanced route during API call. Discarding stale times.")
-                    return
-            }
-            freshJourney.activePredictionTimes = times
-            freshJourney.needTimes = false
-            userDefaultsClient.saveActiveJourney(freshJourney)
-            
-        case .finalStop:
-            //end of route
-            return
         }
     }
-    func exitedStop() async{
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
-        guard let currentStop = currentJourney.currentStop else {
+    
+    private func fetchPredictions(for stop: Stop) async {
+        var times: [String] = []
+        do {
+            times = try await mbtaClient.fetchTransitTimes(stop)
+        } catch {
+            //this will set the display for times unavaible, mbta down, etc depending on error
+        }
+        
+        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
+        //can check against more specific request id guard
+        guard freshJourney.currentStop?.mbtaStopId == stop.mbtaStopId else {
+            print("User manually advanced route during API call. Discarding stale times.")
             return
         }
-        switch currentStop.stopType {
-        case .transferStop:
-            if !currentStop.overlapsWithNext{
-               
-                guard let newStop = currentJourney.advanceToNextStop() else {
-                    return
-                }
-                currentJourney.activePredictionTimes = []
-                currentJourney.needTimes = true
-                userDefaultsClient.saveActiveJourney(currentJourney)
-                await RegionManager.shared.registerRegion(for: newStop)
-                var times:[String] = []
-                do {
-                    times = try await mbtaClient.fetchTransitTimes( newStop)
-                } catch {
-                    //this will set the display for times unavaible, mbta down, etc depending on error
-                }
-                guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-                guard freshJourney.currentStop?.mbtaStopId == newStop.mbtaStopId else {
-                        print("User manually advanced route during API call. Discarding stale times.")
-                        return
-                }
-                freshJourney.activePredictionTimes = times
-                freshJourney.needTimes = false
-                userDefaultsClient.saveActiveJourney(freshJourney)
-            }
-        case .boardingStop:
-            guard let newStop = currentJourney.advanceToNextStop() else {
-                return
-            }
-            //we're on way to transfer or final stop, need no new times
-            currentJourney.activePredictionTimes = []
-            currentJourney.needTimes = false
-            userDefaultsClient.saveActiveJourney(currentJourney)
-            //register next
-            await RegionManager.shared.registerRegion(for: newStop)
-
-        case .finalStop:
-            //kill route if they wander off
-            self.endRoute()
-        }
+        
+        freshJourney.activePredictionTimes = times
+        freshJourney.needTimes = false
+        userDefaultsClient.saveActiveJourney(freshJourney)
+    }
+    
+    func sendNotificaition(message:String) async{
+        await notificationsClient.debugStringNotification(message)
     }
     
     func endRoute(){
