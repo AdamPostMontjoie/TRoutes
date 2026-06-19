@@ -7,6 +7,7 @@
 
 import ComposableArchitecture
 import SwiftUI
+import CoreLocation
 
 enum locationError: Error, Equatable {
     case locationUnknown
@@ -27,12 +28,15 @@ struct JourneyClient {
     var requestNewTimes: @Sendable () async -> Void
     var nextStop: @Sendable () async -> Void
     var atStop: @Sendable () async -> Void
+    var getCurrentAuthorization: @Sendable () async -> CLAuthorizationStatus
+    var requestLocationAuthorization: @Sendable () async -> Void
+    var endRoute: @Sendable () async -> Void
 }
 
 extension JourneyClient: DependencyKey {
     static let liveValue = Self(
         beginRoute: { route in
-            await JourneyEngine.shared.beginRoute(route:route)
+            return await JourneyEngine.shared.beginRoute(route:route)
         },
         openSettings: {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -48,7 +52,17 @@ extension JourneyClient: DependencyKey {
         },
         atStop: {
             await JourneyEngine.shared.manualEventValidator(.atStopTapped)
+        },
+        getCurrentAuthorization: {
+            return await RegionManager.shared.authorizationStatus
+        },
+        requestLocationAuthorization: {
+            return await RegionManager.shared.requestAlwaysAuthorization()
+        },
+        endRoute: {
+            await JourneyEngine.shared.endRoute()
         }
+        
     )
 }
 

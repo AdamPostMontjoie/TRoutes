@@ -6,9 +6,9 @@
 //
 
 import ComposableArchitecture
-import Foundation
-import Dependencies
 import CoreLocation
+import Dependencies
+import Foundation
 
 @Reducer
 struct RouteStarterFeature {
@@ -25,59 +25,38 @@ struct RouteStarterFeature {
         }
         var routeSelector = SelectorFeature.State()
         var isActiveJourneyPresented = false
-        var activeJourney:JourneyState?
-        //holds route while user tries to setup location permissions
-        var pendingRoute:RouteStruct?
+        var activeJourney: JourneyState?
+        // Holds route while user tries to setup location permissions.
+        var pendingRoute: RouteStruct?
         
         @Presents var destination: Destination.State?
     }
     
-    enum Action:Equatable {
+    enum Action: Equatable {
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
         case onCreateButtonTapped
         case routeSelector(SelectorFeature.Action)
         
-        //setup actions
+        // Setup actions
         case startRouteRequested(RouteStruct)
         case locationAuthorizationStatusReceived(RouteStruct, CLAuthorizationStatus)
-        
         case locationPermissionRequestFinished(CLAuthorizationStatus)
-        
         case beginRoute(RouteStruct)
-        case fetchPredictions(Stop)
         case endRoute
         
         case destination(PresentationAction<Destination.Action>)
         enum Alert: Equatable {
-                    // e.g., case rateLimitAcknowledged
-                    // e.g., case openSettingsTapped
+            // e.g., case rateLimitAcknowledged
+            // e.g., case openSettingsTapped
         }
         
-        // manual widget actions
-        case refreshRoutes
-        case forcedArrival //at stop button, bypasses region did enter
-        case forcedDeparture // next stop button, bypasses region did exit
-        
-        
-        case locationUpdateReceived(LocationEvent)
-        case mbtaApiResponseReceived([String])
-        
-        //handlers for the possible location events
-        //we may want to take in stop id and compare to avoid any cases with erroneously saved stuff
-        case enteredStop
-        case exitedStop
-        case authorizationDenied
-        case locationError
-        
-    
-        case apiFailed(MBTAError)
-        
+        case journeyUpdateReceived(JourneyUpdate)
     }
     
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.liveActivityClient) var liveActivityClient
-    @Dependency(\.mbtaClient) var mbtaClient
+    
     var body: some ReducerOf<Self> {
         Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {
             ActiveJourneyDisplayFeature()
@@ -87,7 +66,6 @@ struct RouteStarterFeature {
         }
         Reduce { state, action in
             switch action {
-            
             case .onCreateButtonTapped:
                 state.destination = .createRoute(CreateRouteFeature.State())
                 return .none
@@ -99,35 +77,42 @@ struct RouteStarterFeature {
             case .destination(.presented(.createRoute(.delegate(.dismiss)))):
                 state.destination = nil
                 return .none
+
             case .activeJourneyDisplay(.delegate(.cancelRoute)):
                 return .send(.endRoute)
+
             case .activeJourneyDisplay(.delegate(.manualAtStop)):
-                return .send(.enteredStop)
-            case .activeJourneyDisplay(.delegate(.manualNextStop)):
-                return .send(.exitedStop)
-            case .activeJourneyDisplay(.delegate(.refreshTimes)):
-                guard let currentStop = state.activeJourney?.currentStop else {
-                    return .none
+                let atStop = journeyClient.atStop
+                return .run { _ in
+                    await atStop()
                 }
-                return .send(.fetchPredictions(currentStop))
-            //this starts the route from inside the app, most of the logic is kicked off here
+
+            case .activeJourneyDisplay(.delegate(.manualNextStop)):
+                let nextStop = journeyClient.nextStop
+                return .run { _ in
+                    await nextStop()
+                }
+
+            case .activeJourneyDisplay(.delegate(.refreshTimes)):
+                let requestNewTimes = journeyClient.requestNewTimes
+                return .run { _ in
+                    await requestNewTimes()
+                }
+
+            // This starts the route from inside the app; permission flow remains here.
             case let .routeSelector(.delegate(.startRoute(id))):
-                
-                
-                guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.id == id}) else {
+                guard let selectedRoute = state.routeSelector.userRoutes.first(where: { $0.id == id }) else {
                     return .none
                 }
                 return .send(.startRouteRequested(selectedRoute))
             
-            //all start requests enter here
             case let .startRouteRequested(route):
-                let getCurrentAuthorization = JourneyClient.getCurrentAuthorization
+                let getCurrentAuthorization = journeyClient.getCurrentAuthorization
                 return .run { send in
                     let status = await getCurrentAuthorization()
                     await send(.locationAuthorizationStatusReceived(route, status))
                 }
             
-            //initial status check
             case let .locationAuthorizationStatusReceived(route, status):
                 print(status.rawValue)
                 switch status {
@@ -139,7 +124,6 @@ struct RouteStarterFeature {
                     state.destination = .locationAlert(LocationAlertFeature.State(mode: .firstTime))
                     return .none
                     
-                //user doesn't have enough permissions
                 case .denied, .restricted, .authorizedWhenInUse:
                     state.destination = .locationAlert(LocationAlertFeature.State(mode: .changeSettings))
                     return .none
@@ -147,6 +131,7 @@ struct RouteStarterFeature {
                 @unknown default:
                     return .none
                 }
+
             case let .locationPermissionRequestFinished(status):
                 guard let pendingRoute = state.pendingRoute else { return .none }
 
@@ -156,7 +141,6 @@ struct RouteStarterFeature {
                     return .send(.beginRoute(pendingRoute))
 
                 case .denied, .restricted, .authorizedWhenInUse:
-                    // may need to remove depending on HIG about immediately telling them to change settings
                     state.destination = .locationAlert(.init(mode: .changeSettings))
                     return .none
 
@@ -170,209 +154,53 @@ struct RouteStarterFeature {
             
             case .destination(.presented(.locationAlert(.delegate(.requestPermissionsInApp)))):
                 state.destination = nil
-                let requestLocationPermissions = JourneyClient.requestLocationAuthorization
+                let requestLocationPermissions = journeyClient.requestLocationAuthorization
                 let requestNotificationPermissions = notificationsClient.requestAuthorization
-                
-                let getCurrentStatus = JourneyClient.getCurrentAuthorization
+                let getCurrentStatus = journeyClient.getCurrentAuthorization
                 return .run { send in
                     await requestLocationPermissions()
                     await requestNotificationPermissions()
                     let status = await getCurrentStatus()
                     await send(.locationPermissionRequestFinished(status))
                 }
+
             case .destination(.presented(.locationAlert(.delegate(.openSettings)))):
-                let openSettings = JourneyClient.openSettings
+                let openSettings = journeyClient.openSettings
                 state.destination = nil
-                return .run { send in
+                return .run { _ in
                     openSettings()
                 }
-            //replace with something that just handles dismiss?
+
             case .destination(.presented(.locationAlert(.delegate(.cancel)))):
                 state.destination = nil
                 state.pendingRoute = nil
                 return .none
             
-            // starts the route
             case let .beginRoute(route):
-                let journey = JourneyState(route: route)
-                guard let firstStop = journey.currentStop else {
-                    return .none
-                }
-
-                state.isActiveJourneyPresented = true
-                state.activeJourney = journey
-                
-                //likely needs to be reworked once we create static manager, works for now
-                let initializeManager = JourneyClient.initializeManager
-                let startMonitoring = JourneyClient.startMonitoring
+                let beginRoute = journeyClient.beginRoute
                 return .run { send in
-                    await send(.fetchPredictions(firstStop))
-                    await initializeManager()
-
-                    guard let stream = try await startMonitoring(firstStop) else { return }
-                    
-                    // Listen to the GPS (Wait at the pipe)
-                    // This loop runs infinitely in the background until the effect is cancelled
-                    for await location in stream{
-                        await send(.locationUpdateReceived(location))
+                    let stream = await beginRoute(route)
+                    for await update in stream {
+                        await send(.journeyUpdateReceived(update))
                     }
                 }
-            //this will be called on natural end or forceful cancelation
+
+            case let .journeyUpdateReceived(update):
+                switch update {
+                case let .activeJourneyChanged(journey):
+                    state.activeJourney = journey
+                    state.isActiveJourneyPresented = journey != nil
+                }
+                return .none
+
             case .endRoute:
-                print("end route")
-                state.isActiveJourneyPresented = false
-                state.activeJourney = nil
-                let stopMonitoring = JourneyClient.stopMonitoring
-                return .run { send in
-                    try await stopMonitoring()
+                let endRoute = journeyClient.endRoute
+                return .run { _ in
+                    await endRoute()
                 }
-            case let .fetchPredictions(stop):
-                //we should probably clear all predictions instead of fetching new if en route to certain stops
-                let fetchTransitTimes = mbtaClient.fetchTransitTimes
-                return .run { send in
-                    do {
-                        let times = try await fetchTransitTimes(stop)
-                        // Send the data back into the reducer
-                        print(stop.latitude, stop.longitude)
-                        print(times)
-                        await send(.mbtaApiResponseReceived(times))
-                    }
-                    catch {
-                        let mbtaError = error as? MBTAError ?? .networkError
-                        await send(.apiFailed(mbtaError))
-                    }
-                }.cancellable(id: CancelID.apiFetch, cancelInFlight: true)
-            case let .mbtaApiResponseReceived(upcomingTimes):
-               
-                state.activeJourney?.activePredictionTimes = upcomingTimes
-                if upcomingTimes.isEmpty {
-                    state.activeJourney? .needTimes = false
-                }
-                
-                return .none
-             //   state.activeRouteDisplay.journey = state.activeJourney
-               
-            case .refreshRoutes:
-                guard let currentStop = state.activeJourney?.currentStop else {
-                    return .none
-                }
-                return .send(.fetchPredictions(currentStop))
-            //these will tell the location client it's time to force switch regions or whatever
-            //location client will then send locationEvent into stream
-            case .forcedArrival:
-                return .send(.enteredStop)
-            case .forcedDeparture:
-                return .send(.exitedStop)
-            //determine what the location event actually was
-            //send the action that corresponds to that update.
-            //those actions will update the state to correspond
-            case let .locationUpdateReceived(locationEvent):
-                switch locationEvent {
-                case .enteredStop:
-                    return .send(.enteredStop)
-                case .exitedStop:
-                    return .send(.exitedStop)
-                case .authorizationDenied:
-                    return .send(.authorizationDenied)
-                case .monitoringFailed:
-                    return .send(.locationError)
-                }
-            //handles what to do with state when user arrives at stop
-            case .enteredStop:
-                //ignore if already at stop
-                guard state.activeJourney?.movementStatus == .enRoute else { return .none }
-                guard let currentStop = state.activeJourney?.currentStop else {
-                    return .none
-                }
-                switch currentStop.stopType {
-                case .transferStop:
-                    guard let newStop = state.activeJourney?.advanceToNextStop() else {
-                        return .none
-                    }
-                    //if they overlap, we're already at the next stop. if not, user is en route to the next stop
-                    if currentStop.overlapsWithNext {
-                        state.activeJourney?.movementStatus = .atStop
-                    } else {
-                        state.activeJourney?.movementStatus = .enRoute
-                    }
-                    state.activeJourney?.needTimes = true
-                    let registerNextStopRegion = JourneyClient.registerNextStopRegion
-                    return .run { send in
-                        try await registerNextStopRegion(newStop)
-                        //get times for the new stop
-                        await send(.fetchPredictions(newStop))
-                    }
-                    //fire did exit as either way, we're dropping bounds
-                case .boardingStop:
-                    //get new times, don't update current stop
-                    state.activeJourney?.movementStatus = .atStop
-                    state.activeJourney?.needTimes = true
-                    
-                    return .send(.fetchPredictions(currentStop))
-                    
-                case .finalStop:
-                    //user can dismiss via widget or leaving
-                    state.activeJourney?.movementStatus = .atStop
-                    return .none
-                }
-            case .exitedStop:
-                guard let currentStop = state.activeJourney?.currentStop else {
-                    return .none
-                }
-                switch currentStop.stopType {
-                case .transferStop:
-                    //this probably shouldn't happen? we should have already dropped monitoring here
-                    return .none
-                case .boardingStop:
-                    state.activeJourney?.movementStatus = .enRoute
-                    state.activeJourney?.stopIndex += 1
-                    guard let newStop = state.activeJourney?.currentStop else {
-                        return .none
-                    }
-                    //we're on way to transfer or final stop, need no new times
-                    state.activeJourney?.activePredictionTimes = []
-                    state.activeJourney?.needTimes = false
-                    let registerNextStopRegion = JourneyClient.registerNextStopRegion
-                    return .run { send in
-                        try await registerNextStopRegion(newStop)
-                        //we probably don't need predictions, because next stop with be transfer or final
-                      //  await send(.fetchPredictions(newStop))
-                    }
-                case .finalStop:
-                    //kill route if they wander off
-                    return .send(.endRoute)
-                }
-            //kill the route, tell the user to navigate to settings
-            case .authorizationDenied:
-                return .run { send in
-                    await send(.endRoute)
-                    // send alert that tells the user they have to go to settings
-                    // this should also display if they try and hit start while it's disabled every time
-                    print("User must enable location services in settings")
-                    // add a link/way for the user to navigate to settings page
-                }
-            case .locationError:
-                return .none
-            case let .apiFailed(error):
-                switch error {
-                //need disruptive alert
-                case .rateLimited:
-                    print("rate limited")
-                case .networkError, .timeoutError:
-                    state.activeJourney?.warningMessage = "Cannot reach times"
-                case .serverError:
-                    state.activeJourney?.warningMessage = "MBTA Server Issue"
-                default:
-                // For Developer Errors (Decoding, Bad Request, Forbidden)
-                    state.activeJourney?.warningMessage = "Data Unavailable"
-                }
-                
-                state.activeJourney?.needTimes = false
-                return .none
-            //does nothing
+
             case .activeJourneyDisplay, .routeSelector, .destination:
                 return .none
-           
             }
         }
         .ifLet(\.$destination, action: \.destination)
@@ -391,5 +219,3 @@ extension RouteStarterFeature {
 
 extension RouteStarterFeature.Destination.State: Equatable {}
 extension RouteStarterFeature.Destination.Action: Equatable {}
-
-private enum CancelID { case apiFetch }
