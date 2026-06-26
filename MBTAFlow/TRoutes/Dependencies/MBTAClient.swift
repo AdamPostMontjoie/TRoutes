@@ -62,6 +62,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
                 throw MBTAError.networkError
             }
+         //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")
             
             // data and response type
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -119,6 +120,7 @@ extension MBTAClient:DependencyKey {
                     guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                         throw MBTAError.networkError
                     }
+          //          print("MBTAClient fetchDirections URL: \(url.absoluteString)")
                     
                     let (data, response) = try await URLSession.shared.data(from: url)
                     try reviewHttpResponse(response,data)
@@ -156,6 +158,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
+       //     print("MBTAClient fetchBranches URL: \(url.absoluteString)")
             
             let (data, response) = try await URLSession.shared.data(from: url)
             try reviewHttpResponse(response,  data)
@@ -207,6 +210,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw MBTAError.networkError
                         }
+       //                 print("MBTAClient fetchStops URL: \(url.absoluteString)")
                         
                         let (data, response) = try await URLSession.shared.data(from: url)
                         try reviewHttpResponse(response, data)

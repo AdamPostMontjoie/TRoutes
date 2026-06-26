@@ -17,25 +17,22 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     // Guards against double state events.
     private var lastKnownState: CLRegionState?
     
-    // Stream is created once, continuation stored for delegate use
-    let eventStream: AsyncStream<LocationEvent>
-    
     static let shared = RegionManager()
     
     override init() {
-        var extractedContinuation: AsyncStream<LocationEvent>.Continuation?
-        self.eventStream = AsyncStream { continuation in
-            extractedContinuation = continuation
-            
-            continuation.onTermination = { _ in
-                print("stream termination")
-            }
-        }
-        self.continuation = extractedContinuation
-        
         super.init()
         locationManager.delegate = self
         // throw if not authorized somewhere in here, in case user disables location access mid journey
+    }
+    
+    func makeEventStream() -> AsyncStream<LocationEvent> {
+        AsyncStream { continuation in
+            self.continuation = continuation
+            
+            continuation.onTermination = { _ in
+                print("location event stream termination")
+            }
+        }
     }
     
     var authorizationStatus: CLAuthorizationStatus {
@@ -85,12 +82,15 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     private func authorizationDenied(){
         continuation?.yield(.authorizationDenied)
-       // self.stopAll()
+        self.stopAll()
     }
     
     func stopAll() {
         clearMonitoredRegions()
+        self.currentStop = nil
+        self.lastKnownState = nil
         continuation?.finish()
+        continuation = nil
         //clear persisted user defaults
     }
     private func clearMonitoredRegions(){

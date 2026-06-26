@@ -45,7 +45,7 @@ actor JourneyEngine {
     
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private let journeyUpdates: AsyncStream<JourneyUpdate>
-    private var isListeningToLocationEvents = false
+    private var locationListeningTask: Task<Void, Never>?
     
     init(){
         var extractedContinuation: AsyncStream<JourneyUpdate>.Continuation?
@@ -58,16 +58,29 @@ actor JourneyEngine {
         self.journeyUpdateContinuation = extractedContinuation
     }
     
-    func startListeningToLocationEvents() async{
-        guard !isListeningToLocationEvents else { return }
-        isListeningToLocationEvents = true
-        defer { isListeningToLocationEvents = false }
+    func restoreActiveJourneyIfNeeded() async {
+        guard let journey = userDefaultsClient.loadActiveJourney(),
+              let currentStop = journey.currentStop
+        else { return }
+
+        await startListeningToLocationEvents()
+        await RegionManager.shared.registerRegion(for: currentStop)
+    }
+    
+    func startListeningToLocationEvents() async {
+        guard locationListeningTask == nil else { return }
+        let stream = await RegionManager.shared.makeEventStream()
         
-        //listen to stream
-        let stream = await RegionManager.shared.eventStream
-        for await event in stream {
-           await self.locationEventValidator(event)
+        locationListeningTask = Task {
+            for await event in stream {
+                await self.locationEventValidator(event)
+            }
+            self.locationEventStreamDidFinish()
         }
+    }
+    
+    private func locationEventStreamDidFinish() {
+        locationListeningTask = nil
     }
     
     func requestAuthorization() async {
@@ -81,13 +94,12 @@ actor JourneyEngine {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         
+        await startListeningToLocationEvents()
+        
         if let firstStop = journey.currentStop {
             await RegionManager.shared.startMonitoring(firstStop: firstStop)
         }
         
-        Task {
-            await self.startListeningToLocationEvents()
-        }
         Task {
             await self.fetchPredictions()
         }
