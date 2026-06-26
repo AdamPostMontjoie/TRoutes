@@ -26,6 +26,15 @@ struct ActiveJourneyDisplayFeature {
                 return "arrow.right.circle.fill"
             }
         }
+        
+        var shouldShowRefreshButton: Bool {
+            switch journey?.predictionState {
+            case .loaded, .unavailable,.loading:
+                return true
+            case  .notNeeded, .none:
+                return false
+            }
+        }
     }
 
     enum Action: Equatable {

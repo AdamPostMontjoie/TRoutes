@@ -27,8 +27,7 @@ enum JourneyAction: Equatable {
         
         switch stop.journeyRole {
         case .boarding:
-            state.needTimes = true
-            state.activePredictionTimes = []
+            state.predictionState = .loading(stopId: stop.mbtaStopId)
             return [
                 .fetchPredictions(stop),
                 .sendNotification("entered \(stop.mbtaStopId)")
@@ -36,8 +35,7 @@ enum JourneyAction: Equatable {
         
         case let .transfer(overlapsNext):
             guard overlapsNext else {
-                state.activePredictionTimes = []
-                state.needTimes = false
+                state.predictionState = .notNeeded
                 return [.sendNotification("entered \(stop.mbtaStopId)")]
             }
             
@@ -46,8 +44,7 @@ enum JourneyAction: Equatable {
             }
             
             state.movementStatus = .atStop
-            state.needTimes = true
-            state.activePredictionTimes = []
+            state.predictionState = .loading(stopId: nextStop.mbtaStopId)
             return [
                 .registerRegion(nextStop),
                 .fetchPredictions(nextStop),
@@ -72,8 +69,7 @@ enum JourneyAction: Equatable {
                 return []
             }
             
-            state.activePredictionTimes = []
-            state.needTimes = false
+            state.predictionState = .notNeeded
             return [
                 .registerRegion(nextStop),
                 .sendNotification("left \(stop.mbtaStopId)")
@@ -88,8 +84,7 @@ enum JourneyAction: Equatable {
                 return []
             }
             
-            state.activePredictionTimes = []
-            state.needTimes = true
+            state.predictionState = .loading(stopId: nextStop.mbtaStopId)
             return [
                 .registerRegion(nextStop),
                 .fetchPredictions(nextStop),
