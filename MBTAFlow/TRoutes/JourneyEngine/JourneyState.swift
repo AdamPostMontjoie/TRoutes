@@ -11,9 +11,7 @@ struct JourneyState: Equatable, Codable {
     
     var stopIndex: Int = 0
     var movementStatus: MovementStatus = .enRoute
-    var activePredictionTimes: [String] = []
-    var warningMessage: String?
-    var needTimes: Bool = true
+    var predictionState: PredictionState = .notNeeded
     
     var currentStop: Stop? {
         guard stopSequence.indices.contains(stopIndex) else {
@@ -51,6 +49,7 @@ struct JourneyState: Equatable, Codable {
         }
         
         self.stopSequence = sequence
+        self.predictionState = sequence.first.map { .loading(stopId: $0.mbtaStopId) } ?? .notNeeded
     }
     
     mutating func advanceToNextStop() -> Stop? {
@@ -63,6 +62,13 @@ struct JourneyState: Equatable, Codable {
         return stopSequence[stopIndex]
     }
 
+}
+
+enum PredictionState: Equatable, Codable {
+    case notNeeded
+    case loading(stopId: String)
+    case loaded(stopId: String, times: [String])
+    case unavailable(stopId: String, message: String)
 }
 
 enum MovementStatus: Codable {

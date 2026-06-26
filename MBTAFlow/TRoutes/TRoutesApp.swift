@@ -13,13 +13,9 @@ import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        
-        
-        //region manager just needs to be created for it to handle did enter did exit
-        _ = RegionManager.shared
         //put this before or after the region manager creation?
         Task {
-            await JourneyEngine.shared.startListeningToLocationEvents()
+            await JourneyEngine.shared.restoreActiveJourneyIfNeeded()
         }
         
         //may need to ensure stream is being listened to

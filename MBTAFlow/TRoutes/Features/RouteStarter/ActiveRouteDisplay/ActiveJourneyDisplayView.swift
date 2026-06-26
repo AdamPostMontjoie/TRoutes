@@ -29,7 +29,7 @@ struct ActiveJourneyDisplayView: View {
             }
             
             HStack(spacing: 10) {
-                if store.journey?.needTimes == true {
+                if store.shouldShowRefreshButton {
                     refreshButton
                 }
                 
@@ -133,12 +133,13 @@ struct ActiveJourneyDisplayView: View {
     
     @ViewBuilder
     private var predictionTimesView: some View {
-        if let predictionTimes = store.journey?.activePredictionTimes, !predictionTimes.isEmpty {
-            Text(predictionTimes.joined(separator: "  •  "))
+        switch store.journey?.predictionState {
+        case let .loaded(_, times):
+            Text(times.joined(separator: "  •  "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-        } else if store.journey?.needTimes != false {
+        case .loading:
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.small)
@@ -146,6 +147,13 @@ struct ActiveJourneyDisplayView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        case let .unavailable(_, message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        case .notNeeded, .none:
+            EmptyView()
         }
     }
 }

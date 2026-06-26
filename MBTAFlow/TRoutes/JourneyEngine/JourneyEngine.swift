@@ -45,7 +45,7 @@ actor JourneyEngine {
     
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private let journeyUpdates: AsyncStream<JourneyUpdate>
-    private var isListeningToLocationEvents = false
+    private var locationListeningTask: Task<Void, Never>?
     
     init(){
         var extractedContinuation: AsyncStream<JourneyUpdate>.Continuation?
@@ -58,16 +58,29 @@ actor JourneyEngine {
         self.journeyUpdateContinuation = extractedContinuation
     }
     
-    func startListeningToLocationEvents() async{
-        guard !isListeningToLocationEvents else { return }
-        isListeningToLocationEvents = true
-        defer { isListeningToLocationEvents = false }
+    func restoreActiveJourneyIfNeeded() async {
+        guard let journey = userDefaultsClient.loadActiveJourney(),
+              let currentStop = journey.currentStop
+        else { return }
+
+        await startListeningToLocationEvents()
+        await RegionManager.shared.registerRegion(for: currentStop)
+    }
+    
+    func startListeningToLocationEvents() async {
+        guard locationListeningTask == nil else { return }
+        let stream = await RegionManager.shared.makeEventStream()
         
-        //listen to stream
-        let stream = await RegionManager.shared.eventStream
-        for await event in stream {
-           await self.locationEventValidator(event)
+        locationListeningTask = Task {
+            for await event in stream {
+                await self.locationEventValidator(event)
+            }
+            self.locationEventStreamDidFinish()
         }
+    }
+    
+    private func locationEventStreamDidFinish() {
+        locationListeningTask = nil
     }
     
     func requestAuthorization() async {
@@ -81,13 +94,16 @@ actor JourneyEngine {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         
+        await startListeningToLocationEvents()
+        
         if let firstStop = journey.currentStop {
             await RegionManager.shared.startMonitoring(firstStop: firstStop)
         }
         
         Task {
-            await self.startListeningToLocationEvents()
+            await self.fetchPredictions()
         }
+        
         
         return journeyUpdates
     }
@@ -139,6 +155,7 @@ actor JourneyEngine {
         }
     }
     
+    //ask for more time in background?
     private func handleJourneyAction(_ action: JourneyAction) async {
         guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
         let effects = action.reduce(state: &currentJourney)
@@ -150,39 +167,67 @@ actor JourneyEngine {
         for effect in effects {
             switch effect {
             case let .registerRegion(stop):
+                print("JourneyEngine effect: registerRegion for \(stop.mbtaStopId)")
                 await RegionManager.shared.registerRegion(for: stop)
                 
-            case .fetchPredictions:
-                await fetchPredictions()
+            case let .fetchPredictions(stop):
+                print("JourneyEngine effect: fetchPredictions for \(stop.mbtaStopId)")
+                await fetchPredictions(for: stop)
                 
             case let .sendNotification(message):
+                print("JourneyEngine effect: sendNotification - \(message)")
                 await sendNotificaition(message: message)
                 
             case .endRoute:
+                print("JourneyEngine effect: endRoute")
                 await endRoute()
             }
         }
     }
     
     func fetchPredictions() async {
-        guard let currentStop = userDefaultsClient.loadActiveJourney()?.currentStop else { return }
-        var times: [String] = []
-        do {
-            times = try await mbtaClient.fetchTransitTimes(currentStop)
-        } catch {
-            //this will set the display for times unavaible, mbta down, etc depending on error
-        }
+        guard var currentJourney = userDefaultsClient.loadActiveJourney(),
+              let currentStop = currentJourney.currentStop else { return }
         
+        currentJourney.predictionState = .loading(stopId: currentStop.mbtaStopId)
+        saveActiveJourneyAndPublish(currentJourney)
+        await fetchPredictions(for: currentStop)
+    }
+    
+    private func fetchPredictions(for stop: Stop) async {
+        do {
+            print("current stop \(stop.mbtaStopId)")
+            print("fetching times")
+            let times = try await mbtaClient.fetchTransitTimes(stop)
+            print(times)
+            await savePredictionResult(for: stop, result: .success(times))
+        } catch {
+            print("catch error")
+            await savePredictionResult(for: stop, result: .failure(error))
+        }
+    }
+    
+    private func savePredictionResult(for stop: Stop, result: Result<[String], Error>) async {
         guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-        //can check against more specific request id guard, but for now ensure new stop wasn't set by another journey command while we awaited change
-        guard freshJourney.currentStop?.mbtaStopId == currentStop.mbtaStopId else {
+        // Can check against more specific request id guard, but for now ensure new stop wasn't set by another journey command while we awaited change.
+        guard freshJourney.currentStop?.mbtaStopId == stop.mbtaStopId else {
             print("User manually advanced route during API call. Discarding stale times.")
             return
         }
         
-        freshJourney.activePredictionTimes = times
-        freshJourney.needTimes = false
+        switch result {
+        case let .success(times):
+            if times.isEmpty {
+                freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
+            } else {
+                freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times: times)
+            }
+        case .failure:
+            freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
+        }
+        
         saveActiveJourneyAndPublish(freshJourney)
+        print("saved prediction state")
     }
     
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
@@ -193,6 +238,7 @@ actor JourneyEngine {
     private func clearActiveJourneyAndPublish() {
         userDefaultsClient.clearActiveJourney()
         journeyUpdateContinuation?.yield(.activeJourneyChanged(nil))
+        //terminate stream here too
     }
     
     func sendNotificaition(message:String) async{
