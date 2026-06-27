@@ -80,6 +80,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         
     }
     
+    //dynamic, and it ending means it's time to fetch vehicle info again.
     private func setTimer(){
         
     }
