@@ -10,12 +10,14 @@ import Foundation
 
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
+    //predictions
     var fetchTransitTimes: @Sendable (Stop) async throws -> [String]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
-    //for use on lines that don't have a single direction
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
     var fetchRoutes: @Sendable (String, String) async throws -> String
+    //position
+    var fetchVehicleData: @Sendable (String) async throws -> VehicleData
 }
 
 let header = "https://api-v3.mbta.com/"
@@ -113,10 +115,8 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.decodingError
             }
         },
-        //this will be called immediately if red line, etc, but after if it's green line. both use routes endpoint
        
         fetchDirections: { routeId in
-                    // If the user selected Blue Line, routeId is "Blue or sum shit"
                     guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                         throw MBTAError.networkError
                     }
@@ -152,9 +152,8 @@ extension MBTAClient:DependencyKey {
                     }
                 },
     
-        //this is required for green line, bus, cr, ferry
+        //for use on lines that don't have a single direction
         fetchBranches: { filterKey, filterValue in
-            // Added direction_names and direction_destinations to the fields filter
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
@@ -205,8 +204,6 @@ extension MBTAClient:DependencyKey {
             }
         },
         fetchStops: { directionId, routeId in
-            //we are going to want to configure this based on direction, flip stop order and stuff
-            
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw MBTAError.networkError
                         }
@@ -248,6 +245,36 @@ extension MBTAClient:DependencyKey {
         fetchRoutes: { filterKey,filterValue in
             
             return "routes"
+        },
+        fetchVehicleData: { vehicleId in
+            guard let encodedVehicleId = vehicleId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(header)vehicles/\(encodedVehicleId)") else {
+                throw MBTAError.networkError
+            }
+            print("MBTAClient fetchVehicle URL: \(url.absoluteString)")
+            
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            do {
+                let vehicleResponse = try decoder.decode(VehicleResponse.self, from: data)
+                let attributes = vehicleResponse.data.attributes
+                return VehicleData(
+                    id: vehicleResponse.data.id,
+                    bearing: attributes.bearing,
+                    directionId: attributes.directionId,
+                    latitude: attributes.latitude,
+                    longitude: attributes.longitude,
+                    currentStopSequence: attributes.currentStopSequence,
+                    currentStatus: attributes.currentStatus,
+                    speed: attributes.speed
+                )
+            } catch {
+                throw MBTAError.decodingError
+            }
         }
     )
     static let testValue: Self = .liveValue //TODO figure out what the hell this is even about later
