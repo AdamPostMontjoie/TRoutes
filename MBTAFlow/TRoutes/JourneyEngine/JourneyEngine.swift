@@ -16,9 +16,11 @@ enum LocationEvent: Equatable {
     case monitoringFailed(stopId: String, error: locationError)
 }
 
-//fill in later
-enum MotionEvent: Equatable {
-    
+enum UndergroundEvent {
+    case enteredStop(stopId: String)
+    case exitedStop(stopId: String)
+    case authorizationDenied
+    case monitoringFailed(stopId: String, error: locationError)
 }
 
 enum ManualEvent: Equatable {
@@ -52,7 +54,7 @@ actor JourneyEngine {
         self.journeyUpdates = AsyncStream { continuation in
             extractedContinuation = continuation
             continuation.onTermination = { _ in
-                print("journey update stream termination")
+                
             }
         }
         self.journeyUpdateContinuation = extractedContinuation
@@ -88,8 +90,7 @@ actor JourneyEngine {
     }
     
     //this is what is called to start fresh route
-    //not always needed, as on background wakeup regions will already be monitored
-    //initialize activeJourney
+    //This needs to be modified once we start differentiating between streams. 
     func beginRoute(route:RouteStruct) async -> AsyncStream<JourneyUpdate> {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
@@ -110,6 +111,7 @@ actor JourneyEngine {
     
     func locationEventValidator(_ event:LocationEvent) async {
         let currentJourney = userDefaultsClient.loadActiveJourney()
+        await notificationsClient.debugStringNotification("JourneyEngine received \(event), currentStop: \(currentJourney?.currentStop?.mbtaStopId ?? "nil"), status: \(String(describing: currentJourney?.movementStatus))")
         switch event {
             case let .enteredStop(stopId:id):
                 //we're receiving entered data for the correct stop, and we're not yet counted as there
@@ -196,13 +198,10 @@ actor JourneyEngine {
     
     private func fetchPredictions(for stop: Stop) async {
         do {
-            print("current stop \(stop.mbtaStopId)")
-            print("fetching times")
             let times = try await mbtaClient.fetchTransitTimes(stop)
             print(times)
             await savePredictionResult(for: stop, result: .success(times))
         } catch {
-            print("catch error")
             await savePredictionResult(for: stop, result: .failure(error))
         }
     }
@@ -227,7 +226,6 @@ actor JourneyEngine {
         }
         
         saveActiveJourneyAndPublish(freshJourney)
-        print("saved prediction state")
     }
     
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
