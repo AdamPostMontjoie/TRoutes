@@ -99,13 +99,8 @@ actor JourneyEngine {
         
         if let firstStop = journey.currentStop {
             await RegionManager.shared.startMonitoring(firstStop: firstStop)
+            await self.fetchPredictions(for: firstStop)
         }
-        
-        Task {
-            await self.fetchPredictions()
-        }
-        
-        
         return journeyUpdates
     }
     
@@ -187,7 +182,7 @@ actor JourneyEngine {
         }
     }
     
-    func fetchPredictions() async {
+    func manualRefreshPredictions() async {
         guard var currentJourney = userDefaultsClient.loadActiveJourney(),
               let currentStop = currentJourney.currentStop else { return }
         
@@ -196,17 +191,19 @@ actor JourneyEngine {
         await fetchPredictions(for: currentStop)
     }
     
+    
     private func fetchPredictions(for stop: Stop) async {
         do {
-            let times = try await mbtaClient.fetchTransitTimes(stop)
-            print(times)
-            await savePredictionResult(for: stop, result: .success(times))
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
+            
+            await savePredictionResult(for: stop, result: .success(predictionResponse))
         } catch {
             await savePredictionResult(for: stop, result: .failure(error))
         }
     }
     
-    private func savePredictionResult(for stop: Stop, result: Result<[String], Error>) async {
+    //this will be heavily refactored, as it will depend on ug mode, movement status, and if next stop times
+    private func savePredictionResult(for stop: Stop, result: Result<[TransitPrediction], Error>) async {
         guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
         // Can check against more specific request id guard, but for now ensure new stop wasn't set by another journey command while we awaited change.
         guard freshJourney.currentStop?.mbtaStopId == stop.mbtaStopId else {
@@ -215,11 +212,15 @@ actor JourneyEngine {
         }
         
         switch result {
-        case let .success(times):
+        case let .success(predictionResults):
+            let times = predictionResults.map(\.display)
+            let firstVehicle = predictionResults.first?.vehicleId ?? ""
             if times.isEmpty {
                 freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
             } else {
-                freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times: times)
+                freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
+                //heavily gated later, just to test passing
+                await UndergroundManager.shared.updateTrackedVehicle(vehicle: firstVehicle)
             }
         case .failure:
             freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")

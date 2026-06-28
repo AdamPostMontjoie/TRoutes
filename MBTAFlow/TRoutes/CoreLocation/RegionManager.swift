@@ -115,7 +115,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
     //checks if we're already inside of the zone
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
-        debugNotify("CoreLocation didDetermineState \(state) for \(region.identifier)")
+        debugNotify("CL State is \(state) for \(region.identifier)")
         //iOS may automatically fire did determine state on start monitoring, ignore if no change
         guard state != lastKnownState else { return }
         lastKnownState = state
@@ -136,14 +136,14 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         print("entered region")
-        debugNotify("CoreLocation didEnterRegion \(region.identifier)")
+        debugNotify("CL Entered \(region.identifier)")
         continuation?.yield(.enteredStop(stopId: region.identifier))
     }
     
     //on exit
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         print("exited region")
-        debugNotify("CoreLocation didExitRegion \(region.identifier)")
+        debugNotify("CL Exited \(region.identifier)")
         continuation?.yield(.exitedStop(stopId: region.identifier))
         
         //stopping monitoring should be handled when new region is registered

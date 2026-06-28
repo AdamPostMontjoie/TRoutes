@@ -40,9 +40,10 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
     
     //journey engine hands us a vehicle to track
-    func updateTrackedVehicle(vehicle:String, route:String) async {
+    //only should be done when we're at stop
+    func updateTrackedVehicle(vehicle:String) async {
         currentVehicle = vehicle
-        currentRoute = route
+       // currentRoute = route
         await fetchVehicleData()
     }
 
@@ -55,7 +56,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     //polls api for where the current vehicle is.
     //we will initially assume user always takes first available vehicle/vehicle of next time
     //this will not be accurate, so need to use incoming location data to determine
-    
     private func fetchVehicleData() async {
         guard let vehicle = currentVehicle else { return }
         do {
@@ -66,6 +66,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             print("error fetching vehicle data: \(error)")
             handleVehicleFetchError(error: error)
         }
+    }
+    
+    //this will be used to display an ETA when we're in movement by polling the next stop, and to figure out dynamic timer setting (?). May do for region manager later
+    private func fetchVehicleArrivalEstimation() async {
+        
     }
     
     //what does this mean? where are we? should we set timer?

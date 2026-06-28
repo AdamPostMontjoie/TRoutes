@@ -14,6 +14,16 @@ struct PredictionResponse: Codable {
     // Swift will simply ignore any JSON keys you do not explicitly define.
 }
 
+struct TransitPrediction: Codable, Equatable, Hashable {
+    let display: String
+    let vehicleId: String?
+    let predictionId: String
+    let tripId: String?
+    let stopId: String?
+    let directionId: Int?
+    let stopSequence: Int?
+}
+
 // 2. The Data Array Elements
 struct PredictionData: Codable {
     let type: String
