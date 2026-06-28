@@ -46,6 +46,30 @@ def read_stop_times_for_trips(gtfs_dir, trip_ids):
     return stop_times_by_trip
 
 
+def read_trip_pattern_lookup(gtfs_dir, target_pattern_ids):
+    trips = []
+
+    with (gtfs_dir / "trips.txt").open(newline="", encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            pattern_id = row["route_pattern_id"]
+            if pattern_id not in target_pattern_ids:
+                continue
+
+            trips.append(
+                {
+                    "tripId": row["trip_id"],
+                    "routeId": row["route_id"],
+                    "directionId": int(row["direction_id"]),
+                    "patternId": pattern_id,
+                    "serviceId": row["service_id"],
+                    "headsign": row["trip_headsign"],
+                }
+            )
+
+    trips.sort(key=lambda row: (row["routeId"], row["patternId"], row["tripId"]))
+    return trips
+
+
 def stop_name(stop):
     platform_name = stop.get("platform_name", "")
     if platform_name:
@@ -71,8 +95,10 @@ def build_static_json(gtfs_dir, route_ids):
 
     stops = read_csv_by_id(gtfs_dir / "stops.txt", "stop_id")
     patterns = read_route_patterns(gtfs_dir, target_routes)
+    pattern_ids = {pattern["route_pattern_id"] for pattern in patterns}
     representative_trip_ids = {pattern["representative_trip_id"] for pattern in patterns}
     stop_times_by_trip = read_stop_times_for_trips(gtfs_dir, representative_trip_ids)
+    trips = read_trip_pattern_lookup(gtfs_dir, pattern_ids)
 
     sequences = []
     platform_pattern_ids = defaultdict(set)
@@ -148,7 +174,7 @@ def build_static_json(gtfs_dir, route_ids):
         )
     )
 
-    return sequences, platforms, stations
+    return sequences, platforms, stations, trips
 
 
 def write_json(path, data):
@@ -183,16 +209,18 @@ def parse_args():
 
 def main():
     args = parse_args()
-    sequences, platforms, stations = build_static_json(args.gtfs_dir, args.routes)
+    sequences, platforms, stations, trips = build_static_json(args.gtfs_dir, args.routes)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write_json(args.output_dir / "sequences.json", sequences)
     write_json(args.output_dir / "platforms.json", platforms)
     write_json(args.output_dir / "stations.json", stations)
+    write_json(args.output_dir / "trips.json", trips)
 
     print(f"Wrote {len(sequences):,} sequence edges")
     print(f"Wrote {len(platforms):,} platforms")
     print(f"Wrote {len(stations):,} stations")
+    print(f"Wrote {len(trips):,} trip pattern mappings")
     print(f"Output directory: {args.output_dir}")
 
 

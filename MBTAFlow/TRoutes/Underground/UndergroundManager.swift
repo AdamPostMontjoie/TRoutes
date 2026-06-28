@@ -17,6 +17,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<UndergroundEvent>.Continuation?
     private var currentVehicle:String? //we need to track what train/bus we are supposed to be monitoring
+    private var currentTrip:String?
+    private var currentStopSequence:Int?
     private var currentRoute:String? //refine/specify later
     
     @Dependency(\.mbtaClient) var mbtaClient
@@ -41,9 +43,10 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     //journey engine hands us a vehicle to track
     //only should be done when we're at stop
-    func updateTrackedVehicle(vehicle:String) async {
-        currentVehicle = vehicle
-       // currentRoute = route
+    func updateTrackedVehicle(prediction: TransitPrediction) async {
+        currentVehicle = prediction.vehicleId
+        currentTrip = prediction.tripId
+        currentStopSequence = prediction.stopSequence
         await fetchVehicleData()
     }
 
@@ -77,7 +80,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     //what does this mean? where are we? should we set timer?
     //break actual actions into sub funcs
     private func handleVehicleData(data:VehicleData) {
-        
+        currentRoute = data.routeId ?? currentRoute
+        currentTrip = data.tripId ?? currentTrip
+        currentStopSequence = data.currentStopSequence ?? currentStopSequence
+        print(currentTrip)
+        print(data)
     }
     
     //if we can't get any info, that will be an error

@@ -214,13 +214,15 @@ actor JourneyEngine {
         switch result {
         case let .success(predictionResults):
             let times = predictionResults.map(\.display)
-            let firstVehicle = predictionResults.first?.vehicleId ?? ""
             if times.isEmpty {
                 freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
             } else {
                 freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
                 //heavily gated later, just to test passing
-                await UndergroundManager.shared.updateTrackedVehicle(vehicle: firstVehicle)
+                if let firstPrediction = predictionResults.first,
+                   firstPrediction.vehicleId != nil {
+                    await UndergroundManager.shared.updateTrackedVehicle(prediction: firstPrediction)
+                }
             }
         case .failure:
             freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
@@ -256,4 +258,3 @@ actor JourneyEngine {
     }
     
 }
-
