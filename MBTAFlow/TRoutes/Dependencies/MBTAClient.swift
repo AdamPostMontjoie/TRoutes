@@ -11,7 +11,7 @@ import Foundation
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
     //predictions
-    var fetchTransitTimes: @Sendable (Stop) async throws -> [TransitTime]
+    var fetchTransitTimes: @Sendable (Stop) async throws -> [TransitPrediction]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
@@ -88,7 +88,7 @@ extension MBTAClient:DependencyKey {
                 let calendarComparator = Calendar.current
                 let now = Date()
                 var seenVehicleIds = Set<String>()
-                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> TransitTime? in
+                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> TransitPrediction? in
                     let display: String
                     
                     // 1. Physical signs prioritize specific statuses over timestamps
@@ -111,7 +111,7 @@ extension MBTAClient:DependencyKey {
                         }
                     }
                     
-                    return TransitTime(
+                    return TransitPrediction(
                         display: display,
                         vehicleId: vehicleId,
                         predictionId: prediction.id,
@@ -121,7 +121,7 @@ extension MBTAClient:DependencyKey {
                         stopSequence: prediction.attributes.stopSequence
                     )
                 }
-                return Array(upcomingTimes[0..<4])
+                return Array(upcomingTimes[0..<3])
             } catch {
                 throw MBTAError.decodingError
             }
