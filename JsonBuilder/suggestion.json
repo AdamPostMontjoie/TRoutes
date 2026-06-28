@@ -13,12 +13,13 @@ sequence
 platform
 [
   {
-    "platformId": "70075",
-    "parentId": "place-jfk", 
-    "name": "JFK/UMass - Red Line Southbound",
-    "latitude": 42.320685,
-    "longitude": -71.052391
-  }
+  "platformId": "70075",
+  "parentId": "place-jfk",
+  "name": "JFK/UMass - Red Line Southbound",
+  "latitude": 42.320685,
+  "longitude": -71.052391,
+  "monitoringMode": "underground"
+}
 ]
 
 station 

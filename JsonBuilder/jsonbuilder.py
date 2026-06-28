@@ -1,92 +1,200 @@
-import requests
-import datetime
+import argparse
+import csv
 import json
+from collections import defaultdict
+from pathlib import Path
 
-#python.terminal.useEnvFile
 
-# Query the API for every route too, for commuter rail purposes
-TARGET_ROUTES = [
-    # Subways
-    "Red", "Orange", "Blue", "Green-B", "Green-C", "Green-D", "Green-E", "Mattapan",
-    # Commuter Rail (Examples)
-    "CR-Fitchburg", "CR-Lowell", "CR-Providence", "CR-Worcester", 
-    # Ferries (Examples)
-    "Boat-F1", "Boat-F4"
-]
+DEFAULT_GTFS_DIR = Path("/Users/adampost/Downloads/MBTA_GTFS")
+OUTPUT_DIR = Path(__file__).resolve().parent
 
-HEADERS = {"accept": "application/vnd.api+json"}
 
-def build_sequences():
-    final_sequences = []
+def read_csv_by_id(path, key):
+    with path.open(newline="", encoding="utf-8-sig") as file:
+        return {row[key]: row for row in csv.DictReader(file)}
 
-    print(f"Starting Sequence Extraction for {len(TARGET_ROUTES)} routes...\n")
 
-    for route_id in TARGET_ROUTES:
-        print(f"=== Processing Route: {route_id} ===")
-        
-        # 1. Fetch Route Patterns
-        patterns_url = f"https://api-v3.mbta.com/route_patterns?filter[route]={route_id}"
-        patterns_response = requests.get(patterns_url, headers=HEADERS).json()
-        
-        patterns_data = patterns_response.get("data", [])
-        if not patterns_data:
-            print(f"  ⚠️ No patterns found for {route_id}. Skipping.")
-            continue
+def read_route_patterns(gtfs_dir, target_routes):
+    patterns = []
 
-        for pattern in patterns_data:
-            pattern_id = pattern["id"]
-            direction_id = pattern["attributes"]["direction_id"]
-            
-            print(f"  -> Pattern: {pattern_id} (Direction {direction_id})")
-
-            # 2. Fetch the first real trip for this pattern
-            # We omit the date filter to just grab the first available scheduled trip in the current rating
-            trips_url = f"https://api-v3.mbta.com/trips?filter[route_pattern]={pattern_id}&page[limit]=1"
-            trips_response = requests.get(trips_url, headers=HEADERS).json()
-            time.sleep(0.2) # Rate limit safety
-
-            trips_data = trips_response.get("data", [])
-            if not trips_data:
-                print(f"     ⚠️ No active trips found for pattern {pattern_id}. Skipping.")
+    with (gtfs_dir / "route_patterns.txt").open(newline="", encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            if target_routes and row["route_id"] not in target_routes:
                 continue
 
-            trip_id = trips_data[0]["id"]
-
-            # 3. Fetch the schedule sequence for that trip
-            schedules_url = f"https://api-v3.mbta.com/schedules?filter[trip]={trip_id}&sort=stop_sequence"
-            schedules_response = requests.get(schedules_url, headers=HEADERS).json()
-            time.sleep(0.2) # Rate limit safety
-
-            schedules_data = schedules_response.get("data", [])
-            if not schedules_data:
-                print(f"     ⚠️ Schedule array empty for trip {trip_id}. Skipping.")
+            representative_trip_id = row.get("representative_trip_id", "")
+            if not representative_trip_id:
                 continue
 
-            # 4. Extract sequence items and platform IDs
-            stops_added = 0
-            for schedule in schedules_data:
-                seq_num = schedule["attributes"]["stop_sequence"]
-                platform_id = schedule["relationships"]["stop"]["data"]["id"]
+            patterns.append(row)
 
-                # Create the flat edge object for SwiftData
-                sequence_edge = {
+    return patterns
+
+
+def read_stop_times_for_trips(gtfs_dir, trip_ids):
+    stop_times_by_trip = defaultdict(list)
+
+    with (gtfs_dir / "stop_times.txt").open(newline="", encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            trip_id = row["trip_id"]
+            if trip_id in trip_ids:
+                stop_times_by_trip[trip_id].append(row)
+
+    for rows in stop_times_by_trip.values():
+        rows.sort(key=lambda row: int(row["stop_sequence"]))
+
+    return stop_times_by_trip
+
+
+def stop_name(stop):
+    platform_name = stop.get("platform_name", "")
+    if platform_name:
+        return f"{stop['stop_name']} - {platform_name}"
+    return stop["stop_name"]
+
+
+def monitoring_mode(stop):
+    vehicle_type = stop.get("vehicle_type", "")
+    if stop.get("location_type") == "1":
+        return "station"
+    if vehicle_type in {"0", "1"}:
+        return "rapid_transit"
+    if vehicle_type == "2":
+        return "commuter_rail"
+    if vehicle_type == "4":
+        return "ferry"
+    return "surface"
+
+
+def build_static_json(gtfs_dir, route_ids):
+    target_routes = set(route_ids) if route_ids else None
+
+    stops = read_csv_by_id(gtfs_dir / "stops.txt", "stop_id")
+    patterns = read_route_patterns(gtfs_dir, target_routes)
+    representative_trip_ids = {pattern["representative_trip_id"] for pattern in patterns}
+    stop_times_by_trip = read_stop_times_for_trips(gtfs_dir, representative_trip_ids)
+
+    sequences = []
+    platform_pattern_ids = defaultdict(set)
+    station_platform_ids = defaultdict(set)
+
+    for pattern in patterns:
+        pattern_id = pattern["route_pattern_id"]
+        route_id = pattern["route_id"]
+        direction_id = int(pattern["direction_id"])
+        trip_id = pattern["representative_trip_id"]
+
+        for stop_time in stop_times_by_trip.get(trip_id, []):
+            platform_id = stop_time["stop_id"]
+            sequence_number = int(stop_time["stop_sequence"])
+
+            sequences.append(
+                {
                     "routeId": route_id,
                     "patternId": pattern_id,
                     "directionId": direction_id,
-                    "sequenceNumber": seq_num,
-                    "platformId": platform_id
+                    "sequenceNumber": sequence_number,
+                    "platformId": platform_id,
                 }
-                final_sequences.append(sequence_edge)
-                stops_added += 1
-            
-            print(f"     ✅ Extracted {stops_added} sequence edges.")
+            )
+            platform_pattern_ids[platform_id].add(pattern_id)
 
-    # 5. Write everything to sequences.json
-    output_filename = "sequences.json"
-    with open(output_filename, "w") as outfile:
-        json.dump(final_sequences, outfile, indent=4)
+            stop = stops.get(platform_id, {})
+            station_id = stop.get("parent_station") or platform_id
+            station_platform_ids[station_id].add(platform_id)
 
-    print(f"\n🎉 Finished! Wrote {len(final_sequences)} total sequence edges to {output_filename}")
+    platforms = []
+    for platform_id in sorted(platform_pattern_ids):
+        stop = stops.get(platform_id)
+        if not stop:
+            continue
+
+        parent_id = stop.get("parent_station") or platform_id
+        platforms.append(
+            {
+                "platformId": platform_id,
+                "parentId": parent_id,
+                "name": stop_name(stop),
+                "latitude": float(stop["stop_lat"]) if stop.get("stop_lat") else None,
+                "longitude": float(stop["stop_lon"]) if stop.get("stop_lon") else None,
+                "monitoringMode": monitoring_mode(stop),
+                "patterns": sorted(platform_pattern_ids[platform_id]),
+            }
+        )
+
+    stations = []
+    for station_id in sorted(station_platform_ids):
+        stop = stops.get(station_id)
+        first_platform = stops.get(next(iter(station_platform_ids[station_id])), {})
+        source = stop or first_platform
+
+        stations.append(
+            {
+                "stationId": station_id,
+                "name": source.get("stop_name", station_id),
+                "latitude": float(source["stop_lat"]) if source.get("stop_lat") else None,
+                "longitude": float(source["stop_lon"]) if source.get("stop_lon") else None,
+                "municipality": source.get("municipality", ""),
+                "platforms": sorted(station_platform_ids[station_id]),
+            }
+        )
+
+    sequences.sort(
+        key=lambda row: (
+            row["routeId"],
+            row["patternId"],
+            row["directionId"],
+            row["sequenceNumber"],
+        )
+    )
+
+    return sequences, platforms, stations
+
+
+def write_json(path, data):
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(data, file, indent=2)
+        file.write("\n")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Build MBTA structure JSON from static GTFS files."
+    )
+    parser.add_argument(
+        "--gtfs-dir",
+        type=Path,
+        default=DEFAULT_GTFS_DIR,
+        help=f"Path to unpacked MBTA GTFS folder. Default: {DEFAULT_GTFS_DIR}",
+    )
+    parser.add_argument(
+        "--routes",
+        nargs="*",
+        help="Optional route IDs to include, e.g. Red Orange Green-B CR-Lowell.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=OUTPUT_DIR,
+        help=f"Directory for generated JSON files. Default: {OUTPUT_DIR}",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    sequences, platforms, stations = build_static_json(args.gtfs_dir, args.routes)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    write_json(args.output_dir / "sequences.json", sequences)
+    write_json(args.output_dir / "platforms.json", platforms)
+    write_json(args.output_dir / "stations.json", stations)
+
+    print(f"Wrote {len(sequences):,} sequence edges")
+    print(f"Wrote {len(platforms):,} platforms")
+    print(f"Wrote {len(stations):,} stations")
+    print(f"Output directory: {args.output_dir}")
+
 
 if __name__ == "__main__":
-    build_sequences()
+    main()
