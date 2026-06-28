@@ -11,7 +11,7 @@ import Foundation
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
     //predictions
-    var fetchTransitTimes: @Sendable (Stop) async throws -> [String]
+    var fetchTransitTimes: @Sendable (Stop) async throws -> [TransitTime]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
@@ -87,30 +87,41 @@ extension MBTAClient:DependencyKey {
                 
                 let calendarComparator = Calendar.current
                 let now = Date()
-                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> String? in
+                var seenVehicleIds = Set<String>()
+                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> TransitTime? in
+                    let display: String
+                    
                     // 1. Physical signs prioritize specific statuses over timestamps
                     if let status = prediction.attributes.status {
-                        return status
+                        display = status
+                    } else if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
+                              let date = isoFormatter.date(from: timeString),
+                              date >= now {
+                        // 2. If no status, calculate the "minutes away" countdown
+                        let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
+                        display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
+                    } else {
+                        return nil
                     }
                     
-                    // 2. If no status, calculate the "minutes away" countdown
-                    if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
-                       let date = isoFormatter.date(from: timeString),
-                       date >= now { // Filter out past times
-                        
-                        let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
-                        
-                        if minutesAway <= 0 {
-                            return "Arriving"
-                        } else {
-                            return "\(minutesAway) min"
+                    let vehicleId = prediction.relationships.vehicle?.data?.id
+                    if let vehicleId {
+                        guard seenVehicleIds.insert(vehicleId).inserted else {
+                            return nil
                         }
                     }
                     
-                    // Returning nil automatically drops the item from the final array
-                    return nil
+                    return TransitTime(
+                        display: display,
+                        vehicleId: vehicleId,
+                        predictionId: prediction.id,
+                        tripId: prediction.relationships.trip?.data?.id,
+                        stopId: prediction.relationships.stop?.data?.id,
+                        directionId: prediction.attributes.directionId,
+                        stopSequence: prediction.attributes.stopSequence
+                    )
                 }
-                return Array(upcomingTimes.prefix(3))
+                return Array(upcomingTimes[0..<4])
             } catch {
                 throw MBTAError.decodingError
             }

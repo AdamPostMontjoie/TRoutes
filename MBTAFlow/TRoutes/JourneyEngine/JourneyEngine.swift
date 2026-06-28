@@ -198,8 +198,8 @@ actor JourneyEngine {
     
     private func fetchPredictions(for stop: Stop) async {
         do {
-            let times = try await mbtaClient.fetchTransitTimes(stop)
-            print(times)
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
+            let times = predictionResponse.map(\.display)
             await savePredictionResult(for: stop, result: .success(times))
         } catch {
             await savePredictionResult(for: stop, result: .failure(error))
