@@ -221,7 +221,13 @@ actor JourneyEngine {
                 //heavily gated later, just to test passing
                 if let firstPrediction = predictionResults.first,
                    firstPrediction.vehicleId != nil {
-                    await UndergroundManager.shared.updateTrackedVehicle(prediction: firstPrediction)
+                    let currentLeg = freshJourney.route.legs.first { leg in
+                        leg.startStop.mbtaStopId == stop.mbtaStopId
+                    }
+                    await UndergroundManager.shared.updateTrackedVehicle(
+                        prediction: firstPrediction,
+                        leg: currentLeg
+                    )
                 }
             }
         case .failure:

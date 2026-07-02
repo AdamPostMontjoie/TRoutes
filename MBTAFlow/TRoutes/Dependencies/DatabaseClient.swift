@@ -19,6 +19,7 @@ struct DatabaseClient {
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
     var saveImportedTrips: @Sendable ([JsonBuilderTrip]) async throws -> Void
+    var matchTripID: @Sendable (String, String?, Int?, String?, Int?, String?) async throws -> Void
 }
 
 enum DatabaseError: Error, Equatable {
@@ -299,11 +300,231 @@ extension DatabaseClient: DependencyKey {
                 )
 
                 try context.save()
+            },
+            matchTripID: { tripID, routeID, directionID, currentPlatformID, currentSequenceNumber, originPlatformID in
+                let context = ModelContext(sharedContainer)
+                let requestedTripID = tripID
+                let tripDescriptor = FetchDescriptor<TransitTripPattern>(
+                    predicate: #Predicate { trip in
+                        trip.tripId == requestedTripID
+                    }
+                )
+
+                guard let trip = try context.fetch(tripDescriptor).first else {
+                    try printFallbackTripMatch(
+                        context: context,
+                        tripID: tripID,
+                        routeID: routeID,
+                        directionID: directionID,
+                        currentPlatformID: currentPlatformID,
+                        currentSequenceNumber: currentSequenceNumber,
+                        originPlatformID: originPlatformID
+                    )
+                    return
+                }
+
+                let matchedPatternID = trip.patternId
+                try printPatternMatch(
+                    context: context,
+                    title: "Static trip match",
+                    tripID: trip.tripId,
+                    routeID: trip.routeId,
+                    directionID: trip.directionId,
+                    patternID: matchedPatternID
+                )
             }
         )
     }()
 
     static let testValue: Self = .liveValue
+}
+
+private func printFallbackTripMatch(
+    context: ModelContext,
+    tripID: String,
+    routeID: String?,
+    directionID: Int?,
+    currentPlatformID: String?,
+    currentSequenceNumber: Int?,
+    originPlatformID: String?
+) throws {
+    guard let routeID,
+          let directionID else {
+        print(
+            """
+
+            === Transit Trip Match ===
+            No imported trip found for tripId: \(tripID)
+            Cannot fallback without route/direction.
+            Route:     \(routeID ?? "nil")
+            Direction: \(directionID.map(String.init) ?? "nil")
+            ==========================
+
+            """
+        )
+        return
+    }
+
+    let fallbackRouteID = routeID
+    let fallbackDirectionID = directionID
+    let edgeDescriptor = FetchDescriptor<TransitSequenceEdge>(
+        predicate: #Predicate { edge in
+            edge.routeId == fallbackRouteID && edge.directionId == fallbackDirectionID
+        },
+        sortBy: [
+            SortDescriptor(\.patternId),
+            SortDescriptor(\.sortIndex),
+            SortDescriptor(\.sequenceNumber)
+        ]
+    )
+    let routeDirectionEdges = try context.fetch(edgeDescriptor)
+    let groupedEdges = Dictionary(grouping: routeDirectionEdges, by: \.patternId)
+
+    let scoredPatterns = groupedEdges.map { patternID, edges in
+        var score = 0
+
+        if let originPlatformID,
+           edges.contains(where: { $0.platformId == originPlatformID }) {
+            score += 20
+        }
+
+        if let currentPlatformID,
+           edges.contains(where: { $0.platformId == currentPlatformID }) {
+            score += 50
+        }
+
+        if let currentSequenceNumber,
+           edges.contains(where: { $0.sequenceNumber == currentSequenceNumber }) {
+            score += 30
+        }
+
+        if let currentPlatformID,
+           let currentSequenceNumber,
+           edges.contains(where: { $0.platformId == currentPlatformID && $0.sequenceNumber == currentSequenceNumber }) {
+            score += 100
+        }
+
+        return (patternID: patternID, score: score)
+    }
+    .sorted {
+        if $0.score == $1.score {
+            return $0.patternID < $1.patternID
+        }
+        return $0.score > $1.score
+    }
+
+    guard let bestPattern = scoredPatterns.first,
+          bestPattern.score > 0 else {
+        print(
+            """
+
+            === Transit Trip Match ===
+            No imported trip found for tripId: \(tripID)
+            Fallback found no likely pattern.
+            Route:            \(routeID)
+            Direction:        \(directionID)
+            Current platform: \(currentPlatformID ?? "nil")
+            Current sequence: \(currentSequenceNumber.map(String.init) ?? "nil")
+            Origin platform:  \(originPlatformID ?? "nil")
+            Candidate edges:  \(routeDirectionEdges.count)
+            ==========================
+
+            """
+        )
+        return
+    }
+
+    try printPatternMatch(
+        context: context,
+        title: "Fallback pattern match for realtime-added trip",
+        tripID: tripID,
+        routeID: routeID,
+        directionID: directionID,
+        patternID: bestPattern.patternID,
+        debugLines: [
+            "Fallback score:   \(bestPattern.score)",
+            "Current platform: \(currentPlatformID ?? "nil")",
+            "Current sequence: \(currentSequenceNumber.map(String.init) ?? "nil")",
+            "Origin platform:  \(originPlatformID ?? "nil")",
+            "Other candidates: \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
+        ]
+    )
+}
+
+private func printPatternMatch(
+    context: ModelContext,
+    title: String,
+    tripID: String,
+    routeID: String,
+    directionID: Int,
+    patternID: String,
+    debugLines: [String] = []
+) throws {
+    let matchedPatternID = patternID
+    let patternDescriptor = FetchDescriptor<TransitPattern>(
+        predicate: #Predicate { pattern in
+            pattern.patternId == matchedPatternID
+        }
+    )
+
+    guard let pattern = try context.fetch(patternDescriptor).first else {
+        print(
+            """
+
+            === Transit Trip Match ===
+            Trip: \(tripID)
+            No imported pattern found for patternId: \(matchedPatternID)
+            ==========================
+
+            """
+        )
+        return
+    }
+
+    let edgeDescriptor = FetchDescriptor<TransitSequenceEdge>(
+        predicate: #Predicate { edge in
+            edge.patternId == matchedPatternID
+        },
+        sortBy: [
+            SortDescriptor(\.sortIndex),
+            SortDescriptor(\.sequenceNumber)
+        ]
+    )
+    let edges = try context.fetch(edgeDescriptor)
+    let stations = try context.fetch(FetchDescriptor<TransitStation>())
+    let stationNamesById = Dictionary(uniqueKeysWithValues: stations.map { ($0.stationId, $0.name) })
+
+    print(
+        """
+
+        === Transit Trip Match ===
+        \(title)
+        Trip:      \(tripID)
+        Route:     \(routeID)
+        Direction: \(directionID)
+        Pattern:   \(pattern.patternId)
+        Name:      \(pattern.name)
+        Edges:     \(edges.count)
+        \(debugLines.joined(separator: "\n"))
+
+        SEQ   PLATFORM        STATION
+        -----------------------------------------------
+        """
+    )
+
+    for edge in edges {
+        let stationName = stationNamesById[edge.stationId] ?? "Unknown station (\(edge.stationId))"
+        print(
+            String(
+                format: "%-5d %-15@ %@",
+                edge.sequenceNumber,
+                edge.platformId as NSString,
+                stationName
+            )
+        )
+    }
+
+    print("==========================\n")
 }
 
 extension DependencyValues {
