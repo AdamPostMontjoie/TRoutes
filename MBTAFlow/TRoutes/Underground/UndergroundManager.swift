@@ -89,12 +89,12 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         currentStopSequence = data.currentStopSequence ?? currentStopSequence
         do {
             try await databaseClient.matchTripID(
-                data.tripId ?? currentTrip ?? "",
-                data.routeId ?? currentLeg?.mbtaRouteId,
-                data.directionId ?? currentLeg?.transitDirection?.directionId,
+                currentLeg?.mbtaRouteId ?? data.routeId,
+                currentLeg?.transitDirection?.directionId ?? data.directionId,
                 data.stopId,
                 data.currentStopSequence ?? currentStopSequence,
-                currentLeg?.startStop.mbtaStopId
+                currentLeg?.startStop.mbtaStopId,
+                currentLeg?.endStop.mbtaStopId
             )
         }
         

@@ -32,9 +32,8 @@ struct TransitBranch: Codable, Equatable, Hashable {
     let directions: [TransitDirection] // Holds the pre-fetched directions
 }
 
-// 3. A new struct to map the direction names to their required API ID (0 or 1)
 struct TransitDirection: Codable, Equatable, Hashable {
-    let directionId: Int // 0 or 1 (Required for the predictions endpoint later)
+    let directionId: Int
     let directionName: String // "Outbound"
     let destination: String // "Boston College"
 }

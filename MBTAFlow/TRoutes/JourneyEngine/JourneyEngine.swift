@@ -186,6 +186,7 @@ actor JourneyEngine {
         guard var currentJourney = userDefaultsClient.loadActiveJourney(),
               let currentStop = currentJourney.currentStop else { return }
         
+        
         currentJourney.predictionState = .loading(stopId: currentStop.mbtaStopId)
         saveActiveJourneyAndPublish(currentJourney)
         await fetchPredictions(for: currentStop)

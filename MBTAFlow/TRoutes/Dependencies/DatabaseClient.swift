@@ -18,8 +18,7 @@ struct DatabaseClient {
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var saveImportedTrips: @Sendable ([JsonBuilderTrip]) async throws -> Void
-    var matchTripID: @Sendable (String, String?, Int?, String?, Int?, String?) async throws -> Void
+    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?) async throws -> Void
 }
 
 enum DatabaseError: Error, Equatable {
@@ -77,7 +76,6 @@ extension DatabaseClient: DependencyKey {
                     TransitPlatform.self,
                     TransitPattern.self,
                     TransitSequenceEdge.self,
-                    TransitTripPattern.self,
                     TransitReferenceImportMetadata.self,
                     configurations: configuration
                 )
@@ -167,7 +165,6 @@ extension DatabaseClient: DependencyKey {
                     throw DatabaseImportError.alreadyImported
                 }
 
-                try context.fetch(FetchDescriptor<TransitTripPattern>()).forEach(context.delete)
                 try context.fetch(FetchDescriptor<TransitSequenceEdge>()).forEach(context.delete)
                 try context.fetch(FetchDescriptor<TransitPattern>()).forEach(context.delete)
                 try context.fetch(FetchDescriptor<TransitPlatform>()).forEach(context.delete)
@@ -272,24 +269,6 @@ extension DatabaseClient: DependencyKey {
                     )
                 }
 
-                try context.save()
-            },
-            saveImportedTrips: { trips in
-                let context = ModelContext(sharedContainer)
-
-                for trip in trips {
-                    context.insert(
-                        TransitTripPattern(
-                            tripId: trip.tripId,
-                            patternId: trip.patternId,
-                            routeId: trip.routeId,
-                            directionId: trip.directionId,
-                            serviceId: trip.serviceId,
-                            headsign: trip.headsign
-                        )
-                    )
-                }
-
                 context.insert(
                     TransitReferenceImportMetadata(
                         metadataId: metadataId,
@@ -301,36 +280,16 @@ extension DatabaseClient: DependencyKey {
 
                 try context.save()
             },
-            matchTripID: { tripID, routeID, directionID, currentPlatformID, currentSequenceNumber, originPlatformID in
+            matchTripID: { routeID, directionID, currentPlatformID, currentSequenceNumber, originPlatformID, destinationPlatformID in
                 let context = ModelContext(sharedContainer)
-                let requestedTripID = tripID
-                let tripDescriptor = FetchDescriptor<TransitTripPattern>(
-                    predicate: #Predicate { trip in
-                        trip.tripId == requestedTripID
-                    }
-                )
-
-                guard let trip = try context.fetch(tripDescriptor).first else {
-                    try printFallbackTripMatch(
-                        context: context,
-                        tripID: tripID,
-                        routeID: routeID,
-                        directionID: directionID,
-                        currentPlatformID: currentPlatformID,
-                        currentSequenceNumber: currentSequenceNumber,
-                        originPlatformID: originPlatformID
-                    )
-                    return
-                }
-
-                let matchedPatternID = trip.patternId
-                try printPatternMatch(
+                try printLegPatternMatch(
                     context: context,
-                    title: "Static trip match",
-                    tripID: trip.tripId,
-                    routeID: trip.routeId,
-                    directionID: trip.directionId,
-                    patternID: matchedPatternID
+                    routeID: routeID,
+                    directionID: directionID,
+                    currentPlatformID: currentPlatformID,
+                    currentSequenceNumber: currentSequenceNumber,
+                    originPlatformID: originPlatformID,
+                    destinationPlatformID: destinationPlatformID
                 )
             }
         )
@@ -339,14 +298,14 @@ extension DatabaseClient: DependencyKey {
     static let testValue: Self = .liveValue
 }
 
-private func printFallbackTripMatch(
+private func printLegPatternMatch(
     context: ModelContext,
-    tripID: String,
     routeID: String?,
     directionID: Int?,
     currentPlatformID: String?,
     currentSequenceNumber: Int?,
-    originPlatformID: String?
+    originPlatformID: String?,
+    destinationPlatformID: String?
 ) throws {
     guard let routeID,
           let directionID else {
@@ -354,8 +313,7 @@ private func printFallbackTripMatch(
             """
 
             === Transit Trip Match ===
-            No imported trip found for tripId: \(tripID)
-            Cannot fallback without route/direction.
+            FAILURE: Cannot match static sequence without route/direction.
             Route:     \(routeID ?? "nil")
             Direction: \(directionID.map(String.init) ?? "nil")
             ==========================
@@ -382,29 +340,70 @@ private func printFallbackTripMatch(
 
     let scoredPatterns = groupedEdges.map { patternID, edges in
         var score = 0
-
-        if let originPlatformID,
-           edges.contains(where: { $0.platformId == originPlatformID }) {
-            score += 20
+        let sortedEdges = edges.sorted {
+            if $0.sortIndex == $1.sortIndex {
+                return $0.sequenceNumber < $1.sequenceNumber
+            }
+            return $0.sortIndex < $1.sortIndex
+        }
+        let originEdge = originPlatformID.flatMap { stopID in
+            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
+        }
+        let destinationEdge = destinationPlatformID.flatMap { stopID in
+            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
+        }
+        let currentEdge = currentPlatformID.flatMap { stopID in
+            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
         }
 
-        if let currentPlatformID,
-           edges.contains(where: { $0.platformId == currentPlatformID }) {
-            score += 50
+        if originEdge != nil {
+            score += 200
         }
 
-        if let currentSequenceNumber,
-           edges.contains(where: { $0.sequenceNumber == currentSequenceNumber }) {
-            score += 30
+        if destinationEdge != nil {
+            score += 200
         }
 
-        if let currentPlatformID,
-           let currentSequenceNumber,
-           edges.contains(where: { $0.platformId == currentPlatformID && $0.sequenceNumber == currentSequenceNumber }) {
+        if let originEdge,
+           let destinationEdge {
+            if originEdge.sequenceNumber < destinationEdge.sequenceNumber {
+                score += 1_000
+            } else {
+                score -= 1_000
+            }
+        }
+
+        if currentEdge != nil {
             score += 100
         }
 
-        return (patternID: patternID, score: score)
+        if let currentSequenceNumber,
+           sortedEdges.contains(where: { $0.sequenceNumber == currentSequenceNumber }) {
+            score += 80
+        }
+
+        if let currentEdge,
+           let currentSequenceNumber,
+           currentEdge.sequenceNumber == currentSequenceNumber {
+            score += 200
+        }
+
+        if let originEdge,
+           let currentSequenceNumber {
+            if currentSequenceNumber <= originEdge.sequenceNumber {
+                score += 150
+            } else {
+                score -= 500
+            }
+        }
+
+        return (
+            patternID: patternID,
+            score: score,
+            originSequence: originEdge?.sequenceNumber,
+            destinationSequence: destinationEdge?.sequenceNumber,
+            currentSequenceOnPattern: currentEdge?.sequenceNumber
+        )
     }
     .sorted {
         if $0.score == $1.score {
@@ -419,14 +418,14 @@ private func printFallbackTripMatch(
             """
 
             === Transit Trip Match ===
-            No imported trip found for tripId: \(tripID)
-            Fallback found no likely pattern.
-            Route:            \(routeID)
-            Direction:        \(directionID)
-            Current platform: \(currentPlatformID ?? "nil")
-            Current sequence: \(currentSequenceNumber.map(String.init) ?? "nil")
-            Origin platform:  \(originPlatformID ?? "nil")
-            Candidate edges:  \(routeDirectionEdges.count)
+            FAILURE: No likely static pattern for this leg.
+            Route:              \(routeID)
+            Direction:          \(directionID)
+            Origin stop:        \(originPlatformID ?? "nil")
+            Destination stop:   \(destinationPlatformID ?? "nil")
+            Current stop:       \(currentPlatformID ?? "nil")
+            Current sequence:   \(currentSequenceNumber.map(String.init) ?? "nil")
+            Candidate edges:    \(routeDirectionEdges.count)
             ==========================
 
             """
@@ -434,27 +433,51 @@ private func printFallbackTripMatch(
         return
     }
 
+    let orderingFailure: String
+    if bestPattern.originSequence == nil {
+        orderingFailure = "FAILURE: Origin stop was not found on selected pattern."
+    } else if bestPattern.destinationSequence == nil {
+        orderingFailure = "FAILURE: Destination stop was not found on selected pattern."
+    } else if let originSequence = bestPattern.originSequence,
+              let destinationSequence = bestPattern.destinationSequence,
+              originSequence >= destinationSequence {
+        orderingFailure = "FAILURE: Stop sequence is backwards for this leg. Origin seq \(originSequence), destination seq \(destinationSequence)."
+    } else if let originSequence = bestPattern.originSequence,
+              let currentSequenceNumber,
+              currentSequenceNumber > originSequence {
+        orderingFailure = "FAILURE: Vehicle current sequence \(currentSequenceNumber) is already past origin seq \(originSequence)."
+    } else {
+        orderingFailure = "Sequence check: OK"
+    }
+
     try printPatternMatch(
         context: context,
-        title: "Fallback pattern match for realtime-added trip",
-        tripID: tripID,
+        title: "Leg-based static sequence match",
         routeID: routeID,
         directionID: directionID,
         patternID: bestPattern.patternID,
         debugLines: [
-            "Fallback score:   \(bestPattern.score)",
-            "Current platform: \(currentPlatformID ?? "nil")",
-            "Current sequence: \(currentSequenceNumber.map(String.init) ?? "nil")",
-            "Origin platform:  \(originPlatformID ?? "nil")",
-            "Other candidates: \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
+            orderingFailure,
+            "Fallback score:      \(bestPattern.score)",
+            "Origin stop:         \(originPlatformID ?? "nil")",
+            "Origin sequence:     \(bestPattern.originSequence.map(String.init) ?? "nil")",
+            "Destination stop:    \(destinationPlatformID ?? "nil")",
+            "Destination sequence:\(bestPattern.destinationSequence.map { " \($0)" } ?? " nil")",
+            "Current stop:        \(currentPlatformID ?? "nil")",
+            "Current API sequence:\(currentSequenceNumber.map { " \($0)" } ?? " nil")",
+            "Current edge seq:    \(bestPattern.currentSequenceOnPattern.map(String.init) ?? "nil")",
+            "Other candidates:    \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
         ]
     )
+}
+
+private func edgeMatchesStop(_ edge: TransitSequenceEdge, stopID: String) -> Bool {
+    edge.platformId == stopID || edge.stationId == stopID
 }
 
 private func printPatternMatch(
     context: ModelContext,
     title: String,
-    tripID: String,
     routeID: String,
     directionID: Int,
     patternID: String,
@@ -472,7 +495,6 @@ private func printPatternMatch(
             """
 
             === Transit Trip Match ===
-            Trip: \(tripID)
             No imported pattern found for patternId: \(matchedPatternID)
             ==========================
 
@@ -499,7 +521,6 @@ private func printPatternMatch(
 
         === Transit Trip Match ===
         \(title)
-        Trip:      \(tripID)
         Route:     \(routeID)
         Direction: \(directionID)
         Pattern:   \(pattern.patternId)

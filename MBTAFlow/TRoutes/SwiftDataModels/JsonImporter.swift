@@ -50,13 +50,6 @@ class JsonImporter {
             let sequenceEdges: [JsonBuilderSequenceEdge] = try decodeJsonBuilderFile(named: "sequences")
             try await databaseClient.saveImportedSequenceEdges(sequenceEdges)
             
-            print("importing trips")
-            preciseTime = Date.now.formatted(
-                .dateTime.hour().minute().second().secondFraction(.fractional(3))
-            )
-            print(preciseTime)
-            let trips: [JsonBuilderTrip] = try decodeJsonBuilderFile(named: "trips")
-            try await databaseClient.saveImportedTrips(trips)
             print("finished json importing")
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))

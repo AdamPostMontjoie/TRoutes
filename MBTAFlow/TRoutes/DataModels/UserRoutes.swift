@@ -10,6 +10,7 @@ struct Stop: Codable, Equatable, Identifiable {
     var id: UUID
     var mbtaStopId: String
     var mbtaRouteId: String
+    var mbtaDirectionId: Int
     var stopName: String
     var longitude: Double
     var latitude: Double
@@ -58,6 +59,7 @@ struct Stop: Codable, Equatable, Identifiable {
         id: UUID = UUID(),
         mbtaStopId: String,
         mbtaRouteId: String,
+        mbtaDirectionId: Int,
         stopName: String,
         longitude: Double,
         latitude: Double,
@@ -67,6 +69,7 @@ struct Stop: Codable, Equatable, Identifiable {
         self.id = id
         self.mbtaStopId = mbtaStopId
         self.mbtaRouteId = mbtaRouteId
+        self.mbtaDirectionId = mbtaDirectionId
         self.stopName = stopName
         self.longitude = longitude
         self.latitude = latitude
@@ -78,6 +81,7 @@ struct Stop: Codable, Equatable, Identifiable {
         case id
         case mbtaStopId
         case mbtaRouteId
+        case mbtaDirectionId
         case stopName
         case longitude
         case latitude
@@ -91,6 +95,7 @@ struct Stop: Codable, Equatable, Identifiable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         mbtaStopId = try container.decode(String.self, forKey: .mbtaStopId)
         mbtaRouteId = try container.decode(String.self, forKey: .mbtaRouteId)
+        mbtaDirectionId = try container.decode(Int.self, forKey: .mbtaDirectionId)
         stopName = try container.decode(String.self, forKey: .stopName)
         longitude = try container.decode(Double.self, forKey: .longitude)
         latitude = try container.decode(Double.self, forKey: .latitude)
@@ -130,12 +135,13 @@ struct Leg: Equatable, Codable, Identifiable {
         transitDirection: TransitDirection? = nil
     ) {
         self.id = id
-        self.startStop = startStop
-        self.endStop = endStop
         self.mbtaRouteId = mbtaRouteId
         self.transitType = transitType
         self.transitBranch = transitBranch
         self.transitDirection = transitDirection
+        self.startStop = startStop
+        self.endStop = endStop
+        applyDirectionToStopsIfNeeded()
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -158,6 +164,14 @@ struct Leg: Equatable, Codable, Identifiable {
         transitType = try container.decode(TransitType.self, forKey: .transitType)
         transitBranch = try container.decodeIfPresent(TransitBranch.self, forKey: .transitBranch)
         transitDirection = try container.decodeIfPresent(TransitDirection.self, forKey: .transitDirection)
+        applyDirectionToStopsIfNeeded()
+    }
+
+    private mutating func applyDirectionToStopsIfNeeded() {
+        guard let directionId = transitDirection?.directionId else { return }
+
+        startStop.mbtaDirectionId = directionId
+        endStop.mbtaDirectionId = directionId
     }
 }
 
