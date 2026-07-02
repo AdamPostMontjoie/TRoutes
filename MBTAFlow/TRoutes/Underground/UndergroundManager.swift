@@ -17,9 +17,14 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<UndergroundEvent>.Continuation?
     private var currentVehicle:String? //we need to track what train/bus we are supposed to be monitoring
-    private var currentRoute:String? //refine/specify later
+    private var currentTrip:String?
+    private var currentStopSequence:Int?
+    private var currentRoute:String?
+    private var currentLeg:Leg? //refine/specify later
     
     @Dependency(\.mbtaClient) var mbtaClient
+    @Dependency(\.databaseClient) var databaseClient: DatabaseClient
+
 
     func makeEventStream() -> AsyncStream<UndergroundEvent> {
         AsyncStream { continuation in
@@ -41,9 +46,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     //journey engine hands us a vehicle to track
     //only should be done when we're at stop
-    func updateTrackedVehicle(vehicle:String) async {
-        currentVehicle = vehicle
-       // currentRoute = route
+    func updateTrackedVehicle(prediction: TransitPrediction, leg: Leg?) async {
+        currentVehicle = prediction.vehicleId
+        currentTrip = prediction.tripId
+        currentStopSequence = prediction.stopSequence
+        currentLeg = leg
         await fetchVehicleData()
     }
 
@@ -60,7 +67,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         guard let vehicle = currentVehicle else { return }
         do {
             let data = try await mbtaClient.fetchVehicleData(vehicle)
-            handleVehicleData(data: data)
+            await handleVehicleData(data: data)
         }
         catch {
             print("error fetching vehicle data: \(error)")
@@ -69,14 +76,31 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
     
     //this will be used to display an ETA when we're in movement by polling the next stop, and to figure out dynamic timer setting (?). May do for region manager later
+    //stop events endpoint looks good for this
     private func fetchVehicleArrivalEstimation() async {
         
     }
     
     //what does this mean? where are we? should we set timer?
     //break actual actions into sub funcs
-    private func handleVehicleData(data:VehicleData) {
+    private func handleVehicleData(data:VehicleData) async {
+        currentRoute = data.routeId ?? currentRoute
+        currentTrip = data.tripId ?? currentTrip
+        currentStopSequence = data.currentStopSequence ?? currentStopSequence
+        do {
+            try await databaseClient.matchTripID(
+                currentLeg?.mbtaRouteId ?? data.routeId,
+                currentLeg?.transitDirection?.directionId ?? data.directionId,
+                data.stopId,
+                data.currentStopSequence ?? currentStopSequence,
+                currentLeg?.startStop.mbtaStopId,
+                currentLeg?.endStop.mbtaStopId
+            )
+        }
         
+        catch {
+            print("fuck")
+        }
     }
     
     //if we can't get any info, that will be an error

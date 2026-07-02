@@ -15,6 +15,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         //put this before or after the region manager creation?
         Task {
+            try await JsonImporter().importIfNeeded()
             await JourneyEngine.shared.restoreActiveJourneyIfNeeded()
         }
         
@@ -32,6 +33,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             await NotificationsClient.liveValue.debugStringNotification("App will terminate")
         }
     }
+}
+
+//application wide state
+@Observable class AppState {
+    
 }
 
 @main
@@ -52,7 +58,9 @@ struct TRoutes: App {
     var body: some Scene {
         WindowGroup {
             RootView(store:TRoutes.store)
+            
         }
+        
     }
 }
 

@@ -12,6 +12,7 @@ struct VehicleResponse: Codable {
 struct VehicleResponseData: Codable {
     let id: String
     let attributes: VehicleAttributes
+    let relationships: VehicleRelationships?
 }
 
 struct VehicleAttributes: Codable {
@@ -28,9 +29,18 @@ struct VehicleData: Codable, Equatable {
     let id: String
     let bearing: Double?
     let directionId: Int?
+    let routeId: String?
+    let tripId: String?
+    let stopId: String?
     let latitude: Double?
     let longitude: Double?
     let currentStopSequence: Int?
     let currentStatus: String?
     let speed: Double?
+}
+
+struct VehicleRelationships: Codable {
+    let route: RelationshipSingle?
+    let stop: RelationshipSingle?
+    let trip: RelationshipSingle?
 }

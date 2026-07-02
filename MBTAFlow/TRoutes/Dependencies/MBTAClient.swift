@@ -59,9 +59,8 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop in
-            //it seems as if the predictions endpoint will return outdated times. potential solution is to pull more than 3
             //filter out any that are in past and then return next 3.
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
                 throw MBTAError.networkError
             }
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")
@@ -88,7 +87,9 @@ extension MBTAClient:DependencyKey {
                 let calendarComparator = Calendar.current
                 let now = Date()
                 var seenVehicleIds = Set<String>()
-                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> TransitPrediction? in
+                var upcomingTimes: [TransitPrediction] = []
+                
+                for prediction in predictionResponse.data {
                     let display: String
                     
                     // 1. Physical signs prioritize specific statuses over timestamps
@@ -101,27 +102,32 @@ extension MBTAClient:DependencyKey {
                         let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
                         display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
                     } else {
-                        return nil
+                        continue
                     }
                     
                     let vehicleId = prediction.relationships.vehicle?.data?.id
-                    if let vehicleId {
-                        guard seenVehicleIds.insert(vehicleId).inserted else {
-                            return nil
-                        }
+                    if let vehicleId, !seenVehicleIds.insert(vehicleId).inserted {
+                        continue
                     }
                     
-                    return TransitPrediction(
-                        display: display,
-                        vehicleId: vehicleId,
-                        predictionId: prediction.id,
-                        tripId: prediction.relationships.trip?.data?.id,
-                        stopId: prediction.relationships.stop?.data?.id,
-                        directionId: prediction.attributes.directionId,
-                        stopSequence: prediction.attributes.stopSequence
+                    upcomingTimes.append(
+                        TransitPrediction(
+                            display: display,
+                            vehicleId: vehicleId,
+                            predictionId: prediction.id,
+                            tripId: prediction.relationships.trip?.data?.id,
+                            stopId: prediction.relationships.stop?.data?.id,
+                            directionId: prediction.attributes.directionId,
+                            stopSequence: prediction.attributes.stopSequence
+                        )
                     )
+                    
+                    if upcomingTimes.count == 3 {
+                        break
+                    }
                 }
-                return Array(upcomingTimes[0..<3])
+                
+                return upcomingTimes
             } catch {
                 throw MBTAError.decodingError
             }
@@ -233,12 +239,11 @@ extension MBTAClient:DependencyKey {
                             let totalStops = stopResponse.data.count
                             
                             for (index, stopData) in stopResponse.data.enumerated() {
-                                
-                                
                                 let stop = Stop(
                                     id: UUID(),
                                     mbtaStopId: stopData.id,
                                     mbtaRouteId: routeId,
+                                    mbtaDirectionId: directionId,
                                     stopName: stopData.attributes.name ?? "stop",
                                     longitude: stopData.attributes.longitude ?? 0.0,
                                     latitude: stopData.attributes.latitude ?? 0.0,
@@ -277,6 +282,9 @@ extension MBTAClient:DependencyKey {
                     id: vehicleResponse.data.id,
                     bearing: attributes.bearing,
                     directionId: attributes.directionId,
+                    routeId: vehicleResponse.data.relationships?.route?.data?.id,
+                    tripId: vehicleResponse.data.relationships?.trip?.data?.id,
+                    stopId: vehicleResponse.data.relationships?.stop?.data?.id,
                     latitude: attributes.latitude,
                     longitude: attributes.longitude,
                     currentStopSequence: attributes.currentStopSequence,
