@@ -21,6 +21,11 @@ enum JourneyCommand: Equatable {
     case monitoringFailed(stopId: String, error: locationError)
 }
 
+enum MonitoringMode:Equatable {
+    case underground
+    case surface
+}
+
 
 ///Manages Reacting to Journey Events
 actor JourneyEngine {
@@ -79,7 +84,7 @@ actor JourneyEngine {
     
     //this is what is called to start fresh route
     //This needs to be modified once we start differentiating between streams. 
-    func beginRoute(route:RouteStruct) async -> AsyncStream<JourneyUpdate> {
+    func beginRoute(route:UserRoute) async -> AsyncStream<JourneyUpdate> {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         

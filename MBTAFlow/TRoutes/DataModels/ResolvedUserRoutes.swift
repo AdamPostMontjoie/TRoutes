@@ -1,12 +1,13 @@
 //
-//  Locations.swift
-//  MBTAFlow
+//  ResolvedUserRoutes.swift
+//  TRoutes
 //
-//  Created by Adam Post on 5/30/26.
+//  Created by Adam Post on 7/3/26.
 //
+
 import Foundation
 
-struct Stop: Codable, Equatable, Identifiable {
+struct ResolvedStop: Codable, Equatable, Identifiable {
     var id: UUID
     var mbtaStopId: String
     var mbtaRouteId: String
@@ -16,6 +17,7 @@ struct Stop: Codable, Equatable, Identifiable {
     var latitude: Double
     var address: String // display on review feature
     var journeyRole: JourneyStopRole = .boarding
+    var monitoringMode:MonitoringMode
 
     var stopType: StopType {
         get {
@@ -104,19 +106,8 @@ struct Stop: Codable, Equatable, Identifiable {
     }
 }
 
-enum JourneyStopRole: Codable, Equatable {
-    case boarding
-    case transfer(overlapsNext: Bool)
-    case final
-}
 
-enum StopType: Codable, Equatable {
-    case boardingStop
-    case transferStop
-    case finalStop
-}
-
-struct Leg: Equatable, Codable, Identifiable {
+struct ResolvedLeg: Equatable, Codable, Identifiable {
     var id: UUID
     var startStop: Stop
     var endStop: Stop
@@ -124,7 +115,10 @@ struct Leg: Equatable, Codable, Identifiable {
     var transitType: TransitType
     var transitBranch: TransitBranch?
     var transitDirection: TransitDirection?
-
+    var stopsOnLeg:Int?
+    var stops: [ResolvedStop]?
+    
+    
     init(
         id: UUID = UUID(),
         startStop: Stop,
@@ -175,7 +169,7 @@ struct Leg: Equatable, Codable, Identifiable {
     }
 }
 
-struct UserRoute: Codable, Equatable, Identifiable {
+struct ResolvedUserRoute: Codable, Equatable, Identifiable {
     var legs: [Leg]
     var id: UUID
     var name: String

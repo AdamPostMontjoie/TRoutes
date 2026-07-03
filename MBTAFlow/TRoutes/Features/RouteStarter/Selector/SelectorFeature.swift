@@ -14,7 +14,7 @@ struct SelectorFeature {
 
     @ObservableState
     struct State: Equatable {
-        var userRoutes: IdentifiedArrayOf<RouteStruct> = []
+        var userRoutes: IdentifiedArrayOf<UserRoute> = []
         var path = StackState<RouteReviewFeature.State>()
         @Presents var destination: Destination.State? // Added
     }
@@ -24,7 +24,7 @@ struct SelectorFeature {
         case path(StackAction<RouteReviewFeature.State, RouteReviewFeature.Action>)
         case fetchRoutesFromDisk
         case deleteRouteFromDisk(UUID)
-        case routesFetched([RouteStruct])
+        case routesFetched([UserRoute])
         case fetchRoutesFailed
         //we need to implement the deletion and editing here and in the routereviewfeature
         //both behavior and the alerts should be the same

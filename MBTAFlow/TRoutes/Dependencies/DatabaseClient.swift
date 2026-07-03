@@ -11,9 +11,9 @@ import SwiftData
 
 struct DatabaseClient {
     var saveRoute: @Sendable ([Leg]) async throws -> Void
-    var updateRoute: @Sendable (RouteStruct) async throws -> Void
+    var updateRoute: @Sendable (UserRoute) async throws -> Void
     var deleteRoute: @Sendable (UUID) async throws -> Void
-    var fetchSavedRoutes: @Sendable () async throws -> [RouteStruct]
+    var fetchSavedRoutes: @Sendable () async throws -> [UserRoute]
     var saveImportedStations: @Sendable ([JsonBuilderStation]) async throws -> Void
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
@@ -159,7 +159,7 @@ extension DatabaseClient: DependencyKey {
                 )
 
                 return try context.fetch(descriptor).map { savedRoute in
-                    RouteStruct(
+                    UserRoute(
                         legs: savedRoute.legs,
                         id: savedRoute.localRouteId,
                         name: savedRoute.name,
@@ -321,6 +321,8 @@ extension DatabaseClient: DependencyKey {
     static let testValue: Self = .liveValue
 }
 
+
+//change
 private func matchLegPattern(
     context: ModelContext,
     routeID: String?,
@@ -528,6 +530,7 @@ private func matchLegPattern(
 private func edgeMatchesStop(_ edge: TransitSequenceEdge, stopID: String) -> Bool {
     edge.platformId == stopID || edge.stationId == stopID
 }
+
 
 private func printPatternMatch(
     context: ModelContext,

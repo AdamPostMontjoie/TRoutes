@@ -23,7 +23,7 @@ enum JourneyUpdate: Equatable {
 
 ///The layer between UI and the Journey Engine
 struct JourneyClient {
-    var beginRoute: @Sendable (RouteStruct) async -> AsyncStream<JourneyUpdate>
+    var beginRoute: @Sendable (UserRoute) async -> AsyncStream<JourneyUpdate>
     var openSettings: @Sendable () -> Void
     var requestNewTimes: @Sendable () async -> Void
     var nextStop: @Sendable () async -> Void

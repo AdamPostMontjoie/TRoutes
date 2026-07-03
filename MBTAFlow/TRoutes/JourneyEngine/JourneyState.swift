@@ -6,7 +6,7 @@
 //
 
 struct JourneyState: Equatable, Codable {
-    let route: RouteStruct
+    let route: UserRoute
     let stopSequence: [Stop]
     
     var stopIndex: Int = 0
@@ -24,7 +24,7 @@ struct JourneyState: Equatable, Codable {
         return stopIndex == stopSequence.count - 1 && movementStatus == .atStop
     }
     
-    init(route: RouteStruct) {
+    init(route: UserRoute) {
         self.route = route
         var sequence: [Stop] = []
         
