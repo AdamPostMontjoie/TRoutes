@@ -11,6 +11,7 @@ struct JsonBuilderStation: Decodable, Equatable {
     let latitude: Double?
     let longitude: Double?
     let municipality: String?
+    let monitoringMode: String
     let platforms: [String]
 
     var platformIds: [String] {

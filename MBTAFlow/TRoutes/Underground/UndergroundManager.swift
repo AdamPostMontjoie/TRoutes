@@ -93,6 +93,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                 currentLeg?.transitDirection?.directionId ?? data.directionId,
                 data.stopId,
                 data.currentStopSequence ?? currentStopSequence,
+                data.currentStatus,
                 currentLeg?.startStop.mbtaStopId,
                 currentLeg?.endStop.mbtaStopId
             )

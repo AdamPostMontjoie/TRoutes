@@ -18,7 +18,7 @@ struct DatabaseClient {
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?) async throws -> Void
+    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?, String?) async throws -> Void
 }
 
 enum DatabaseError: Error, Equatable {
@@ -56,8 +56,8 @@ final class TransitReferenceImportMetadata {
 extension DatabaseClient: DependencyKey {
     static let liveValue:Self  = {
         let metadataId = "transit-reference-data"
-        let schemaVersion = 1
-        let feedVersion = "jsonbuilder-v1"
+        let schemaVersion = 2
+        let feedVersion = "jsonbuilder-v2"
         let sharedContainer: ModelContainer
             do {
                 let appSupport = try FileManager.default.url(
@@ -184,6 +184,7 @@ extension DatabaseClient: DependencyKey {
                             latitude: latitude,
                             longitude: longitude,
                             municipality: station.municipality,
+                            monitoringMode: station.monitoringMode,
                             platformIds: station.platformIds
                         )
                     )
@@ -232,7 +233,12 @@ extension DatabaseClient: DependencyKey {
                             directionId: pattern.directionId,
                             name: pattern.name,
                             typicality: pattern.typicality,
-                            isCanonical: pattern.isCanonical
+                            isCanonical: pattern.isCanonical,
+                            stopCount: pattern.stopCount,
+                            isDefaultCandidate: pattern.isDefaultCandidate,
+                            defaultReason: pattern.defaultReason,
+                            defaultRank: pattern.defaultRank,
+                            isBranched: pattern.isBranched
                         )
                     )
                 }
@@ -280,7 +286,7 @@ extension DatabaseClient: DependencyKey {
 
                 try context.save()
             },
-            matchTripID: { routeID, directionID, currentPlatformID, currentSequenceNumber, originPlatformID, destinationPlatformID in
+            matchTripID: { routeID, directionID, currentPlatformID, currentSequenceNumber, currentVehicleStatus, originPlatformID, destinationPlatformID in
                 let context = ModelContext(sharedContainer)
                 try printLegPatternMatch(
                     context: context,
@@ -288,6 +294,7 @@ extension DatabaseClient: DependencyKey {
                     directionID: directionID,
                     currentPlatformID: currentPlatformID,
                     currentSequenceNumber: currentSequenceNumber,
+                    currentVehicleStatus: currentVehicleStatus,
                     originPlatformID: originPlatformID,
                     destinationPlatformID: destinationPlatformID
                 )
@@ -304,6 +311,7 @@ private func printLegPatternMatch(
     directionID: Int?,
     currentPlatformID: String?,
     currentSequenceNumber: Int?,
+    currentVehicleStatus: String?,
     originPlatformID: String?,
     destinationPlatformID: String?
 ) throws {
@@ -465,6 +473,7 @@ private func printLegPatternMatch(
             "Destination sequence:\(bestPattern.destinationSequence.map { " \($0)" } ?? " nil")",
             "Current stop:        \(currentPlatformID ?? "nil")",
             "Current API sequence:\(currentSequenceNumber.map { " \($0)" } ?? " nil")",
+            "Current API vehicle status:    \(currentVehicleStatus ?? "nil")",
             "Current edge seq:    \(bestPattern.currentSequenceOnPattern.map(String.init) ?? "nil")",
             "Other candidates:    \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
         ]

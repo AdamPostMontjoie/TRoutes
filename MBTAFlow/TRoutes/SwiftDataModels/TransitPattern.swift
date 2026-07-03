@@ -16,6 +16,11 @@ final class TransitPattern {
     var name: String
     var typicality: Int?
     var isCanonical: Bool
+    var stopCount: Int
+    var isDefaultCandidate: Bool
+    var defaultReason: String?
+    var defaultRank: Int
+    var isBranched: Bool
     @Relationship(deleteRule: .cascade, inverse: \TransitSequenceEdge.pattern)
     var sequenceEdges: [TransitSequenceEdge]
 
@@ -26,6 +31,11 @@ final class TransitPattern {
         name: String,
         typicality: Int? = nil,
         isCanonical: Bool = false,
+        stopCount: Int = 0,
+        isDefaultCandidate: Bool = false,
+        defaultReason: String? = nil,
+        defaultRank: Int = 0,
+        isBranched: Bool = false,
         sequenceEdges: [TransitSequenceEdge] = []
     ) {
         self.patternId = patternId
@@ -34,6 +44,11 @@ final class TransitPattern {
         self.name = name
         self.typicality = typicality
         self.isCanonical = isCanonical
+        self.stopCount = stopCount
+        self.isDefaultCandidate = isDefaultCandidate
+        self.defaultReason = defaultReason
+        self.defaultRank = defaultRank
+        self.isBranched = isBranched
         self.sequenceEdges = sequenceEdges
     }
 }

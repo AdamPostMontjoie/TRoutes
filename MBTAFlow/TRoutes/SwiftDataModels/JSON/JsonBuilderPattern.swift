@@ -12,4 +12,9 @@ struct JsonBuilderPattern: Decodable, Equatable {
     let name: String
     let typicality: Int?
     let isCanonical: Bool
+    let stopCount: Int
+    let isDefaultCandidate: Bool
+    let defaultReason: String?
+    let defaultRank: Int
+    let isBranched: Bool
 }
