@@ -184,6 +184,7 @@ extension DatabaseClient: DependencyKey {
                             latitude: latitude,
                             longitude: longitude,
                             municipality: station.municipality,
+                            monitoringMode: station.monitoringMode,
                             platformIds: station.platformIds
                         )
                     )
