@@ -46,15 +46,15 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
     
     private var currentVehicle = TrackedVehicleState()
-    private var currentLeg: Leg? //refine to resolved leg
-    private var currentMatchResult: TransitTripMatchResult?
+    private var currentLeg: ResolvedLeg? //refine to resolved leg
+    //private var currentMatchResult: TransitTripMatchResult?
     private var phase: VehicleTrackingPhase = .idle
     private var preparedCommand: JourneyCommand? 
     
     private var apiTimer: Timer?
     
     @Dependency(\.mbtaClient) var mbtaClient
-    @Dependency(\.databaseClient) var databaseClient: DatabaseClient
+    //@Dependency(\.databaseClient) var databaseClient: DatabaseClient
 
 
     func startSession() {
@@ -69,15 +69,15 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     //journey engine hands us a vehicle to track
     //only should be done when we're at stop
-    func updateTrackedVehicle(prediction: TransitPrediction, leg: Leg?) async {
+    func updateTrackedVehicle(prediction: TransitPrediction, leg: ResolvedLeg) async {
         currentVehicle.updateVehicleInfo(
             vehicleId: prediction.vehicleId,
             tripId: prediction.tripId,
             stopSequence: prediction.stopSequence,
-            routeId: leg?.mbtaRouteId
+            routeId: leg.mbtaRouteId
         )
         currentLeg = leg
-        currentMatchResult = nil
+        //currentMatchResult = nil
         preparedCommand = nil
         phase = .waitingToBoard
         await fetchVehicleData()
@@ -122,38 +122,17 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             return
 
         case .waitingToBoard:
-            await matchVehiclePattern(vehicleData: vehicleData)
+            //await matchVehiclePattern(vehicleData: vehicleData)
+            print("UndergroundManager vehicle matching is paused until resolved-leg live trip mapping is wired.")
 
         case .trackingVehicle:
-            evaluateTrackedVehicleProgress(vehicleData: vehicleData)
+            //evaluateTrackedVehicleProgress(vehicleData: vehicleData)
+            print("UndergroundManager vehicle progress evaluation is paused until resolved-leg live trip mapping is wired.")
         }
 
         if phase != .completed {
             setTimer(time: 15)
         }        
-    }
-    
-    private func matchVehiclePattern(vehicleData:VehicleData) async {
-        do {
-            guard let matchResult = try await databaseClient.matchTripID(
-                currentLeg?.mbtaRouteId ?? vehicleData.routeId,
-                currentLeg?.transitDirection?.directionId ?? vehicleData.directionId,
-                vehicleData.stopId,
-                vehicleData.currentStopSequence ?? currentVehicle.currentVehicleStopSequence,
-                vehicleData.currentStatus,
-                currentLeg?.startStop.mbtaStopId,
-                currentLeg?.endStop.mbtaStopId
-            ) else {
-                print("UndergroundManager could not match a usable stop sequence yet")
-                return
-            }
-
-            currentMatchResult = matchResult
-            evaluateBoardingProgress(vehicleData: vehicleData, matchResult: matchResult)
-        }
-        catch {
-            handleVehicleFetchError(error: error)
-        }
     }
 
     private func updateTrackingSnapshot(with vehicleData: VehicleData) {
@@ -166,8 +145,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         )
     }
 
-    private func evaluateBoardingProgress(vehicleData: VehicleData, matchResult: TransitTripMatchResult) {
-        guard hasVehicleLeftOrigin(vehicleData: vehicleData, matchResult: matchResult),
+    private func evaluateBoardingProgress(vehicleData: VehicleData) {
+        guard hasVehicleLeftOrigin(vehicleData: vehicleData),
               let originStopId = currentLeg?.startStop.mbtaStopId else {
             return
         }
@@ -178,20 +157,19 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
 
     private func evaluateTrackedVehicleProgress(vehicleData: VehicleData) {
-        guard let matchResult = currentMatchResult,
-              let currentVehicleSequence = vehicleData.currentStopSequence ?? currentVehicle.currentVehicleStopSequence,
+        guard let currentVehicleSequence = vehicleData.currentStopSequence ?? currentVehicle.currentVehicleStopSequence,
               let destinationStopId = currentLeg?.endStop.mbtaStopId else {
             return
         }
 
-        if currentVehicleSequence >= matchResult.destinationSequence {
+        if currentVehicleSequence >= currentLeg position lol{
             phase = .completed
             cancelTimer()
             prepareCommand(.executeEntry(stopId: destinationStopId))
         }
     }
 
-    private func hasVehicleLeftOrigin(vehicleData: VehicleData, matchResult: TransitTripMatchResult) -> Bool {
+    private func hasVehicleLeftOrigin(vehicleData: VehicleData) -> Bool {
         guard let currentVehicleSequence = vehicleData.currentStopSequence ?? currentVehicle.currentVehicleStopSequence else {
             return false
         }
@@ -240,7 +218,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private func resetTracking() {
         currentVehicle = TrackedVehicleState()
         currentLeg = nil
-        currentMatchResult = nil
+        //currentMatchResult = nil
         preparedCommand = nil
         phase = .idle
     }

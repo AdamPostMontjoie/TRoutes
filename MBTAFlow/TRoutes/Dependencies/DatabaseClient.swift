@@ -18,23 +18,7 @@ struct DatabaseClient {
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?, String?) async throws -> TransitTripMatchResult?
-}
-
-struct TrackedStopSequenceEntry: Equatable, Sendable {
-    let sequenceNumber: Int
-    let platformId: String
-    let stationId: String
-    let sortIndex: Int
-}
-
-struct TransitTripMatchResult: Equatable, Sendable {
-    let patternId: String
-    let originSequence: Int
-    let destinationSequence: Int
-    let currentVehicleSequence: Int?
-    let currentPatternSequence: Int?
-    let trackedStopSequence: [TrackedStopSequenceEntry]
+    var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
 }
 
 enum DatabaseError: Error, Equatable {
@@ -302,18 +286,9 @@ extension DatabaseClient: DependencyKey {
 
                 try context.save()
             },
-            matchTripID: { routeID, directionID, currentPlatformID, currentSequenceNumber, currentVehicleStatus, originPlatformID, destinationPlatformID in
+            resolveUserRoute: { userRoute in
                 let context = ModelContext(sharedContainer)
-                return try matchLegPattern(
-                    context: context,
-                    routeID: routeID,
-                    directionID: directionID,
-                    currentPlatformID: currentPlatformID,
-                    currentSequenceNumber: currentSequenceNumber,
-                    currentVehicleStatus: currentVehicleStatus,
-                    originPlatformID: originPlatformID,
-                    destinationPlatformID: destinationPlatformID
-                )
+                return try resolveUserRouteStruct(userRoute, context: context)
             }
         )
     }()
@@ -322,38 +297,42 @@ extension DatabaseClient: DependencyKey {
 }
 
 
-//change
-private func matchLegPattern(
-    context: ModelContext,
-    routeID: String?,
-    directionID: Int?,
-    currentPlatformID: String?,
-    currentSequenceNumber: Int?,
-    currentVehicleStatus: String?,
-    originPlatformID: String?,
-    destinationPlatformID: String?
-) throws -> TransitTripMatchResult? {
-    guard let routeID,
-          let directionID else {
-        print(
-            """
-
-            === Transit Trip Match ===
-            FAILURE: Cannot match static sequence without route/direction.
-            Route:     \(routeID ?? "nil")
-            Direction: \(directionID.map(String.init) ?? "nil")
-            ==========================
-
-            """
+private func resolveUserRouteStruct(
+    _ userRoute: UserRoute,
+    context: ModelContext
+) throws -> ResolvedUserRoute {
+    let resolvedLegs = try userRoute.legs.enumerated().map { legIndex, leg in
+        let nextLeg = userRoute.legs.indices.contains(legIndex + 1) ? userRoute.legs[legIndex + 1] : nil
+        return try resolveLeg(
+            leg,
+            legIndex: legIndex,
+            isLastLeg: legIndex == userRoute.legs.count - 1,
+            nextLeg: nextLeg,
+            context: context
         )
-        return nil
     }
 
-    let fallbackRouteID = routeID
-    let fallbackDirectionID = directionID
+    return ResolvedUserRoute(
+        legs: resolvedLegs,
+        id: userRoute.id,
+        name: userRoute.name,
+        timeStamp: userRoute.timeStamp
+    )
+}
+
+private func resolveLeg(
+    _ leg: Leg,
+    legIndex: Int,
+    isLastLeg: Bool,
+    nextLeg: Leg?,
+    context: ModelContext
+) throws -> ResolvedLeg {
+    let directionId = try resolvedDirectionId(for: leg)
+    let routeId = leg.mbtaRouteId
+
     let edgeDescriptor = FetchDescriptor<TransitSequenceEdge>(
         predicate: #Predicate { edge in
-            edge.routeId == fallbackRouteID && edge.directionId == fallbackDirectionID
+            edge.routeId == routeId && edge.directionId == directionId
         },
         sortBy: [
             SortDescriptor(\.patternId),
@@ -362,247 +341,343 @@ private func matchLegPattern(
         ]
     )
     let routeDirectionEdges = try context.fetch(edgeDescriptor)
-    let groupedEdges = Dictionary(grouping: routeDirectionEdges, by: \.patternId)
 
-    let scoredPatterns = groupedEdges.map { patternID, edges in
-        var score = 0
-        let sortedEdges = edges.sorted {
-            if $0.sortIndex == $1.sortIndex {
-                return $0.sequenceNumber < $1.sequenceNumber
-            }
-            return $0.sortIndex < $1.sortIndex
-        }
-        let originEdge = originPlatformID.flatMap { stopID in
-            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
-        }
-        let destinationEdge = destinationPlatformID.flatMap { stopID in
-            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
-        }
-        let currentEdge = currentPlatformID.flatMap { stopID in
-            sortedEdges.first { edgeMatchesStop($0, stopID: stopID) }
-        }
-
-        if originEdge != nil {
-            score += 200
-        }
-
-        if destinationEdge != nil {
-            score += 200
-        }
-
-        if let originEdge,
-           let destinationEdge {
-            if originEdge.sequenceNumber < destinationEdge.sequenceNumber {
-                score += 1_000
-            } else {
-                score -= 1_000
-            }
-        }
-
-        if currentEdge != nil {
-            score += 100
-        }
-
-        if let currentSequenceNumber,
-           sortedEdges.contains(where: { $0.sequenceNumber == currentSequenceNumber }) {
-            score += 80
-        }
-
-        if let currentEdge,
-           let currentSequenceNumber,
-           currentEdge.sequenceNumber == currentSequenceNumber {
-            score += 200
-        }
-
-        if let originEdge,
-           let currentSequenceNumber {
-            if currentSequenceNumber <= originEdge.sequenceNumber {
-                score += 150
-            } else {
-                score -= 500
-            }
-        }
-
-        return (
-            patternID: patternID,
-            score: score,
-            originSequence: originEdge?.sequenceNumber,
-            destinationSequence: destinationEdge?.sequenceNumber,
-            currentSequenceOnPattern: currentEdge?.sequenceNumber,
-            sortedEdges: sortedEdges
+    guard !routeDirectionEdges.isEmpty else {
+        throw ResolvedRouteError.noSequenceEdges(
+            legId: leg.id,
+            routeId: routeId,
+            directionId: directionId
         )
     }
-    .sorted {
-        if $0.score == $1.score {
-            return $0.patternID < $1.patternID
-        }
-        return $0.score > $1.score
-    }
 
-    guard let bestPattern = scoredPatterns.first,
-          bestPattern.score > 0 else {
-        print(
-            """
-
-            === Transit Trip Match ===
-            FAILURE: No likely static pattern for this leg.
-            Route:              \(routeID)
-            Direction:          \(directionID)
-            Origin stop:        \(originPlatformID ?? "nil")
-            Destination stop:   \(destinationPlatformID ?? "nil")
-            Current stop:       \(currentPlatformID ?? "nil")
-            Current sequence:   \(currentSequenceNumber.map(String.init) ?? "nil")
-            Candidate edges:    \(routeDirectionEdges.count)
-            ==========================
-
-            """
-        )
-        return nil
-    }
-
-    let sequenceCheck: String
-    if bestPattern.originSequence == nil {
-        sequenceCheck = "FAILURE: Origin stop was not found on selected pattern."
-    } else if bestPattern.destinationSequence == nil {
-        sequenceCheck = "FAILURE: Destination stop was not found on selected pattern."
-    } else if let originSequence = bestPattern.originSequence,
-              let destinationSequence = bestPattern.destinationSequence,
-              originSequence >= destinationSequence {
-        sequenceCheck = "FAILURE: Stop sequence is backwards for this leg. Origin seq \(originSequence), destination seq \(destinationSequence)."
-    } else if let originSequence = bestPattern.originSequence,
-              let currentSequenceNumber,
-              currentSequenceNumber > originSequence {
-        sequenceCheck = "Vehicle has already passed origin seq \(originSequence)."
-    } else {
-        sequenceCheck = "Sequence check: OK"
-    }
-
-    try printPatternMatch(
-        context: context,
-        title: "Leg-based static sequence match",
-        routeID: routeID,
-        directionID: directionID,
-        patternID: bestPattern.patternID,
-        debugLines: [
-            sequenceCheck,
-            "Fallback score:      \(bestPattern.score)",
-            "Origin stop:         \(originPlatformID ?? "nil")",
-            "Origin sequence:     \(bestPattern.originSequence.map(String.init) ?? "nil")",
-            "Destination stop:    \(destinationPlatformID ?? "nil")",
-            "Destination sequence:\(bestPattern.destinationSequence.map { " \($0)" } ?? " nil")",
-            "Current stop:        \(currentPlatformID ?? "nil")",
-            "Current API sequence:\(currentSequenceNumber.map { " \($0)" } ?? " nil")",
-            "Current API vehicle status:    \(currentVehicleStatus ?? "nil")",
-            "Current edge seq:    \(bestPattern.currentSequenceOnPattern.map(String.init) ?? "nil")",
-            "Other candidates:    \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
-        ]
-    )
-
-    guard let originSequence = bestPattern.originSequence,
-          let destinationSequence = bestPattern.destinationSequence,
-          originSequence < destinationSequence else {
-        return nil
-    }
-
-    let trackedStopSequence = bestPattern.sortedEdges
-        .filter { edge in
-            edge.sequenceNumber >= originSequence && edge.sequenceNumber <= destinationSequence
-        }
-        .map { edge in
-            TrackedStopSequenceEntry(
-                sequenceNumber: edge.sequenceNumber,
-                platformId: edge.platformId,
-                stationId: edge.stationId,
-                sortIndex: edge.sortIndex
-            )
-        }
-
-    return TransitTripMatchResult(
-        patternId: bestPattern.patternID,
-        originSequence: originSequence,
-        destinationSequence: destinationSequence,
-        currentVehicleSequence: currentSequenceNumber,
-        currentPatternSequence: bestPattern.currentSequenceOnPattern,
-        trackedStopSequence: trackedStopSequence
-    )
-}
-
-private func edgeMatchesStop(_ edge: TransitSequenceEdge, stopID: String) -> Bool {
-    edge.platformId == stopID || edge.stationId == stopID
-}
-
-
-private func printPatternMatch(
-    context: ModelContext,
-    title: String,
-    routeID: String,
-    directionID: Int,
-    patternID: String,
-    debugLines: [String] = []
-) throws {
-    let matchedPatternID = patternID
     let patternDescriptor = FetchDescriptor<TransitPattern>(
         predicate: #Predicate { pattern in
-            pattern.patternId == matchedPatternID
+            pattern.routeId == routeId && pattern.directionId == directionId
         }
     )
-
-    guard let pattern = try context.fetch(patternDescriptor).first else {
-        print(
-            """
-
-            === Transit Trip Match ===
-            No imported pattern found for patternId: \(matchedPatternID)
-            ==========================
-
-            """
-        )
-        return
-    }
-
-    let edgeDescriptor = FetchDescriptor<TransitSequenceEdge>(
-        predicate: #Predicate { edge in
-            edge.patternId == matchedPatternID
-        },
-        sortBy: [
-            SortDescriptor(\.sortIndex),
-            SortDescriptor(\.sequenceNumber)
-        ]
+    let patternsById = Dictionary(
+        uniqueKeysWithValues: try context.fetch(patternDescriptor).map { ($0.patternId, $0) }
     )
-    let edges = try context.fetch(edgeDescriptor)
-    let stations = try context.fetch(FetchDescriptor<TransitStation>())
-    let stationNamesById = Dictionary(uniqueKeysWithValues: stations.map { ($0.stationId, $0.name) })
-
-    print(
-        """
-
-        === Transit Trip Match ===
-        \(title)
-        Route:     \(routeID)
-        Direction: \(directionID)
-        Pattern:   \(pattern.patternId)
-        Name:      \(pattern.name)
-        Edges:     \(edges.count)
-        \(debugLines.joined(separator: "\n"))
-
-        SEQ   PLATFORM        STATION
-        -----------------------------------------------
-        """
+    let platformsById = Dictionary(
+        uniqueKeysWithValues: try context.fetch(FetchDescriptor<TransitPlatform>()).map { ($0.platformId, $0) }
+    )
+    let stationsById = Dictionary(
+        uniqueKeysWithValues: try context.fetch(FetchDescriptor<TransitStation>()).map { ($0.stationId, $0) }
     )
 
-    for edge in edges {
-        let stationName = stationNamesById[edge.stationId] ?? "Unknown station (\(edge.stationId))"
-        print(
-            String(
-                format: "%-5d %-15@ %@",
-                edge.sequenceNumber,
-                edge.platformId as NSString,
-                stationName
+    let validCandidates = Dictionary(grouping: routeDirectionEdges, by: \.patternId)
+        .compactMap { patternId, edges -> PatternResolutionCandidate? in
+            let sortedEdges = sortEdges(edges)
+            guard let originMatch = findStopMatch(in: sortedEdges, stopId: leg.startStop.mbtaStopId),
+                  let destinationMatch = findStopMatch(in: sortedEdges, stopId: leg.endStop.mbtaStopId),
+                  originMatch.edgePosition < destinationMatch.edgePosition else {
+                return nil
+            }
+
+            let slice = Array(sortedEdges[originMatch.edgePosition...destinationMatch.edgePosition])
+            return PatternResolutionCandidate(
+                patternId: patternId,
+                pattern: patternsById[patternId],
+                edges: slice,
+                originMatch: originMatch,
+                destinationMatch: destinationMatch
             )
+        }
+
+    guard !validCandidates.isEmpty else {
+        throw ResolvedRouteError.noValidPattern(
+            legId: leg.id,
+            originStopId: leg.startStop.mbtaStopId,
+            destinationStopId: leg.endStop.mbtaStopId
         )
     }
 
-    print("==========================\n")
+    let selectedCandidate = try selectCandidate(validCandidates, leg: leg)
+    let stops = try selectedCandidate.edges.enumerated().map { stopIndex, edge in
+        try makeResolvedStop(
+            edge: edge,
+            leg: leg,
+            legIndex: legIndex,
+            stopIndex: stopIndex,
+            isLastStopOnLeg: stopIndex == selectedCandidate.edges.count - 1,
+            isLastLeg: isLastLeg,
+            nextLeg: nextLeg,
+            platform: platformsById[edge.platformId],
+            station: stationsById[edge.stationId],
+            directionId: directionId
+        )
+    }
+
+    guard let startStop = stops.first,
+          let endStop = stops.last else {
+        throw ResolvedRouteError.noValidPattern(
+            legId: leg.id,
+            originStopId: leg.startStop.mbtaStopId,
+            destinationStopId: leg.endStop.mbtaStopId
+        )
+    }
+
+    return ResolvedLeg(
+        sourceLegId: leg.id,
+        legIndex: legIndex,
+        startStop: startStop,
+        endStop: endStop,
+        mbtaRouteId: leg.mbtaRouteId,
+        mbtaDirectionId: directionId,
+        transitType: leg.transitType,
+        selectedPatternId: selectedCandidate.patternId,
+        transitBranch: leg.transitBranch,
+        transitDirection: leg.transitDirection,
+        stops: stops
+    )
+}
+
+private struct PatternResolutionCandidate {
+    let patternId: String
+    let pattern: TransitPattern?
+    let edges: [TransitSequenceEdge]
+    let originMatch: StopMatch
+    let destinationMatch: StopMatch
+
+    var exactEndpointMatchCount: Int {
+        [originMatch, destinationMatch].filter(\.isExactPlatformMatch).count
+    }
+
+    var usesCanonicalPattern: Bool {
+        pattern?.isCanonical == true
+    }
+
+    var usesDefaultPattern: Bool {
+        pattern?.isDefaultCandidate == true
+    }
+
+    var defaultRank: Int {
+        pattern?.defaultRank ?? Int.max
+    }
+
+    var sliceLength: Int {
+        edges.count
+    }
+}
+
+private struct StopMatch {
+    let edgePosition: Int
+    let isExactPlatformMatch: Bool
+}
+
+private func resolvedDirectionId(for leg: Leg) throws -> Int {
+    if let directionId = leg.transitDirection?.directionId {
+        return directionId
+    }
+
+    let startDirection = leg.startStop.mbtaDirectionId
+    let endDirection = leg.endStop.mbtaDirectionId
+    if startDirection == endDirection {
+        return startDirection
+    }
+
+    throw ResolvedRouteError.missingDirection(legId: leg.id)
+}
+
+private func sortEdges(_ edges: [TransitSequenceEdge]) -> [TransitSequenceEdge] {
+    edges.sorted {
+        if $0.sortIndex == $1.sortIndex {
+            return $0.sequenceNumber < $1.sequenceNumber
+        }
+        return $0.sortIndex < $1.sortIndex
+    }
+}
+
+private func findStopMatch(in edges: [TransitSequenceEdge], stopId: String) -> StopMatch? {
+    if let platformIndex = edges.firstIndex(where: { $0.platformId == stopId }) {
+        return StopMatch(edgePosition: platformIndex, isExactPlatformMatch: true)
+    }
+
+    if let stationIndex = edges.firstIndex(where: { $0.stationId == stopId }) {
+        return StopMatch(edgePosition: stationIndex, isExactPlatformMatch: false)
+    }
+
+    return nil
+}
+
+private func selectCandidate(
+    _ candidates: [PatternResolutionCandidate],
+    leg: Leg
+) throws -> PatternResolutionCandidate {
+    let sortedCandidates = candidates.sorted { lhs, rhs in
+        candidateSortKey(lhs, leg: leg) < candidateSortKey(rhs, leg: leg)
+    }
+
+    guard let bestCandidate = sortedCandidates.first else {
+        throw ResolvedRouteError.noValidPattern(
+            legId: leg.id,
+            originStopId: leg.startStop.mbtaStopId,
+            destinationStopId: leg.endStop.mbtaStopId
+        )
+    }
+
+    if sortedCandidates.count > 1,
+       candidateRankingKey(bestCandidate, leg: leg) == candidateRankingKey(sortedCandidates[1], leg: leg) {
+        let tiedPatternIds = sortedCandidates
+            .filter { candidateRankingKey($0, leg: leg) == candidateRankingKey(bestCandidate, leg: leg) }
+            .map(\.patternId)
+            .sorted()
+
+        throw ResolvedRouteError.ambiguousPattern(
+            legId: leg.id,
+            patternIds: tiedPatternIds
+        )
+    }
+
+    return bestCandidate
+}
+
+private func candidateRankingKey(
+    _ candidate: PatternResolutionCandidate,
+    leg: Leg
+) -> PatternRankingKey {
+    PatternRankingKey(
+        inverseExactEndpointMatchCount: -candidate.exactEndpointMatchCount,
+        branchHintMiss: branchHintMatches(candidate, leg: leg) ? 0 : 1,
+        canonicalMiss: candidate.usesCanonicalPattern ? 0 : 1,
+        defaultMiss: candidate.usesDefaultPattern ? 0 : 1,
+        defaultRank: candidate.defaultRank,
+        sliceLength: candidate.sliceLength
+    )
+}
+
+private func candidateSortKey(
+    _ candidate: PatternResolutionCandidate,
+    leg: Leg
+) -> PatternSortKey {
+    PatternSortKey(
+        rankingKey: candidateRankingKey(candidate, leg: leg),
+        patternId: candidate.patternId
+    )
+}
+
+private struct PatternRankingKey: Comparable, Equatable {
+    let inverseExactEndpointMatchCount: Int
+    let branchHintMiss: Int
+    let canonicalMiss: Int
+    let defaultMiss: Int
+    let defaultRank: Int
+    let sliceLength: Int
+
+    static func < (lhs: PatternRankingKey, rhs: PatternRankingKey) -> Bool {
+        if lhs.inverseExactEndpointMatchCount != rhs.inverseExactEndpointMatchCount {
+            return lhs.inverseExactEndpointMatchCount < rhs.inverseExactEndpointMatchCount
+        }
+        if lhs.branchHintMiss != rhs.branchHintMiss {
+            return lhs.branchHintMiss < rhs.branchHintMiss
+        }
+        if lhs.canonicalMiss != rhs.canonicalMiss {
+            return lhs.canonicalMiss < rhs.canonicalMiss
+        }
+        if lhs.defaultMiss != rhs.defaultMiss {
+            return lhs.defaultMiss < rhs.defaultMiss
+        }
+        if lhs.defaultRank != rhs.defaultRank {
+            return lhs.defaultRank < rhs.defaultRank
+        }
+        if lhs.sliceLength != rhs.sliceLength {
+            return lhs.sliceLength < rhs.sliceLength
+        }
+        return false
+    }
+}
+
+private struct PatternSortKey: Comparable, Equatable {
+    let rankingKey: PatternRankingKey
+    let patternId: String
+
+    static func < (lhs: PatternSortKey, rhs: PatternSortKey) -> Bool {
+        if lhs.rankingKey != rhs.rankingKey {
+            return lhs.rankingKey < rhs.rankingKey
+        }
+        return lhs.patternId < rhs.patternId
+    }
+}
+
+private func branchHintMatches(_ candidate: PatternResolutionCandidate, leg: Leg) -> Bool {
+    guard let branchId = leg.transitBranch?.id else {
+        return true
+    }
+
+    return candidate.patternId.contains(branchId) || candidate.pattern?.routeId == branchId
+}
+
+private func makeResolvedStop(
+    edge: TransitSequenceEdge,
+    leg: Leg,
+    legIndex: Int,
+    stopIndex: Int,
+    isLastStopOnLeg: Bool,
+    isLastLeg: Bool,
+    nextLeg: Leg?,
+    platform: TransitPlatform?,
+    station: TransitStation?,
+    directionId: Int
+) throws -> ResolvedStop {
+    guard let platform else {
+        throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
+    }
+    guard let station else {
+        throw ResolvedRouteError.missingStation(stationId: edge.stationId)
+    }
+
+    let overlapsWithNext = isLastStopOnLeg && nextLeg.map {
+        resolvedStopMatchesUserStop(
+            platformId: edge.platformId,
+            stationId: station.stationId,
+            userStopId: $0.startStop.mbtaStopId
+        )
+    } == true
+    let journeyRole: JourneyStopRole
+    if isLastStopOnLeg && isLastLeg {
+        journeyRole = .final
+    } else if isLastStopOnLeg {
+        journeyRole = .transfer(overlapsNext: overlapsWithNext)
+    } else {
+        journeyRole = .boarding
+    }
+
+    return ResolvedStop(
+        sourceLegId: leg.id,
+        legIndex: legIndex,
+        legStopIndex: stopIndex,
+        platformId: edge.platformId,
+        stationId: edge.stationId,
+        mbtaStopId: edge.platformId,
+        mbtaRouteId: leg.mbtaRouteId,
+        mbtaDirectionId: directionId,
+        stopName: station.name,
+        longitude: station.longitude,
+        latitude: station.latitude,
+        address: station.municipality ?? leg.startStop.address,
+        journeyRole: journeyRole,
+        monitoringMode: station.monitoringMode.resolvedMonitoringMode,
+        overlapsWithNext: overlapsWithNext
+    )
+}
+
+private func resolvedStopMatchesUserStop(
+    platformId: String,
+    stationId: String,
+    userStopId: String
+) -> Bool {
+    platformId == userStopId || stationId == userStopId
+}
+
+private extension String {
+    var resolvedMonitoringMode: MonitoringMode {
+        switch lowercased() {
+        case "underground":
+            return .underground
+        default:
+            return .surface
+        }
+    }
 }
 
 extension DependencyValues {

@@ -7,8 +7,13 @@
 
 import Foundation
 
-struct ResolvedStop: Codable, Equatable, Identifiable {
+struct ResolvedStop:Equatable, Identifiable {
     var id: UUID
+    var sourceLegId: UUID
+    var legIndex: Int
+    var legStopIndex: Int
+    var platformId: String
+    var stationId: String
     var mbtaStopId: String
     var mbtaRouteId: String
     var mbtaDirectionId: Int
@@ -18,47 +23,16 @@ struct ResolvedStop: Codable, Equatable, Identifiable {
     var address: String // display on review feature
     var journeyRole: JourneyStopRole = .boarding
     var monitoringMode:MonitoringMode
-
-    var stopType: StopType {
-        get {
-            switch journeyRole {
-            case .boarding:
-                return .boardingStop
-            case .transfer:
-                return .transferStop
-            case .final:
-                return .finalStop
-            }
-        }
-        set {
-            switch newValue {
-            case .boardingStop:
-                journeyRole = .boarding
-            case .transferStop:
-                journeyRole = .transfer(overlapsNext: overlapsWithNext)
-            case .finalStop:
-                journeyRole = .final
-            }
-        }
-    }
-
-    var overlapsWithNext: Bool {
-        get {
-            guard case let .transfer(overlapsNext) = journeyRole else {
-                return false
-            }
-            return overlapsNext
-        }
-        set {
-            guard case .transfer = journeyRole else {
-                return
-            }
-            journeyRole = .transfer(overlapsNext: newValue)
-        }
-    }
+    var overlapsWithNext: Bool
+    var stopType: StopType
 
     init(
         id: UUID = UUID(),
+        sourceLegId: UUID,
+        legIndex: Int,
+        legStopIndex: Int,
+        platformId: String,
+        stationId: String,
         mbtaStopId: String,
         mbtaRouteId: String,
         mbtaDirectionId: Int,
@@ -66,9 +40,16 @@ struct ResolvedStop: Codable, Equatable, Identifiable {
         longitude: Double,
         latitude: Double,
         address: String,
-        journeyRole: JourneyStopRole = .boarding
+        journeyRole: JourneyStopRole = .boarding,
+        monitoringMode: MonitoringMode,
+        overlapsWithNext: Bool = false
     ) {
         self.id = id
+        self.sourceLegId = sourceLegId
+        self.legIndex = legIndex
+        self.legStopIndex = legStopIndex
+        self.platformId = platformId
+        self.stationId = stationId
         self.mbtaStopId = mbtaStopId
         self.mbtaRouteId = mbtaRouteId
         self.mbtaDirectionId = mbtaDirectionId
@@ -77,101 +58,88 @@ struct ResolvedStop: Codable, Equatable, Identifiable {
         self.latitude = latitude
         self.address = address
         self.journeyRole = journeyRole
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case mbtaStopId
-        case mbtaRouteId
-        case mbtaDirectionId
-        case stopName
-        case longitude
-        case latitude
-        case address
-        case journeyRole
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        mbtaStopId = try container.decode(String.self, forKey: .mbtaStopId)
-        mbtaRouteId = try container.decode(String.self, forKey: .mbtaRouteId)
-        mbtaDirectionId = try container.decode(Int.self, forKey: .mbtaDirectionId)
-        stopName = try container.decode(String.self, forKey: .stopName)
-        longitude = try container.decode(Double.self, forKey: .longitude)
-        latitude = try container.decode(Double.self, forKey: .latitude)
-        address = try container.decode(String.self, forKey: .address)
-        journeyRole = try container.decodeIfPresent(JourneyStopRole.self, forKey: .journeyRole) ?? .boarding
+        self.stopType = journeyRole.stopType
+        self.monitoringMode = monitoringMode
+        self.overlapsWithNext = overlapsWithNext
     }
 }
 
 
-struct ResolvedLeg: Equatable, Codable, Identifiable {
+struct ResolvedLeg: Equatable, Identifiable {
     var id: UUID
-    var startStop: Stop
-    var endStop: Stop
+    var sourceLegId: UUID
+    var legIndex: Int
+    var startStop: ResolvedStop
+    var endStop: ResolvedStop
     var mbtaRouteId: String
+    var mbtaDirectionId: Int
     var transitType: TransitType
     var transitBranch: TransitBranch?
     var transitDirection: TransitDirection?
-    var stopsOnLeg:Int?
-    var stops: [ResolvedStop]?
+    var selectedPatternId: String
+    var stops: [ResolvedStop]
+
+    var stopsOnLeg:Int {
+        stops.count
+    }
     
     
     init(
         id: UUID = UUID(),
-        startStop: Stop,
-        endStop: Stop,
+        sourceLegId: UUID,
+        legIndex: Int,
+        startStop: ResolvedStop,
+        endStop: ResolvedStop,
         mbtaRouteId: String,
+        mbtaDirectionId: Int,
         transitType: TransitType,
+        selectedPatternId: String,
         transitBranch: TransitBranch? = nil,
-        transitDirection: TransitDirection? = nil
+        transitDirection: TransitDirection? = nil,
+        stops: [ResolvedStop]
     ) {
         self.id = id
+        self.sourceLegId = sourceLegId
+        self.legIndex = legIndex
         self.mbtaRouteId = mbtaRouteId
+        self.mbtaDirectionId = mbtaDirectionId
         self.transitType = transitType
         self.transitBranch = transitBranch
         self.transitDirection = transitDirection
         self.startStop = startStop
         self.endStop = endStop
-        applyDirectionToStopsIfNeeded()
+        self.selectedPatternId = selectedPatternId
+        self.stops = stops
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case startStop
-        case endStop
-        case mbtaRouteId
-        case transitType
-        case transitBranch
-        case transitDirection
-    }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        startStop = try container.decode(Stop.self, forKey: .startStop)
-        endStop = try container.decode(Stop.self, forKey: .endStop)
-        mbtaRouteId = try container.decode(String.self, forKey: .mbtaRouteId)
-        transitType = try container.decode(TransitType.self, forKey: .transitType)
-        transitBranch = try container.decodeIfPresent(TransitBranch.self, forKey: .transitBranch)
-        transitDirection = try container.decodeIfPresent(TransitDirection.self, forKey: .transitDirection)
-        applyDirectionToStopsIfNeeded()
-    }
-
-    private mutating func applyDirectionToStopsIfNeeded() {
-        guard let directionId = transitDirection?.directionId else { return }
-
-        startStop.mbtaDirectionId = directionId
-        endStop.mbtaDirectionId = directionId
-    }
 }
 
-struct ResolvedUserRoute: Codable, Equatable, Identifiable {
-    var legs: [Leg]
+struct ResolvedUserRoute: Equatable, Identifiable {
+    var legs: [ResolvedLeg]
     var id: UUID
     var name: String
     var timeStamp: Date
+}
+
+enum ResolvedRouteError: Error, Equatable {
+    case missingDirection(legId: UUID)
+    case noSequenceEdges(legId: UUID, routeId: String, directionId: Int)
+    case noValidPattern(legId: UUID, originStopId: String, destinationStopId: String)
+    case ambiguousPattern(legId: UUID, patternIds: [String])
+    case missingPlatform(platformId: String)
+    case missingStation(stationId: String)
+}
+
+private extension JourneyStopRole {
+    var stopType: StopType {
+        switch self {
+        case .boarding:
+            return .boardingStop
+        case .transfer:
+            return .transferStop
+        case .final:
+            return .finalStop
+        }
+    }
 }
