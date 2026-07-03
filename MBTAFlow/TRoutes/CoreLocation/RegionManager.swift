@@ -11,7 +11,7 @@ import ComposableArchitecture
 @MainActor
 class RegionManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
-    private var continuation: AsyncStream<LocationEvent>.Continuation?
+    private var continuation: AsyncStream<JourneyCommand>.Continuation?
     private var currentStop: Stop?
     
     // Guards against double state events.
@@ -25,7 +25,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         // throw if not authorized somewhere in here, in case user disables location access mid journey
     }
     
-    func makeEventStream() -> AsyncStream<LocationEvent> {
+    func makeEventStream() -> AsyncStream<JourneyCommand> {
         AsyncStream { continuation in
             self.continuation = continuation
             
@@ -37,12 +37,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     var authorizationStatus: CLAuthorizationStatus {
         locationManager.authorizationStatus
-    }
-    
-    private func debugNotify(_ message: String) {
-        Task {
-            await NotificationsClient.liveValue.debugStringNotification(message)
-        }
     }
     
     func requestAlwaysAuthorization() {
@@ -115,14 +109,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
     //checks if we're already inside of the zone
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
-        debugNotify("CL State is \(state) for \(region.identifier)")
         //iOS may automatically fire did determine state on start monitoring, ignore if no change
         guard state != lastKnownState else { return }
         lastKnownState = state
             switch state {
             case .inside:
                 print("📍 CoreLocation: Already inside region upon registration.")
-                continuation?.yield(.enteredStop(stopId: region.identifier))
+                continuation?.yield(.executeEntry(stopId: region.identifier))
             case .outside:
                 break
             case .unknown:
@@ -136,16 +129,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         print("entered region")
-        debugNotify("CL Entered \(region.identifier)")
-        continuation?.yield(.enteredStop(stopId: region.identifier))
+        continuation?.yield(.executeEntry(stopId: region.identifier))
     }
     
     //on exit
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         print("exited region")
-        debugNotify("CL Exited \(region.identifier)")
-        continuation?.yield(.exitedStop(stopId: region.identifier))
-        
+        continuation?.yield(.executeExit(stopId: region.identifier))
         //stopping monitoring should be handled when new region is registered
     }
     

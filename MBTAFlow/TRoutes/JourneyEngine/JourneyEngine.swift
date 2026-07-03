@@ -8,21 +8,6 @@
 import ComposableArchitecture
 import CoreLocation
 
-
-enum LocationEvent: Equatable {
-    case enteredStop(stopId: String)
-    case exitedStop(stopId: String)
-    case authorizationDenied
-    case monitoringFailed(stopId: String, error: locationError)
-}
-
-enum UndergroundEvent {
-    case enteredStop(stopId: String)
-    case exitedStop(stopId: String)
-    case authorizationDenied
-    case monitoringFailed(stopId: String, error: locationError)
-}
-
 enum ManualEvent: Equatable {
     case nextStopTapped
     case atStopTapped
@@ -31,6 +16,9 @@ enum ManualEvent: Equatable {
 enum JourneyCommand: Equatable {
     case executeEntry(stopId:String)
     case executeExit(stopId:String)
+    case refreshTimes(stopId: String)
+    case authorizationDenied
+    case monitoringFailed(stopId: String, error: locationError)
 }
 
 
@@ -75,7 +63,7 @@ actor JourneyEngine {
         
         locationListeningTask = Task {
             for await event in stream {
-                await self.locationEventValidator(event)
+                await self.journeyCommandValidator(event)
             }
             self.locationEventStreamDidFinish()
         }
@@ -104,27 +92,6 @@ actor JourneyEngine {
         return journeyUpdates
     }
     
-    func locationEventValidator(_ event:LocationEvent) async {
-        let currentJourney = userDefaultsClient.loadActiveJourney()
-        await notificationsClient.debugStringNotification("JourneyEngine received \(event), currentStop: \(currentJourney?.currentStop?.mbtaStopId ?? "nil"), status: \(String(describing: currentJourney?.movementStatus))")
-        switch event {
-            case let .enteredStop(stopId:id):
-                //we're receiving entered data for the correct stop, and we're not yet counted as there
-                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .atStop {
-                    await self.journeyCommandValidator(JourneyCommand.executeEntry(stopId: id))
-                }
-            case let .exitedStop(stopId:id):
-                //we're receiving exited data for the correct stop, and we're currently counted as there
-                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .enRoute {
-                    await self.journeyCommandValidator(JourneyCommand.executeExit(stopId: id))
-                }
-                
-            default:
-                //handle monitoring and authorization error
-                print("uh")
-        }
-    }
-    
     //this will handle both widget and in app i think
     func manualEventValidator(_ event:ManualEvent) async{
         guard let currentStop = userDefaultsClient.loadActiveJourney()?.currentStop else { return }
@@ -149,6 +116,17 @@ actor JourneyEngine {
             if currentJourney.movementStatus == .atStop && currentJourney.currentStop?.mbtaStopId == id {
                 await handleJourneyAction(.departFromStop)
             }
+        case let .refreshTimes(stopId: id):
+            if currentJourney.movementStatus == .atStop,
+               let currentStop = currentJourney.currentStop,
+               currentStop.mbtaStopId == id {
+                await fetchPredictions(for: currentStop)
+            }
+        case .authorizationDenied:
+            print("no user deauthorized during journey")
+            
+        case .monitoringFailed(stopId: let stopId, error: let error):
+            print("monitoring failed for \(stopId): \(error)")
         }
     }
     
@@ -189,7 +167,7 @@ actor JourneyEngine {
         
         currentJourney.predictionState = .loading(stopId: currentStop.mbtaStopId)
         saveActiveJourneyAndPublish(currentJourney)
-        await fetchPredictions(for: currentStop)
+        await journeyCommandValidator(.refreshTimes(stopId: currentStop.mbtaStopId))
     }
     
     
@@ -263,5 +241,26 @@ actor JourneyEngine {
     func monitoringFailed(){
         
     }
+
+//    func locationEventValidator(_ event:LocationEvent) async {
+//        let currentJourney = userDefaultsClient.loadActiveJourney()
+//        await notificationsClient.debugStringNotification("JourneyEngine received \(event), currentStop: \(currentJourney?.currentStop?.mbtaStopId ?? "nil"), status: \(String(describing: currentJourney?.movementStatus))")
+//        switch event {
+//            case let .enteredStop(stopId:id):
+//                //we're receiving entered data for the correct stop, and we're not yet counted as there
+//                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .atStop {
+//                    await self.journeyCommandValidator(JourneyCommand.executeEntry(stopId: id))
+//                }
+//            case let .exitedStop(stopId:id):
+//                //we're receiving exited data for the correct stop, and we're currently counted as there
+//                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .enRoute {
+//                    await self.journeyCommandValidator(JourneyCommand.executeExit(stopId: id))
+//                }
+//                
+//            default:
+//                //handle monitoring and authorization error
+//                print("uh")
+//        }
+//    }
     
 }

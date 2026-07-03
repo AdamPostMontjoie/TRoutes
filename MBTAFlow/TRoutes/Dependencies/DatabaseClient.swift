@@ -18,7 +18,23 @@ struct DatabaseClient {
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?, String?) async throws -> Void
+    var matchTripID: @Sendable (String?, Int?, String?, Int?, String?, String?, String?) async throws -> TransitTripMatchResult?
+}
+
+struct TrackedStopSequenceEntry: Equatable, Sendable {
+    let sequenceNumber: Int
+    let platformId: String
+    let stationId: String
+    let sortIndex: Int
+}
+
+struct TransitTripMatchResult: Equatable, Sendable {
+    let patternId: String
+    let originSequence: Int
+    let destinationSequence: Int
+    let currentVehicleSequence: Int?
+    let currentPatternSequence: Int?
+    let trackedStopSequence: [TrackedStopSequenceEntry]
 }
 
 enum DatabaseError: Error, Equatable {
@@ -288,7 +304,7 @@ extension DatabaseClient: DependencyKey {
             },
             matchTripID: { routeID, directionID, currentPlatformID, currentSequenceNumber, currentVehicleStatus, originPlatformID, destinationPlatformID in
                 let context = ModelContext(sharedContainer)
-                try printLegPatternMatch(
+                return try matchLegPattern(
                     context: context,
                     routeID: routeID,
                     directionID: directionID,
@@ -305,7 +321,7 @@ extension DatabaseClient: DependencyKey {
     static let testValue: Self = .liveValue
 }
 
-private func printLegPatternMatch(
+private func matchLegPattern(
     context: ModelContext,
     routeID: String?,
     directionID: Int?,
@@ -314,7 +330,7 @@ private func printLegPatternMatch(
     currentVehicleStatus: String?,
     originPlatformID: String?,
     destinationPlatformID: String?
-) throws {
+) throws -> TransitTripMatchResult? {
     guard let routeID,
           let directionID else {
         print(
@@ -328,7 +344,7 @@ private func printLegPatternMatch(
 
             """
         )
-        return
+        return nil
     }
 
     let fallbackRouteID = routeID
@@ -410,7 +426,8 @@ private func printLegPatternMatch(
             score: score,
             originSequence: originEdge?.sequenceNumber,
             destinationSequence: destinationEdge?.sequenceNumber,
-            currentSequenceOnPattern: currentEdge?.sequenceNumber
+            currentSequenceOnPattern: currentEdge?.sequenceNumber,
+            sortedEdges: sortedEdges
         )
     }
     .sorted {
@@ -438,24 +455,24 @@ private func printLegPatternMatch(
 
             """
         )
-        return
+        return nil
     }
 
-    let orderingFailure: String
+    let sequenceCheck: String
     if bestPattern.originSequence == nil {
-        orderingFailure = "FAILURE: Origin stop was not found on selected pattern."
+        sequenceCheck = "FAILURE: Origin stop was not found on selected pattern."
     } else if bestPattern.destinationSequence == nil {
-        orderingFailure = "FAILURE: Destination stop was not found on selected pattern."
+        sequenceCheck = "FAILURE: Destination stop was not found on selected pattern."
     } else if let originSequence = bestPattern.originSequence,
               let destinationSequence = bestPattern.destinationSequence,
               originSequence >= destinationSequence {
-        orderingFailure = "FAILURE: Stop sequence is backwards for this leg. Origin seq \(originSequence), destination seq \(destinationSequence)."
+        sequenceCheck = "FAILURE: Stop sequence is backwards for this leg. Origin seq \(originSequence), destination seq \(destinationSequence)."
     } else if let originSequence = bestPattern.originSequence,
               let currentSequenceNumber,
               currentSequenceNumber > originSequence {
-        orderingFailure = "FAILURE: Vehicle current sequence \(currentSequenceNumber) is already past origin seq \(originSequence)."
+        sequenceCheck = "Vehicle has already passed origin seq \(originSequence)."
     } else {
-        orderingFailure = "Sequence check: OK"
+        sequenceCheck = "Sequence check: OK"
     }
 
     try printPatternMatch(
@@ -465,7 +482,7 @@ private func printLegPatternMatch(
         directionID: directionID,
         patternID: bestPattern.patternID,
         debugLines: [
-            orderingFailure,
+            sequenceCheck,
             "Fallback score:      \(bestPattern.score)",
             "Origin stop:         \(originPlatformID ?? "nil")",
             "Origin sequence:     \(bestPattern.originSequence.map(String.init) ?? "nil")",
@@ -477,6 +494,34 @@ private func printLegPatternMatch(
             "Current edge seq:    \(bestPattern.currentSequenceOnPattern.map(String.init) ?? "nil")",
             "Other candidates:    \(scoredPatterns.prefix(5).map { "\($0.patternID)=\($0.score)" }.joined(separator: ", "))"
         ]
+    )
+
+    guard let originSequence = bestPattern.originSequence,
+          let destinationSequence = bestPattern.destinationSequence,
+          originSequence < destinationSequence else {
+        return nil
+    }
+
+    let trackedStopSequence = bestPattern.sortedEdges
+        .filter { edge in
+            edge.sequenceNumber >= originSequence && edge.sequenceNumber <= destinationSequence
+        }
+        .map { edge in
+            TrackedStopSequenceEntry(
+                sequenceNumber: edge.sequenceNumber,
+                platformId: edge.platformId,
+                stationId: edge.stationId,
+                sortIndex: edge.sortIndex
+            )
+        }
+
+    return TransitTripMatchResult(
+        patternId: bestPattern.patternID,
+        originSequence: originSequence,
+        destinationSequence: destinationSequence,
+        currentVehicleSequence: currentSequenceNumber,
+        currentPatternSequence: bestPattern.currentSequenceOnPattern,
+        trackedStopSequence: trackedStopSequence
     )
 }
 
