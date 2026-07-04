@@ -19,7 +19,7 @@ struct RouteReviewFeature {
         return "\(firstLeg.startStop.stopName) to \(lastLeg.endStop.stopName)"
     }
     //renames routes if they're default and stops have changed, does not if customizing or customized
-    private func routeWithUpdatedDefaultName(previousRoute: RouteStruct?, updatedRoute: RouteStruct) -> RouteStruct {
+    private func routeWithUpdatedDefaultName(previousRoute: UserRoute?, updatedRoute: UserRoute) -> UserRoute {
         guard let previousRoute,
               previousRoute.name == defaultRouteName(for: previousRoute.legs),
               updatedRoute.name == previousRoute.name,
@@ -33,11 +33,11 @@ struct RouteReviewFeature {
     }
     @ObservableState
     struct State: Equatable {
-        var route: RouteStruct
+        var route: UserRoute
         var legRows: IdentifiedArrayOf<LegRowFeature.State> = []
         @Presents var destination: Destination.State?
 
-        init(route: RouteStruct) {
+        init(route: UserRoute) {
             self.route = route
             self.legRows = IdentifiedArray(
                 uniqueElements: route.legs.map { LegRowFeature.State(leg: $0) }
@@ -56,7 +56,7 @@ struct RouteReviewFeature {
 
         enum Delegate: Equatable {
             case deleteRoute(UUID)
-            case updateRoute(RouteStruct)
+            case updateRoute(UserRoute)
         }
     }
 

@@ -6,12 +6,13 @@
 //
 
 struct JourneyState: Equatable, Codable {
-    let route: RouteStruct
+    let route: UserRoute
     let stopSequence: [Stop]
     
     var stopIndex: Int = 0
     var movementStatus: MovementStatus = .enRoute
     var predictionState: PredictionState = .notNeeded
+    var monitoringMode:MonitoringMode = .underground
     
     var currentStop: Stop? {
         guard stopSequence.indices.contains(stopIndex) else {
@@ -24,7 +25,7 @@ struct JourneyState: Equatable, Codable {
         return stopIndex == stopSequence.count - 1 && movementStatus == .atStop
     }
     
-    init(route: RouteStruct) {
+    init(route: UserRoute) {
         self.route = route
         var sequence: [Stop] = []
         

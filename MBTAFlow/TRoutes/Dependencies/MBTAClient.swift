@@ -18,7 +18,10 @@ struct MBTAClient {
     var fetchRoutes: @Sendable (String, String) async throws -> String
     //position
     var fetchVehicleData: @Sendable (String) async throws -> VehicleData
+    var fetchTripTrackingData: @Sendable (String) async throws -> LiveTripTrackingData
 }
+
+
 
 let header = "https://api-v3.mbta.com/"
 
@@ -294,6 +297,27 @@ extension MBTAClient:DependencyKey {
             } catch {
                 throw MBTAError.decodingError
             }
+        },
+
+        fetchTripTrackingData: { tripId in
+            guard let encodedTripId = tripId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(header)trips/\(encodedTripId)?include=stops,predictions,vehicle,route_pattern") else {
+                throw MBTAError.networkError
+            }
+            print("MBTAClient fetchTripTrackingData URL: \(url.absoluteString)")
+
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            do {
+                let tripResponse = try decoder.decode(TripTrackingResponse.self, from: data)
+                return makeLiveTripTrackingData(from: tripResponse)
+            } catch {
+                throw MBTAError.decodingError
+            }
         }
     )
     static let testValue: Self = .liveValue //TODO figure out what the hell this is even about later
@@ -304,6 +328,52 @@ extension DependencyValues {
         get { self[MBTAClient.self] }
         set { self[MBTAClient.self] = newValue }
     }
+}
+
+private func makeLiveTripTrackingData(from response: TripTrackingResponse) -> LiveTripTrackingData {
+    let included = response.included ?? []
+    let includedById = Dictionary(uniqueKeysWithValues: included.map { ($0.id, $0) })
+    let vehicleId = response.data.relationships.vehicle?.data?.id
+    let includedVehicle = vehicleId.flatMap { includedById[$0] }
+    let stopNodes = response.data.relationships.stops?.data ?? []
+    let predictionNodes = response.data.relationships.predictions?.data ?? []
+
+    let stops = stopNodes.enumerated().compactMap { index, node -> LiveTripStop? in
+        guard node.type == "stop" else { return nil }
+        let includedStop = includedById[node.id]
+        return LiveTripStop(
+            stopId: node.id,
+            parentStationId: includedStop?.relationships?.parentStation?.data?.id,
+            name: includedStop?.attributes?.name,
+            orderIndex: index
+        )
+    }
+
+    let predictions = predictionNodes.compactMap { node -> LiveTripPrediction? in
+        guard node.type == "prediction",
+              let includedPrediction = includedById[node.id],
+              let stopId = includedPrediction.relationships?.stop?.data?.id else {
+            return nil
+        }
+
+        return LiveTripPrediction(
+            stopId: stopId,
+            apiStopSequence: includedPrediction.attributes?.stopSequence,
+            arrivalTime: includedPrediction.attributes?.arrivalTime,
+            departureTime: includedPrediction.attributes?.departureTime
+        )
+    }
+
+    return LiveTripTrackingData(
+        tripId: response.data.id,
+        vehicleId: vehicleId,
+        routePatternId: response.data.relationships.routePattern?.data?.id,
+        vehicleStopId: includedVehicle?.relationships?.stop?.data?.id,
+        vehicleStatus: includedVehicle?.attributes?.currentStatus,
+        vehicleApiStopSequence: includedVehicle?.attributes?.currentStopSequence,
+        stops: stops,
+        predictions: predictions
+    )
 }
 
 

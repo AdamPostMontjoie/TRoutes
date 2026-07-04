@@ -8,21 +8,6 @@
 import ComposableArchitecture
 import CoreLocation
 
-
-enum LocationEvent: Equatable {
-    case enteredStop(stopId: String)
-    case exitedStop(stopId: String)
-    case authorizationDenied
-    case monitoringFailed(stopId: String, error: locationError)
-}
-
-enum UndergroundEvent {
-    case enteredStop(stopId: String)
-    case exitedStop(stopId: String)
-    case authorizationDenied
-    case monitoringFailed(stopId: String, error: locationError)
-}
-
 enum ManualEvent: Equatable {
     case nextStopTapped
     case atStopTapped
@@ -31,6 +16,14 @@ enum ManualEvent: Equatable {
 enum JourneyCommand: Equatable {
     case executeEntry(stopId:String)
     case executeExit(stopId:String)
+    case refreshTimes(stopId: String)
+    case authorizationDenied
+    case monitoringFailed(stopId: String, error: locationError)
+}
+
+enum MonitoringMode:Equatable, Codable {
+    case underground
+    case surface
 }
 
 
@@ -44,10 +37,12 @@ actor JourneyEngine {
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.mbtaClient) var mbtaClient
+    @Dependency(\.databaseClient) var databaseClient
     
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private let journeyUpdates: AsyncStream<JourneyUpdate>
     private var locationListeningTask: Task<Void, Never>?
+    private var undergroundListeningTask: Task<Void, Never>?
     
     init(){
         var extractedContinuation: AsyncStream<JourneyUpdate>.Continuation?
@@ -75,7 +70,19 @@ actor JourneyEngine {
         
         locationListeningTask = Task {
             for await event in stream {
-                await self.locationEventValidator(event)
+                await self.journeyCommandValidator(event)
+            }
+            self.locationEventStreamDidFinish()
+        }
+    }
+    
+    func startListeningToUndergroundEvents() async {
+        guard undergroundListeningTask == nil else { return }
+        let stream = await UndergroundManager.shared.makeEventStream()
+        
+        undergroundListeningTask = Task {
+            for await event in stream {
+                await self.journeyCommandValidator(event)
             }
             self.locationEventStreamDidFinish()
         }
@@ -91,38 +98,21 @@ actor JourneyEngine {
     
     //this is what is called to start fresh route
     //This needs to be modified once we start differentiating between streams. 
-    func beginRoute(route:RouteStruct) async -> AsyncStream<JourneyUpdate> {
+    func beginRoute(route:UserRoute) async -> AsyncStream<JourneyUpdate> {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
-        
-        await startListeningToLocationEvents()
+        switch journey.monitoringMode {
+        case .underground:
+            await startListeningToUndergroundEvents()
+        case .surface:
+            await startListeningToLocationEvents()
+        }
         
         if let firstStop = journey.currentStop {
             await RegionManager.shared.startMonitoring(firstStop: firstStop)
             await self.fetchPredictions(for: firstStop)
         }
         return journeyUpdates
-    }
-    
-    func locationEventValidator(_ event:LocationEvent) async {
-        let currentJourney = userDefaultsClient.loadActiveJourney()
-        await notificationsClient.debugStringNotification("JourneyEngine received \(event), currentStop: \(currentJourney?.currentStop?.mbtaStopId ?? "nil"), status: \(String(describing: currentJourney?.movementStatus))")
-        switch event {
-            case let .enteredStop(stopId:id):
-                //we're receiving entered data for the correct stop, and we're not yet counted as there
-                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .atStop {
-                    await self.journeyCommandValidator(JourneyCommand.executeEntry(stopId: id))
-                }
-            case let .exitedStop(stopId:id):
-                //we're receiving exited data for the correct stop, and we're currently counted as there
-                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .enRoute {
-                    await self.journeyCommandValidator(JourneyCommand.executeExit(stopId: id))
-                }
-                
-            default:
-                //handle monitoring and authorization error
-                print("uh")
-        }
     }
     
     //this will handle both widget and in app i think
@@ -149,6 +139,17 @@ actor JourneyEngine {
             if currentJourney.movementStatus == .atStop && currentJourney.currentStop?.mbtaStopId == id {
                 await handleJourneyAction(.departFromStop)
             }
+        case let .refreshTimes(stopId: id):
+            if currentJourney.movementStatus == .atStop,
+               let currentStop = currentJourney.currentStop,
+               currentStop.mbtaStopId == id {
+                await fetchPredictions(for: currentStop)
+            }
+        case .authorizationDenied:
+            print("no user deauthorized during journey")
+            
+        case .monitoringFailed(stopId: let stopId, error: let error):
+            print("monitoring failed for \(stopId): \(error)")
         }
     }
     
@@ -189,7 +190,7 @@ actor JourneyEngine {
         
         currentJourney.predictionState = .loading(stopId: currentStop.mbtaStopId)
         saveActiveJourneyAndPublish(currentJourney)
-        await fetchPredictions(for: currentStop)
+        await journeyCommandValidator(.refreshTimes(stopId: currentStop.mbtaStopId))
     }
     
     
@@ -203,7 +204,7 @@ actor JourneyEngine {
         }
     }
     
-    //this will be heavily refactored, as it will depend on ug mode, movement status, and if next stop times
+
     private func savePredictionResult(for stop: Stop, result: Result<[TransitPrediction], Error>) async {
         guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
         // Can check against more specific request id guard, but for now ensure new stop wasn't set by another journey command while we awaited change.
@@ -221,14 +222,18 @@ actor JourneyEngine {
                 freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
                 //heavily gated later, just to test passing
                 if let firstPrediction = predictionResults.first,
-                   firstPrediction.vehicleId != nil {
-                    let currentLeg = freshJourney.route.legs.first { leg in
-                        leg.startStop.mbtaStopId == stop.mbtaStopId
+                   firstPrediction.tripId != nil {
+                    let resolvedRoute = await resolveRouteForUndergroundTracking(route: freshJourney.route)
+                    let currentLeg = resolvedRoute?.legs.first { leg in
+                        resolvedLeg(leg, startsAt: stop.mbtaStopId)
                     }
-                    await UndergroundManager.shared.updateTrackedVehicle(
-                        prediction: firstPrediction,
-                        leg: currentLeg
-                    )
+
+                    if let currentLeg {
+                        await UndergroundManager.shared.setTrackedVehicle(
+                            prediction: firstPrediction,
+                            leg: currentLeg
+                        )
+                    }
                 }
             }
         case .failure:
@@ -236,6 +241,22 @@ actor JourneyEngine {
         }
         
         saveActiveJourneyAndPublish(freshJourney)
+    }
+
+    // Temporary bridge until JourneyState owns resolved-route progress.
+    private func resolveRouteForUndergroundTracking(route: UserRoute) async -> ResolvedUserRoute? {
+        do {
+            return try await databaseClient.resolveUserRoute(route)
+        } catch {
+            print("JourneyEngine temporary route resolution failed: \(error)")
+            return nil
+        }
+    }
+
+    private func resolvedLeg(_ leg: ResolvedLeg, startsAt stopId: String) -> Bool {
+        leg.startStop.mbtaStopId == stopId ||
+        leg.startStop.platformId == stopId ||
+        leg.startStop.stationId == stopId
     }
     
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
@@ -256,6 +277,7 @@ actor JourneyEngine {
     func endRoute() async {
         clearActiveJourneyAndPublish()
         await RegionManager.shared.stopAll()
+        await UndergroundManager.shared.stopSession()
     }
     func authorizationDenied(){
         
@@ -263,5 +285,26 @@ actor JourneyEngine {
     func monitoringFailed(){
         
     }
+
+//    func locationEventValidator(_ event:LocationEvent) async {
+//        let currentJourney = userDefaultsClient.loadActiveJourney()
+//        await notificationsClient.debugStringNotification("JourneyEngine received \(event), currentStop: \(currentJourney?.currentStop?.mbtaStopId ?? "nil"), status: \(String(describing: currentJourney?.movementStatus))")
+//        switch event {
+//            case let .enteredStop(stopId:id):
+//                //we're receiving entered data for the correct stop, and we're not yet counted as there
+//                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .atStop {
+//                    await self.journeyCommandValidator(JourneyCommand.executeEntry(stopId: id))
+//                }
+//            case let .exitedStop(stopId:id):
+//                //we're receiving exited data for the correct stop, and we're currently counted as there
+//                if currentJourney?.currentStop?.mbtaStopId == id && currentJourney?.movementStatus != .enRoute {
+//                    await self.journeyCommandValidator(JourneyCommand.executeExit(stopId: id))
+//                }
+//                
+//            default:
+//                //handle monitoring and authorization error
+//                print("uh")
+//        }
+//    }
     
 }
