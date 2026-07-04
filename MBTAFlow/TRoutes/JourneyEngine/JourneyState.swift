@@ -12,6 +12,7 @@ struct JourneyState: Equatable, Codable {
     var stopIndex: Int = 0
     var movementStatus: MovementStatus = .enRoute
     var predictionState: PredictionState = .notNeeded
+    var monitoringMode:MonitoringMode = .underground
     
     var currentStop: Stop? {
         guard stopSequence.indices.contains(stopIndex) else {

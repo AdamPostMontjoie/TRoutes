@@ -21,7 +21,7 @@ enum JourneyCommand: Equatable {
     case monitoringFailed(stopId: String, error: locationError)
 }
 
-enum MonitoringMode:Equatable {
+enum MonitoringMode:Equatable, Codable {
     case underground
     case surface
 }
@@ -42,6 +42,7 @@ actor JourneyEngine {
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private let journeyUpdates: AsyncStream<JourneyUpdate>
     private var locationListeningTask: Task<Void, Never>?
+    private var undergroundListeningTask: Task<Void, Never>?
     
     init(){
         var extractedContinuation: AsyncStream<JourneyUpdate>.Continuation?
@@ -75,6 +76,18 @@ actor JourneyEngine {
         }
     }
     
+    func startListeningToUndergroundEvents() async {
+        guard locationListeningTask == nil else { return }
+        let stream = await UndergroundManager.shared.makeEventStream()
+        
+        locationListeningTask = Task {
+            for await event in stream {
+                await self.journeyCommandValidator(event)
+            }
+            self.locationEventStreamDidFinish()
+        }
+    }
+    
     private func locationEventStreamDidFinish() {
         locationListeningTask = nil
     }
@@ -88,8 +101,12 @@ actor JourneyEngine {
     func beginRoute(route:UserRoute) async -> AsyncStream<JourneyUpdate> {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
-        
-        await startListeningToLocationEvents()
+        switch journey.monitoringMode {
+        case .underground:
+            await startListeningToUndergroundEvents()
+        case .surface:
+            await startListeningToLocationEvents()
+        }
         
         if let firstStop = journey.currentStop {
             await RegionManager.shared.startMonitoring(firstStop: firstStop)
@@ -187,7 +204,7 @@ actor JourneyEngine {
         }
     }
     
-    //this will be heavily refactored, as it will depend on ug mode, movement status, and if next stop times
+
     private func savePredictionResult(for stop: Stop, result: Result<[TransitPrediction], Error>) async {
         guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
         // Can check against more specific request id guard, but for now ensure new stop wasn't set by another journey command while we awaited change.
@@ -260,6 +277,7 @@ actor JourneyEngine {
     func endRoute() async {
         clearActiveJourneyAndPublish()
         await RegionManager.shared.stopAll()
+        await UndergroundManager.shared.stopSession()
     }
     func authorizationDenied(){
         
