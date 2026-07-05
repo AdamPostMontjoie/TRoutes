@@ -18,38 +18,38 @@ class JsonImporter {
 
     func importIfNeeded() async throws -> Void {
         do {
-            print("importing stations")
+            
             var preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let stations: [JsonBuilderStation] = try decodeJsonBuilderFile(named: "stations")
             try await databaseClient.saveImportedStations(stations)
+            print("imported stations")
             
-            print("importing platforms" )
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let platforms: [JsonBuilderPlatform] = try decodeJsonBuilderFile(named: "platforms")
             try await databaseClient.saveImportedPlatforms(platforms)
+            print("imported platforms" )
             
-            print("importing patterns")
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let patterns: [JsonBuilderPattern] = try decodeJsonBuilderFile(named: "patterns")
             try await databaseClient.saveImportedPatterns(patterns)
+            print("imported patterns")
             
-            print("importing edges")
            preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let sequenceEdges: [JsonBuilderSequenceEdge] = try decodeJsonBuilderFile(named: "sequences")
             try await databaseClient.saveImportedSequenceEdges(sequenceEdges)
-            
+            print("imported edges")
             print("finished json importing")
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))

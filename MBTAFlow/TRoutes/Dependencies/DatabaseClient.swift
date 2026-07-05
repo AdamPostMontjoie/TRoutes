@@ -641,7 +641,7 @@ private func makeResolvedStop(
     station: TransitStation?,
     directionId: Int
 ) throws -> ResolvedStop {
-    guard let platform else {
+    guard platform != nil else {
         throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
     }
     guard let station else {

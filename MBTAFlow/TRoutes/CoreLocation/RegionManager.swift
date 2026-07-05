@@ -45,15 +45,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
      //   locationManager.startMonitoringSignificantLocationChanges()
     }
     
-    func startMonitoring(firstStop:ResolvedStop) {
-        self.currentStop = firstStop
-        if currentStop != nil{
-            registerRegion(for: currentStop!)
-        } else {
-            return
-        }
-    }
-    
     func registerRegion(for stop: ResolvedStop) {
         //remove all regions, 1 monitored maximum
         self.currentStop = stop
@@ -89,8 +80,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         clearMonitoredRegions()
         self.currentStop = nil
         self.lastKnownState = nil
-        continuation?.finish()
-        continuation = nil
+     //   continuation?.finish()
+      //  continuation = nil
         //clear persisted user defaults
     }
     private func clearMonitoredRegions(){

@@ -21,7 +21,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         case idle
         case waitingToBoard
         case trackingVehicle
-        case completed
     }
     
     private struct TrackedVehicleState {
@@ -35,17 +34,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         mutating func updateVehicleInfo(
             vehicleId: String? = nil,
             tripId: String? = nil,
-            stopId: String? = nil,
-            apiStopSequence: Int? = nil,
-            routeId: String? = nil,
-            status: String? = nil
+            stopId: String? = nil
         ) {
             self.currentVehicleId = vehicleId
             self.currentVehicleTrip = tripId
             self.currentVehicleStopId = stopId
-            self.currentVehicleAPIStopSequence = apiStopSequence
-            self.currentVehicleRouteId = routeId
-            self.currentVehicleStatus = status
         }
     }
 
@@ -53,50 +46,20 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         let vehicleStopId: String?
         let apiStopSequence: Int?
         let vehicleStatus: String?
-        let legStopIndex: Int?
-        let patternStopIndex: Int?
-        let patternEdgeSequenceNumber: Int?
-        let isBeforeOrigin: Bool
-        let isAtOrigin: Bool
-        let isBetweenOriginAndDestination: Bool
-        let isAtDestination: Bool
-        let isPastDestination: Bool
-
         init(
             vehicleStopId: String?,
             apiStopSequence: Int?,
-            vehicleStatus: String?,
-            legStop: ResolvedStop?,
-            patternStop: ResolvedPatternStop?,
-            leg: ResolvedLeg
+            vehicleStatus: String?
         ) {
             self.vehicleStopId = vehicleStopId
             self.apiStopSequence = apiStopSequence
             self.vehicleStatus = vehicleStatus
-            self.legStopIndex = legStop?.legStopIndex
-            self.patternStopIndex = patternStop?.patternStopIndex ?? legStop?.patternStopIndex
-            self.patternEdgeSequenceNumber = patternStop?.patternEdgeSequenceNumber ?? legStop?.patternEdgeSequenceNumber
-
-            if let patternStopIndex = self.patternStopIndex {
-                isBeforeOrigin = patternStopIndex < leg.originPatternStopIndex
-                isAtOrigin = patternStopIndex == leg.originPatternStopIndex
-                isBetweenOriginAndDestination = patternStopIndex > leg.originPatternStopIndex &&
-                    patternStopIndex < leg.destinationPatternStopIndex
-                isAtDestination = patternStopIndex == leg.destinationPatternStopIndex
-                isPastDestination = patternStopIndex > leg.destinationPatternStopIndex
-            } else {
-                isBeforeOrigin = false
-                isAtOrigin = false
-                isBetweenOriginAndDestination = false
-                isAtDestination = false
-                isPastDestination = false
-            }
         }
     }
     
     private var currentVehicle = TrackedVehicleState()
-    private var currentLeg: ResolvedLeg?
-    private var currentMatchedLegPath: MatchedLegPath?
+    private var currentStopToMonitorId: String?
+    private var previousVehiclePosition: TrackedVehiclePosition?
     private var currentVehiclePosition: TrackedVehiclePosition?
     private var phase: VehicleTrackingPhase = .idle
     
@@ -109,6 +72,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     func makeEventStream() -> AsyncStream<JourneyCommand> {
         AsyncStream { continuation in
+            print("UGM event stream created")
             self.continuation = continuation
 
             continuation.onTermination = { _ in
@@ -118,31 +82,33 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
 
     func startSession() {
+        print("UGM startSession")
         locationManager.allowsBackgroundLocationUpdates = true
         locationManager.pausesLocationUpdatesAutomatically = false
         locationManager.activityType = .otherNavigation
         locationManager.startUpdatingLocation()
 
-        guard currentVehicle.currentVehicleId != nil else { return }
+        guard currentVehicle.currentVehicleId != nil else {
+            print("UGM startSession no vehicle")
+            return
+        }
         Task { await fetchVehicleData() }
     }
     
-    //journey engine hands us a new vehicle to track
-    func setTrackedVehicle(prediction: TransitPrediction, leg: ResolvedLeg) async {
+    //journey engine hands us a vehicle to start tracking
+    func setTrackedVehicle(vehicleId:String, tripId:String, boardingStopId:String, waitToBoard:Bool) async {
         currentVehicle = TrackedVehicleState()
         currentVehicle.updateVehicleInfo(
-            vehicleId: prediction.vehicleId,
-            tripId: prediction.tripId,
-            stopId: prediction.stopId,
-            apiStopSequence: prediction.stopSequence,
-            routeId: leg.mbtaRouteId
+            vehicleId: vehicleId,
+            tripId: tripId
         )
-        currentLeg = leg
-        currentMatchedLegPath = nil
+        currentStopToMonitorId = boardingStopId
+        previousVehiclePosition = nil
         currentVehiclePosition = nil
         preparedCommand = nil
-        phase = .waitingToBoard
-        
+        phase = waitToBoard ? .waitingToBoard: .trackingVehicle
+        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard)")
+
         await fetchVehicleData()
     }
 
@@ -157,7 +123,10 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     //we will initially assume user always takes first available vehicle/vehicle of next time
     //this will not be accurate, so need to use incoming location data to determine
     private func fetchVehicleData() async {
-        guard let vehicleId = currentVehicle.currentVehicleId else { return }
+        guard let vehicleId = currentVehicle.currentVehicleId else {
+            print("UGM fetchVehicleData no vehicle")
+            return
+        }
         do {
             let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId)
             guard currentVehicle.currentVehicleId == vehicleId else {
@@ -180,29 +149,23 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
     private func handleVehicleData(vehicleData:VehicleData) async {
         updateVehicleData(with: vehicleData)
-        if phase == .idle || phase == .completed{
+        if phase == .idle {
+            print("UGM handleVehicleData idle")
             return
         }
-
-        let tripId = vehicleData.tripId ?? currentVehicle.currentVehicleTrip
-        let tripTrackingData: LiveTripTrackingData?
-        if let tripId, currentMatchedLegPath?.tripId != tripId {
-            tripTrackingData = await refreshTripTrackingData(tripId: tripId)
-        } else {
-            tripTrackingData = nil
-        }
-        
-        updateVehiclePosition(with: vehicleData, tripTrackingData: tripTrackingData)
+        updateVehiclePosition(with: vehicleData)
         printCurrentVehiclePosition()
-        
+
         if phase == .waitingToBoard {
+            print("UGM path waitingToBoard")
             evaluateBoardingProgress()
         }
         else if phase == .trackingVehicle {
+            print("UGM path trackingVehicle")
             evaluateTrackedVehicleProgress()
         }
 
-        if phase != .completed {
+        if phase != .idle {
             setTimer(time: 15)
         }        
     }
@@ -211,178 +174,92 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         currentVehicle.updateVehicleInfo(
             vehicleId: currentVehicle.currentVehicleId,
             tripId: vehicleData.tripId ?? currentVehicle.currentVehicleTrip,
-            stopId: vehicleData.stopId ?? currentVehicle.currentVehicleStopId,
-            apiStopSequence: vehicleData.currentStopSequence ?? currentVehicle.currentVehicleAPIStopSequence,
-            routeId: vehicleData.routeId ?? currentVehicle.currentVehicleRouteId,
-            status: vehicleData.currentStatus ?? currentVehicle.currentVehicleStatus
+            stopId: vehicleData.stopId ?? currentVehicle.currentVehicleStopId
         )
+        currentVehicle.currentVehicleAPIStopSequence = vehicleData.currentStopSequence ?? currentVehicle.currentVehicleAPIStopSequence
+        currentVehicle.currentVehicleStatus = vehicleData.currentStatus ?? currentVehicle.currentVehicleStatus
     }
 
 
-    private func refreshTripTrackingData(tripId:String) async -> LiveTripTrackingData? {
-        do {
-            let tripTrackingData = try await mbtaClient.fetchTripTrackingData(tripId)
-            currentVehicle.updateVehicleInfo(
-                vehicleId: currentVehicle.currentVehicleId ?? tripTrackingData.vehicleId,
-                tripId: tripTrackingData.tripId,
-                stopId: currentVehicle.currentVehicleStopId ?? tripTrackingData.vehicleStopId,
-                apiStopSequence: currentVehicle.currentVehicleAPIStopSequence ?? tripTrackingData.vehicleApiStopSequence,
-                routeId: currentVehicle.currentVehicleRouteId,
-                status: currentVehicle.currentVehicleStatus ?? tripTrackingData.vehicleStatus
-            )
-            // we need a new path once we get new trip data
-            updateMatchedLegPath(tripTrackingData: tripTrackingData)
-            return tripTrackingData
-        } catch {
-            handleVehicleFetchError(error: error)
-            return nil
-        }
-    }
+    private func updateVehiclePosition(with vehicleData: VehicleData) {
 
-    private func updateMatchedLegPath(tripTrackingData:LiveTripTrackingData) {
-        guard let currentLeg else {
-            currentMatchedLegPath = nil
-            return
-        }
-
-        guard currentMatchedLegPath?.matches(leg: currentLeg, tripId: tripTrackingData.tripId) != true else {
-            return
-        }
-
-        currentMatchedLegPath = MatchedLegPath(
-            leg: currentLeg,
-            tripTrackingData: tripTrackingData
-        )
-    }
-
-    private func updateVehiclePosition(with vehicleData: VehicleData, tripTrackingData: LiveTripTrackingData?) {
-        guard let currentLeg,
-              let currentMatchedLegPath else {
-            currentVehiclePosition = nil
-            return
-        }
-
-        let vehicleStopId = vehicleData.stopId ??
-            tripTrackingData?.vehicleStopId ??
-            currentVehicle.currentVehicleStopId
-        let apiStopSequence = vehicleData.currentStopSequence ??
-            tripTrackingData?.vehicleApiStopSequence ??
-            currentVehicle.currentVehicleAPIStopSequence
-        let vehicleStatus = (vehicleData.currentStatus ??
-            tripTrackingData?.vehicleStatus ??
-            currentVehicle.currentVehicleStatus)?.lowercased()
-
-        let legStop = currentMatchedLegPath.legStop(forVehicleStopId: vehicleStopId)
-        let patternStop = currentMatchedLegPath.patternStop(
-            forVehicleStopId: vehicleStopId,
-            apiStopSequence: apiStopSequence
-        )
-
+        let vehicleStopId = vehicleData.stopId ?? currentVehicle.currentVehicleStopId
+        let apiStopSequence = vehicleData.currentStopSequence ?? currentVehicle.currentVehicleAPIStopSequence
+        let vehicleStatus = (vehicleData.currentStatus ?? currentVehicle.currentVehicleStatus)?.lowercased()
+        previousVehiclePosition = currentVehiclePosition
         currentVehiclePosition = TrackedVehiclePosition(
             vehicleStopId: vehicleStopId,
             apiStopSequence: apiStopSequence,
-            vehicleStatus: vehicleStatus,
-            legStop: legStop,
-            patternStop: patternStop,
-            leg: currentLeg
+            vehicleStatus: vehicleStatus
         )
     }
 
     private func evaluateBoardingProgress() {
-        guard vehicleHasDepartedOrigin(),
-              let originStopId = currentLeg?.startStop.stationId else {
+        let hasDepartedStop = vehicleHasDepartedStop()
+        print("UGM boarding departed: \(hasDepartedStop)")
+        guard hasDepartedStop else {
             return
         }
 
         phase = .trackingVehicle
-        continuation?.yield(.executeExit(stopId: originStopId))
-        evaluateTrackedVehicleProgress()
+        if let currentStopToMonitorId {
+            print("UGM yield exit \(currentStopToMonitorId)")
+            continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
+        }
     }
 
     private func evaluateTrackedVehicleProgress() {
-        guard vehicleHasStoppedAtDestination(),
-              let destinationStopId = currentLeg?.endStop.stationId else {
-            return
+        let hasEnteredStop = vehicleHasEnteredStop()
+        let hasDepartedStop = vehicleHasDepartedStop()
+        print("UGM tracking entered: \(hasEnteredStop) departed: \(hasDepartedStop)")
+        if hasEnteredStop,
+           let currentStopToMonitorId {
+            print("UGM yield entry \(currentStopToMonitorId)")
+            continuation?.yield(.executeEntry(stopId: currentStopToMonitorId))
+        } else if hasDepartedStop,
+                  let currentStopToMonitorId {
+            print("UGM yield exit \(currentStopToMonitorId)")
+            continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
         }
-
-        phase = .completed
-        cancelTimer()
-        continuation?.yield(.executeEntry(stopId: destinationStopId))
     }
 
-    private func vehicleHasDepartedOrigin() -> Bool {
-        guard let currentVehiclePosition else { return false }
-        return currentVehiclePosition.isBetweenOriginAndDestination ||
-            currentVehiclePosition.isAtDestination ||
-            currentVehiclePosition.isPastDestination
-    }
+    private func vehicleHasDepartedStop() -> Bool {
+        guard let currentStopToMonitorId,
+              let previousVehiclePosition,
+              let currentVehiclePosition else { return false }
 
-    private func vehicleHasStoppedAtDestination() -> Bool {
-        guard let currentVehiclePosition else { return false }
-        return currentVehiclePosition.isAtDestination &&
+        let wasStoppedAtTrackedStop = previousVehiclePosition.vehicleStopId == currentStopToMonitorId &&
+            previousVehiclePosition.vehicleStatus == "stopped_at"
+        let isStillStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId == currentStopToMonitorId &&
             currentVehiclePosition.vehicleStatus == "stopped_at"
+
+        return wasStoppedAtTrackedStop && !isStillStoppedAtTrackedStop
+    }
+
+    //check if we've entered the tracked stop.
+    private func vehicleHasEnteredStop() -> Bool {
+        guard let currentStopToMonitorId,
+              let currentVehiclePosition else { return false }
+
+        let isStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId == currentStopToMonitorId &&
+            currentVehiclePosition.vehicleStatus == "stopped_at"
+        let wasAlreadyStoppedAtTrackedStop = previousVehiclePosition?.vehicleStopId == currentStopToMonitorId &&
+            previousVehiclePosition?.vehicleStatus == "stopped_at"
+
+        return isStoppedAtTrackedStop && !wasAlreadyStoppedAtTrackedStop
     }
 
     private func printCurrentVehiclePosition() {
-        guard let currentLeg,
-              let currentVehiclePosition else {
-            return
-        }
-
-        let tripId = currentVehicle.currentVehicleTrip ?? currentMatchedLegPath?.tripId ?? "nil"
-        let currentVehicleStopIdText = currentVehiclePosition.vehicleStopId ?? "nil"
-        let currentVehicleAPIStopSequenceText = currentVehiclePosition.apiStopSequence.map(String.init) ?? "nil"
-        let currentVehicleStatusText = currentVehiclePosition.vehicleStatus ?? "nil"
-        let currentVehicleLegStopIndexText = currentVehiclePosition.legStopIndex.map(String.init) ?? "nil"
-        let currentVehiclePatternIndexText = currentVehiclePosition.patternStopIndex.map(String.init) ?? "nil"
-        let currentVehiclePatternEdgeSequenceText = currentVehiclePosition.patternEdgeSequenceNumber.map(String.init) ?? "nil"
-
-        var output = """
-
-        === Live Trip Tracking Match ===
-        Trip:               \(tripId)
-        Route:              \(currentLeg.mbtaRouteId)
-        Direction:          \(currentLeg.mbtaDirectionId)
-        Pattern:            \(currentLeg.selectedPatternId)
-        Origin stop:         \(currentLeg.startStop.stationId)
-        Origin leg stop index: \(currentLeg.startStop.legStopIndex)
-        Origin pattern index: \(currentLeg.originPatternStopIndex)
-        Origin pattern edge sequence: \(currentLeg.originPatternEdgeSequenceNumber)
-        Destination stop:    \(currentLeg.endStop.stationId)
-        Destination leg stop index: \(currentLeg.endStop.legStopIndex)
-        Destination pattern index: \(currentLeg.destinationPatternStopIndex)
-        Destination pattern edge sequence: \(currentLeg.destinationPatternEdgeSequenceNumber)
-        Current stop:        \(currentVehicleStopIdText)
-        Current API stop sequence: \(currentVehicleAPIStopSequenceText)
-        Current API vehicle status:    \(currentVehicleStatusText)
-        Current leg stop index: \(currentVehicleLegStopIndexText)
-        Current pattern index: \(currentVehiclePatternIndexText)
-        Current pattern edge sequence: \(currentVehiclePatternEdgeSequenceText)
-
-        LEG_INDEX   PAT_INDEX   EDGE_SEQUENCE   PLATFORM        STATION
-        -----------------------------------------------
-        """
-
-        for stop in currentLeg.stops {
-            output += "\n\(stop.legStopIndex)     \(stop.patternStopIndex)     \(stop.patternEdgeSequenceNumber)     \(stop.platformId) \(stop.stopName)"
-        }
-
-//        output += """
-//
-//
-//        FULL PATTERN
-//        PAT_INDEX   EDGE_SEQUENCE   PLATFORM        STATION
-//        -----------------------------------------------
-//        """
-//
-//        for stop in currentLeg.patternStops {
-//            output += "\n\(stop.patternStopIndex)     \(stop.patternEdgeSequenceNumber)     \(stop.platformId) \(stop.stopName)"
-//        }
-
-        output += "\n=========================="
-        print(output)
+        let previousStop = previousVehiclePosition?.vehicleStopId ?? "nil"
+        let previousStatus = previousVehiclePosition?.vehicleStatus ?? "nil"
+        let currentStop = currentVehiclePosition?.vehicleStopId ?? "nil"
+        let currentStatus = currentVehiclePosition?.vehicleStatus ?? "nil"
+        let currentSequence = currentVehiclePosition?.apiStopSequence.map(String.init) ?? "nil"
+        let watchedStop = currentStopToMonitorId ?? "nil"
+        print("UGM position watch: \(watchedStop) previous: \(previousStop) \(previousStatus) current: \(currentStop) \(currentStatus) seq: \(currentSequence)")
     }
-    
+
+
     //if we can't get any info, that will be an error
     //specific enum will be defined, this is different than a prediction error
     private func handleVehicleFetchError(error: Error){
@@ -408,8 +285,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
     private func resetTracking() {
         currentVehicle = TrackedVehicleState()
-        currentLeg = nil
-        currentMatchedLegPath = nil
+        currentStopToMonitorId = nil
+        previousVehiclePosition = nil
         currentVehiclePosition = nil
         preparedCommand = nil
         phase = .idle

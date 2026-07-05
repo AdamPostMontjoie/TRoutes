@@ -38,6 +38,7 @@ struct JourneyState: Equatable, Codable {
         let stops = route.legs.flatMap(\.stops)
         self.stopOrder = stops
         self.legOrder = route.legs
+        self.monitoringMode = stops.first?.monitoringMode ?? .underground
         self.predictionState = stops.first.map { .loading(stopId: $0.mbtaStopId) } ?? .notNeeded
     }
     
@@ -48,8 +49,15 @@ struct JourneyState: Equatable, Codable {
             return nil
         }
 
+        let nextStop = stopOrder[nextIndex]
         stopIndex = nextIndex
-        return stopOrder[stopIndex]
+        monitoringMode = nextStop.monitoringMode
+
+        if legOrder.indices.contains(nextStop.legIndex) {
+            legIndex = nextStop.legIndex
+        }
+
+        return nextStop
     }
     
     //
@@ -75,4 +83,9 @@ enum PredictionState: Equatable, Codable {
 enum MovementStatus: Codable {
     case enRoute
     case atStop
+}
+
+enum MonitoringMode:Equatable, Codable {
+    case underground
+    case surface
 }
