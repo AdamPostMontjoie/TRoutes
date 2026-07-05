@@ -35,7 +35,6 @@ actor JourneyEngine {
     @Dependency(\.databaseClient) var databaseClient
     
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
-    private let journeyUpdates: AsyncStream<JourneyUpdate>
     private var locationListeningTask: Task<Void, Never>?
     private var undergroundListeningTask: Task<Void, Never>?
     
@@ -44,17 +43,6 @@ actor JourneyEngine {
     private var trackedVehicleId: String?
     private var trackedTripId: String?
     private var trackedBoardingStopId: String?
-    
-    init(){
-        var extractedContinuation: AsyncStream<JourneyUpdate>.Continuation?
-        self.journeyUpdates = AsyncStream { continuation in
-            extractedContinuation = continuation
-            continuation.onTermination = { _ in
-                
-            }
-        }
-        self.journeyUpdateContinuation = extractedContinuation
-    }
     
     func restoreActiveJourneyIfNeeded() async {
         guard let journey = userDefaultsClient.loadActiveJourney(),
@@ -87,12 +75,16 @@ actor JourneyEngine {
                 print("JourneyEngine received underground command: \(event)")
                 await self.journeyCommandValidator(event)
             }
-            self.locationEventStreamDidFinish()
+            self.undergroundEventStreamDidFinish()
         }
     }
     
     private func locationEventStreamDidFinish() {
         locationListeningTask = nil
+    }
+    
+    private func undergroundEventStreamDidFinish() {
+        undergroundListeningTask = nil
     }
     
     func requestAuthorization() async {
@@ -102,19 +94,22 @@ actor JourneyEngine {
     //this is what is called to start fresh route
     //This needs to be modified once we start differentiating between streams. 
     func beginRoute(route:ResolvedUserRoute) async -> AsyncStream<JourneyUpdate> {
+        let (stream, continuation) = AsyncStream<JourneyUpdate>.makeStream()
+        self.journeyUpdateContinuation = continuation
+        
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         if let firstStop = journey.currentStop {
-                await startListeningToUndergroundEvents()
+            if firstStop.monitoringMode == .surface {
                 await startListeningToLocationEvents()
-                await monitorNextStop(stop: firstStop)
-                
-            
+            } else {
+                await startListeningToUndergroundEvents()
+            }
+            await monitorNextStop(stop: firstStop)
             await self.fetchPredictions(for: firstStop)
         }
         
-        
-        return journeyUpdates
+        return stream
     }
     
     //this will handle both widget and in app i think
@@ -206,12 +201,14 @@ actor JourneyEngine {
             await UndergroundManager.shared.stopSession()
             //start RGM
             print("surface monitoring")
+            await startListeningToLocationEvents()
             break
         case .underground:
             //end RGM
             await RegionManager.shared.stopAll()
             //start UGM
             print("underground monitoring")
+            await startListeningToUndergroundEvents()
             break
         }
         saveActiveJourneyAndPublish(currentJourney)
@@ -229,6 +226,7 @@ actor JourneyEngine {
             await RegionManager.shared.registerRegion(for: stop)
         case .underground:
             print("underground monitoring")
+            await UndergroundManager.shared.startSession()
             if await prepareTrackedVehicleForUndergroundMonitoring(stop: stop, journey: currentJourney),
                let trackedVehicleId,
                let trackedTripId {
@@ -379,7 +377,8 @@ actor JourneyEngine {
     private func clearActiveJourneyAndPublish() {
         userDefaultsClient.clearActiveJourney()
         journeyUpdateContinuation?.yield(.activeJourneyChanged(nil))
-        //terminate stream here too
+        journeyUpdateContinuation?.finish()
+        journeyUpdateContinuation = nil
     }
     
     func sendNotificaition(message:String) async{
