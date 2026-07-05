@@ -17,6 +17,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
     private let locationManager = CLLocationManager()
 
+    override init() {
+        super.init()
+        locationManager.delegate = self
+    }
+
     private enum VehicleTrackingPhase {
         case idle
         case waitingToBoard
@@ -63,6 +68,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var currentVehiclePosition: TrackedVehiclePosition?
     private var phase: VehicleTrackingPhase = .idle
     
+    // GPS proximity detection for first underground boarding stop
+    private var boardingStopCoordinate: CLLocationCoordinate2D?
+    private var isFirstStop = false
+    private var hasYieldedInitialEntry = false
+    
     private var preparedCommand: JourneyCommand?
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
     
@@ -96,7 +106,15 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
     
     //journey engine hands us a vehicle to start tracking
-    func setTrackedVehicle(vehicleId:String, tripId:String, boardingStopId:String, waitToBoard:Bool) async {
+    func setTrackedVehicle(
+        vehicleId: String,
+        tripId: String,
+        boardingStopId: String,
+        waitToBoard: Bool,
+        stopLatitude: Double,
+        stopLongitude: Double,
+        isFirstStop: Bool
+    ) async {
         currentVehicle = TrackedVehicleState()
         currentVehicle.updateVehicleInfo(
             vehicleId: vehicleId,
@@ -107,16 +125,31 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         currentVehiclePosition = nil
         preparedCommand = nil
         phase = waitToBoard ? .waitingToBoard: .trackingVehicle
-        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard)")
+        
+        boardingStopCoordinate = CLLocationCoordinate2D(
+            latitude: stopLatitude, longitude: stopLongitude
+        )
+        self.isFirstStop = isFirstStop
+        hasYieldedInitialEntry = false
+        
+        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard) isFirstStop: \(isFirstStop)")
 
         await fetchVehicleData()
     }
 
 
-    func stopSession() {
+    func stopFunction() {
         locationManager.stopUpdatingLocation()
         cancelTimer()
         resetTracking()
+    }
+    
+    func killManager(){
+        locationManager.stopUpdatingLocation()
+        cancelTimer()
+        resetTracking()
+        continuation?.finish()
+        continuation = nil
     }
     
     //polls api for where the current vehicle is.
@@ -166,6 +199,10 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         }
 
         if phase != .idle {
+            // Refresh predictions on each poll tick
+            if let stopId = currentStopToMonitorId {
+                continuation?.yield(.refreshTimes(stopId: stopId))
+            }
             setTimer(time: 15)
         }        
     }
@@ -290,10 +327,32 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         currentVehiclePosition = nil
         preparedCommand = nil
         phase = .idle
+        boardingStopCoordinate = nil
+        isFirstStop = false
+        hasYieldedInitialEntry = false
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        //continuation?.yield(.locationUpdate(locations))
+        guard phase == .waitingToBoard,
+              isFirstStop,
+              !hasYieldedInitialEntry,
+              let boardingCoord = boardingStopCoordinate,
+              let userLocation = locations.last else { return }
+        
+        let stopLocation = CLLocation(
+            latitude: boardingCoord.latitude,
+            longitude: boardingCoord.longitude
+        )
+        let distance = userLocation.distance(from: stopLocation)
+        print("UGM proximity check: \(distance)m from boarding stop")
+        
+        if distance < 150 {
+            hasYieldedInitialEntry = true
+            if let stopId = currentStopToMonitorId {
+                print("UGM proximity entry for first stop \(stopId)")
+                continuation?.yield(.executeEntry(stopId: stopId))
+            }
+        }
     }
     //used to handle pause, which ios will do if location doesn't change for enough time
     //we can possibly use the countdown timer to determine when we want to restart updates

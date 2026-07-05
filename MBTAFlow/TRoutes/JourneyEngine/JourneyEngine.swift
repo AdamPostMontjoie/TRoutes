@@ -22,9 +22,9 @@ enum JourneyCommand: Equatable {
 }
 
 
-///Manages Reacting to Journey Events
+///Manages The Journey
 actor JourneyEngine {
-    
+
     ///Singleton
     static let shared = JourneyEngine()
     
@@ -37,6 +37,7 @@ actor JourneyEngine {
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private var locationListeningTask: Task<Void, Never>?
     private var undergroundListeningTask: Task<Void, Never>?
+    private var predictionRefreshTask: Task<Void, Never>?
     
     //underground fields
     private var matchedPath:MatchedLegPath?
@@ -102,6 +103,7 @@ actor JourneyEngine {
         if let firstStop = journey.currentStop {
             if firstStop.monitoringMode == .surface {
                 await startListeningToLocationEvents()
+                startPredictionRefreshTimer()
             } else {
                 await startListeningToUndergroundEvents()
             }
@@ -198,18 +200,18 @@ actor JourneyEngine {
         switch newMode {
         case .surface:
             //end UGM
-            await UndergroundManager.shared.stopSession()
+            await UndergroundManager.shared.stopFunction()
             //start RGM
             print("surface monitoring")
             await startListeningToLocationEvents()
-            break
+            startPredictionRefreshTimer()
         case .underground:
             //end RGM
-            await RegionManager.shared.stopAll()
+            await RegionManager.shared.stopFunction()
+            stopPredictionRefreshTimer()
             //start UGM
             print("underground monitoring")
             await startListeningToUndergroundEvents()
-            break
         }
         saveActiveJourneyAndPublish(currentJourney)
     }
@@ -235,7 +237,10 @@ actor JourneyEngine {
                     vehicleId: trackedVehicleId,
                     tripId: trackedTripId,
                     boardingStopId: stop.mbtaStopId,
-                    waitToBoard: stop.journeyRole != .final && stop.journeyRole != .intermediate
+                    waitToBoard: stop.journeyRole != .final && stop.journeyRole != .intermediate,
+                    stopLatitude: stop.latitude,
+                    stopLongitude: stop.longitude,
+                    isFirstStop: currentJourney.stopIndex == 0
                 )
             } else {
                 print("JourneyEngine underground tracking not ready for \(stop.mbtaStopId)")
@@ -314,7 +319,6 @@ actor JourneyEngine {
     private func refreshTripTrackingData(tripId:String) async  {
         do {
             let tripTrackingData = try await mbtaClient.fetchTripTrackingData(tripId)
-            
             // we need a new path once we get new trip data
             updateMatchedLegPath(tripTrackingData: tripTrackingData)
             
@@ -387,18 +391,46 @@ actor JourneyEngine {
     
     func endRoute() async {
         clearActiveJourneyAndPublish()
+        stopPredictionRefreshTimer()
         matchedPath = nil
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
-        await RegionManager.shared.stopAll()
-        await UndergroundManager.shared.stopSession()
+        await RegionManager.shared.killManager()
+        await UndergroundManager.shared.killManager()
     }
     func authorizationDenied(){
         
     }
     func monitoringFailed(){
         
+    }
+    
+    // MARK: - Prediction Refresh Timer (surface mode)
+    
+    private func startPredictionRefreshTimer() {
+        stopPredictionRefreshTimer()
+        predictionRefreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled else { break }
+                guard let currentJourney = userDefaultsClient.loadActiveJourney(),
+                      let currentStop = currentJourney.currentStop else { continue }
+                
+                switch currentJourney.predictionState {
+                case .loaded, .unavailable:
+                    print("JourneyEngine prediction refresh timer: refreshing for \(currentStop.mbtaStopId)")
+                    await fetchPredictions(for: currentStop)
+                case .loading, .notNeeded:
+                    break
+                }
+            }
+        }
+    }
+    
+    private func stopPredictionRefreshTimer() {
+        predictionRefreshTask?.cancel()
+        predictionRefreshTask = nil
     }
     
 }

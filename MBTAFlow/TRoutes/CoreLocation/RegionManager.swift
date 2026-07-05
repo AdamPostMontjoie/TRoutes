@@ -73,17 +73,23 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     private func authorizationDenied(){
         continuation?.yield(.authorizationDenied)
-        self.stopAll()
+        self.killManager()
     }
     
-    func stopAll() {
+    func stopFunction() {
         clearMonitoredRegions()
         self.currentStop = nil
         self.lastKnownState = nil
-     //   continuation?.finish()
-      //  continuation = nil
-        //clear persisted user defaults
     }
+    
+    func killManager(){
+        clearMonitoredRegions()
+        self.currentStop = nil
+        self.lastKnownState = nil
+        continuation?.finish()
+        continuation = nil
+    }
+    
     private func clearMonitoredRegions(){
         locationManager.monitoredRegions.forEach {
             print("Removing montitored region")

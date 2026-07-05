@@ -119,17 +119,43 @@ struct ActiveJourneyDisplayView: View {
     }
     
     private var stopDisplayText: String {
-            guard let journey = store.journey, let stopName = journey.currentStop?.stopName else {
-                return ""
-            }
-            
-            switch journey.movementStatus {
-            case .atStop:
-                return "At: \(stopName)"
-            case .enRoute:
-                return "En route to: \(stopName)"
-            }
+        guard let journey = store.journey,
+              let currentStop = journey.currentStop,
+              let finalStop = journey.stopOrder.last else {
+            return ""
         }
+        
+        let totalStops = journey.stopOrder.count
+        let currentIndex = journey.stopIndex
+        
+        //boarding
+        if currentIndex == 0 && journey.movementStatus == .atStop {
+            return "At: \(currentStop.stopName)"
+        }
+        
+        //at final
+        if currentIndex == totalStops - 1 && journey.movementStatus == .atStop {
+            return "Arrived at \(finalStop.stopName)"
+        }
+        
+        // Calculate stops remaining to arrive at
+        let stopsRemaining = journey.movementStatus == .atStop
+            ? (totalStops - 1 - currentIndex)
+            : (totalStops - currentIndex)
+            
+        //approaching
+        if stopsRemaining == 1 {
+            return "Approaching \(finalStop.stopName)"
+        }
+        
+        //mid journey
+        let stopsText = stopsRemaining == 1 ? "1 stop" : "\(stopsRemaining) stops"
+        if journey.movementStatus == .atStop {
+            return "At: \(currentStop.stopName) • \(stopsText) to \(finalStop.stopName)"
+        } else {
+            return "En Route to: \(currentStop.stopName) • \(stopsText) to \(finalStop.stopName)"
+        }
+    }
     
     @ViewBuilder
     private var predictionTimesView: some View {

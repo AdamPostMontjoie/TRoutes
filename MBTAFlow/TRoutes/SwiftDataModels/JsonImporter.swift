@@ -75,6 +75,14 @@ class JsonImporter {
         if let url = Bundle.main.url(
             forResource: fileName,
             withExtension: "json",
+            subdirectory: "Resources/JsonBuilder"
+        ) {
+            return url
+        }
+
+        if let url = Bundle.main.url(
+            forResource: fileName,
+            withExtension: "json",
             subdirectory: "JsonBuilder"
         ) {
             return url
@@ -95,6 +103,9 @@ class JsonImporter {
             .deletingLastPathComponent()
         let workspaceURL = repositoryURL.deletingLastPathComponent()
         let developmentURL = workspaceURL
+            .appending(path: "MBTAFlow")
+            .appending(path: "TRoutes")
+            .appending(path: "Resources")
             .appending(path: "JsonBuilder")
             .appending(path: "\(fileName).json")
 
