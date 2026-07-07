@@ -30,6 +30,17 @@ struct RouteStarterView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4) // Adds breathing room between banner and list
                     .transition(.move(edge: .top).combined(with: .opacity))
+
+                    if store.isDebugActive {
+                        DebugDashboardView(
+                            store: store.scope(
+                                state: \.debugDashboardDisplay,
+                                action: \.debugDashboardDisplay
+                            )
+                        )
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
 
                 // The List takes up the remaining vertical space
@@ -61,6 +72,7 @@ struct RouteStarterView: View {
             }
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isDebugActive)
         } destination: { store in
             RouteReviewView(store: store)
         }

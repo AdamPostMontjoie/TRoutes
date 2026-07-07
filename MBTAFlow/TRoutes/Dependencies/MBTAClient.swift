@@ -63,7 +63,7 @@ extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop in
             //filter out any that are in past and then return next 3.
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
                 throw MBTAError.networkError
             }
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")

@@ -23,17 +23,33 @@ struct RouteStarterFeature {
                 // without allowing child mutations.
             }
         }
+        var debugDashboardDisplay:DebugDashboardFeature.State {
+            get {
+                DebugDashboardFeature.State(journey: activeJourney)
+            }
+            set {
+                // Intentionally blank to satisfy WritableKeyPath requirement
+                // without allowing child mutations.
+            }
+        }
         var routeSelector = SelectorFeature.State()
         var isActiveJourneyPresented = false
         var activeJourney: JourneyState?
+        var isDebugAvailable = DebugAvailability.current
+        @Shared(.isDebugEnabled) var isDebugEnabled = true
         // Holds route while user tries to setup location permissions.
         var pendingRoute: ResolvedUserRoute?
         
         @Presents var destination: Destination.State?
+
+        var isDebugActive: Bool {
+            isDebugAvailable && isDebugEnabled
+        }
     }
     
     enum Action: Equatable {
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
+        case debugDashboardDisplay(DebugDashboardFeature.Action)
         case onCreateButtonTapped
         case onSettingsButtonTapped
         case routeSelector(SelectorFeature.Action)
@@ -61,6 +77,9 @@ struct RouteStarterFeature {
     var body: some ReducerOf<Self> {
         Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {
             ActiveJourneyDisplayFeature()
+        }
+        Scope(state: \.debugDashboardDisplay, action: \.debugDashboardDisplay) {
+            DebugDashboardFeature()
         }
         Scope(state: \.routeSelector, action: \.routeSelector) {
             SelectorFeature()
@@ -213,7 +232,7 @@ struct RouteStarterFeature {
                     await endRoute()
                 }
 
-            case .activeJourneyDisplay, .routeSelector, .destination:
+            case .activeJourneyDisplay, .debugDashboardDisplay, .routeSelector, .destination:
                 return .none
             }
         }
