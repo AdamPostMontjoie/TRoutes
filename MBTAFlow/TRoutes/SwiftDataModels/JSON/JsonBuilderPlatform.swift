@@ -11,7 +11,8 @@ struct JsonBuilderPlatform: Decodable, Equatable {
     let name: String
     let latitude: Double?
     let longitude: Double?
-    let transitType: String
+    let monitoringMode: String
+    let transitType: GTFSTransitType
     let patterns: [String]
 
     var stationId: String {

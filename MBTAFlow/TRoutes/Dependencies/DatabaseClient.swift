@@ -56,8 +56,8 @@ final class TransitReferenceImportMetadata {
 extension DatabaseClient: DependencyKey {
     static let liveValue:Self  = {
         let metadataId = "transit-reference-data"
-        let schemaVersion = 2
-        let feedVersion = "jsonbuilder-v2"
+        let schemaVersion = 3
+        let feedVersion = "jsonbuilder-v3"
         let sharedContainer: ModelContainer
             do {
                 let appSupport = try FileManager.default.url(
@@ -221,7 +221,8 @@ extension DatabaseClient: DependencyKey {
                             name: platform.name,
                             latitude: latitude,
                             longitude: longitude,
-                            transitType: platform.transitType,
+                            monitoringMode: platform.monitoringMode,
+                            transitType: platform.transitType.rawValue,
                             patternIds: platform.patternIds,
                             station: station
                         )
@@ -641,7 +642,7 @@ private func makeResolvedStop(
     station: TransitStation?,
     directionId: Int
 ) throws -> ResolvedStop {
-    guard platform != nil else {
+    guard let platform else {
         throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
     }
     guard let station else {
@@ -682,7 +683,8 @@ private func makeResolvedStop(
         latitude: station.latitude,
         address: station.municipality ?? leg.startStop.address,
         journeyRole: journeyRole,
-        monitoringMode: station.monitoringMode.resolvedMonitoringMode,
+        monitoringMode: platform.monitoringMode.resolvedMonitoringMode,
+        transitType: platform.transitType.resolvedGTFSTransitType,
         overlapsWithNext: overlapsWithNext
     )
 }
@@ -693,7 +695,7 @@ private func makeResolvedPatternStop(
     platform: TransitPlatform?,
     station: TransitStation?
 ) throws -> ResolvedPatternStop {
-    guard platform != nil else {
+    guard let platform else {
         throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
     }
     guard let station else {
@@ -706,7 +708,8 @@ private func makeResolvedPatternStop(
         platformId: edge.platformId,
         stationId: edge.stationId,
         stopName: station.name,
-        monitoringMode: station.monitoringMode.resolvedMonitoringMode
+        monitoringMode: platform.monitoringMode.resolvedMonitoringMode,
+        transitType: platform.transitType.resolvedGTFSTransitType
     )
 }
 
@@ -719,6 +722,13 @@ private func resolvedStopMatchesUserStop(
 }
 
 private extension String {
+    var resolvedGTFSTransitType: GTFSTransitType {
+        guard let transitType = GTFSTransitType(rawValue: self) else {
+            preconditionFailure("Unknown GTFS transit type: \(self)")
+        }
+        return transitType
+    }
+
     var resolvedMonitoringMode: MonitoringMode {
         switch lowercased() {
         case "underground":

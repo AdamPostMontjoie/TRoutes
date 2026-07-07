@@ -15,6 +15,7 @@ final class TransitPlatform {
     var name: String
     var latitude: Double
     var longitude: Double
+    var monitoringMode: String
     var transitType: String
     var patternIds: [String]
     var station: TransitStation?
@@ -27,6 +28,7 @@ final class TransitPlatform {
         name: String,
         latitude: Double,
         longitude: Double,
+        monitoringMode: String,
         transitType: String,
         patternIds: [String] = [],
         station: TransitStation? = nil,
@@ -37,6 +39,7 @@ final class TransitPlatform {
         self.name = name
         self.latitude = latitude
         self.longitude = longitude
+        self.monitoringMode = monitoringMode
         self.transitType = transitType
         self.patternIds = patternIds
         self.station = station

@@ -25,6 +25,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
     var address: String // display on review feature
     var journeyRole: JourneyStopRole = .boarding
     var monitoringMode:MonitoringMode
+    var transitType: GTFSTransitType
     var overlapsWithNext: Bool
     var stopType: StopType
 
@@ -46,6 +47,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
         address: String,
         journeyRole: JourneyStopRole = .boarding,
         monitoringMode: MonitoringMode,
+        transitType: GTFSTransitType,
         overlapsWithNext: Bool = true
     ) {
         self.id = id
@@ -66,6 +68,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
         self.journeyRole = journeyRole
         self.stopType = journeyRole.stopType
         self.monitoringMode = monitoringMode
+        self.transitType = transitType
         self.overlapsWithNext = overlapsWithNext
     }
 }
@@ -81,6 +84,7 @@ struct ResolvedPatternStop: Equatable, Codable, Identifiable {
     var stationId: String
     var stopName: String
     var monitoringMode: MonitoringMode
+    var transitType: GTFSTransitType
 }
 
 

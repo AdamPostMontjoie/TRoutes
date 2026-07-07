@@ -17,31 +17,67 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
     
     private enum TrackingContext {
-        case arrivingOnFoot
-        case emergingFromUnderground
-        case ridingAlongSurface
+        case arrivingOnFoot(GTFSTransitType)
+        case emergingFromUnderground(GTFSTransitType)
+        case ridingAlongSurface(GTFSTransitType)
         
         var entryDistance: CLLocationDistance {
             switch self {
-            case .arrivingOnFoot: return 60
-            case .emergingFromUnderground: return 200
-            case .ridingAlongSurface: return 120
+            case .arrivingOnFoot(.bus): return 20
+            case .arrivingOnFoot(.lightRail): return 30
+            case .arrivingOnFoot(.heavyRail): return 60
+            case .arrivingOnFoot(.commuterRail): return 60
+            case .arrivingOnFoot(.ferry): return 80
+            case .emergingFromUnderground(.bus): return 80
+            case .emergingFromUnderground(.lightRail): return 100
+            case .emergingFromUnderground(.heavyRail): return 140
+            case .emergingFromUnderground(.commuterRail): return 140
+            case .emergingFromUnderground(.ferry): return 160
+            case .ridingAlongSurface(.bus): return 30
+            case .ridingAlongSurface(.lightRail): return 40
+            case .ridingAlongSurface(.heavyRail): return 80
+            case .ridingAlongSurface(.commuterRail): return 100
+            case .ridingAlongSurface(.ferry): return 120
             }
         }
         
         var exitDistance: CLLocationDistance {
             switch self {
-            case .arrivingOnFoot: return 100
-            case .emergingFromUnderground: return 250
-            case .ridingAlongSurface: return 150
+            case .arrivingOnFoot(.bus): return 40
+            case .arrivingOnFoot(.lightRail): return 50
+            case .arrivingOnFoot(.heavyRail): return 90
+            case .arrivingOnFoot(.commuterRail): return 100
+            case .arrivingOnFoot(.ferry): return 120
+            case .emergingFromUnderground(.bus): return 120
+            case .emergingFromUnderground(.lightRail): return 140
+            case .emergingFromUnderground(.heavyRail): return 200
+            case .emergingFromUnderground(.commuterRail): return 200
+            case .emergingFromUnderground(.ferry): return 220
+            case .ridingAlongSurface(.bus): return 40
+            case .ridingAlongSurface(.lightRail): return 60
+            case .ridingAlongSurface(.heavyRail): return 100
+            case .ridingAlongSurface(.commuterRail): return 120
+            case .ridingAlongSurface(.ferry): return 140
             }
         }
         
         var requiredAccuracy: CLLocationAccuracy {
             switch self {
-            case .arrivingOnFoot: return 65
-            case .emergingFromUnderground: return 250
-            case .ridingAlongSurface: return 100
+            case .arrivingOnFoot(.bus): return 35
+            case .arrivingOnFoot(.lightRail): return 45
+            case .arrivingOnFoot(.heavyRail): return 65
+            case .arrivingOnFoot(.commuterRail): return 65
+            case .arrivingOnFoot(.ferry): return 85
+            case .emergingFromUnderground(.bus): return 120
+            case .emergingFromUnderground(.lightRail): return 140
+            case .emergingFromUnderground(.heavyRail): return 200
+            case .emergingFromUnderground(.commuterRail): return 200
+            case .emergingFromUnderground(.ferry): return 220
+            case .ridingAlongSurface(.bus): return 50
+            case .ridingAlongSurface(.lightRail): return 60
+            case .ridingAlongSurface(.heavyRail): return 100
+            case .ridingAlongSurface(.commuterRail): return 120
+            case .ridingAlongSurface(.ferry): return 140
             }
         }
         
@@ -57,7 +93,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
     private var currentStop: ResolvedStop?
-    private var trackingContext: TrackingContext = .arrivingOnFoot
+    private var trackingContext: TrackingContext = .arrivingOnFoot(.bus)
     private var surfaceTrackingMode: SurfaceTrackingMode = .idle
     private var hasYieldedEntryForCurrentStop = false
     private var hasYieldedExitForCurrentStop = false
@@ -163,14 +199,14 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         previousMonitoringMode: MonitoringMode?
     ) -> TrackingContext {
         if stop.journeyRole == .boarding {
-            return .arrivingOnFoot
+            return .arrivingOnFoot(stop.transitType)
         }
         
         if previousMonitoringMode == .surface {
-            return .ridingAlongSurface
+            return .ridingAlongSurface(stop.transitType)
         }
         
-        return .emergingFromUnderground
+        return .emergingFromUnderground(stop.transitType)
     }
     
     private func clearMonitoredRegions(){
