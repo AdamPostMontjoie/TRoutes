@@ -46,7 +46,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
         address: String,
         journeyRole: JourneyStopRole = .boarding,
         monitoringMode: MonitoringMode,
-        overlapsWithNext: Bool = false
+        overlapsWithNext: Bool = true
     ) {
         self.id = id
         self.sourceLegId = sourceLegId

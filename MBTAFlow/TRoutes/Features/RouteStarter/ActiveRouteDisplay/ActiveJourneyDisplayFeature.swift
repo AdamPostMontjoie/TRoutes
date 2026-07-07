@@ -15,7 +15,10 @@ struct ActiveJourneyDisplayFeature {
         var journey: JourneyState?
         
         var shouldShowStopActionButton: Bool {
-            journey?.currentStop?.stopType != .finalStop || journey?.movementStatus == .enRoute
+            if journey?.pendingDepartureConfirmation == true {
+                return false
+            }
+            return journey?.currentStop?.stopType != .finalStop || journey?.movementStatus == .enRoute
         }
         
         var movementIconName: String {
@@ -31,7 +34,7 @@ struct ActiveJourneyDisplayFeature {
             if journey?.movementStatus == .atStop {
                 return journey?.predictionState
             } else if journey?.movementStatus == .enRoute {
-                // If approaching a transfer, return transfer predictions
+                // If approaching a transfer, prefer transfer predictions.
                 if let journey = journey,
                    let currentLeg = journey.currentLeg,
                    let currentStop = journey.currentStop {
@@ -42,10 +45,15 @@ struct ActiveJourneyDisplayFeature {
                     let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
                     
                     if isTransferLeg && stopsRemainingInLeg == 1 {
-                        return journey.transferPredictionState
+                        switch journey.transferPredictionState {
+                        case .notNeeded:
+                            break
+                        case .loaded, .unavailable, .loading:
+                            return journey.transferPredictionState
+                        }
                     }
                 }
-                return .notNeeded
+                return journey?.predictionState
             }
             return nil
         }
@@ -128,12 +136,16 @@ struct ActiveJourneyDisplayFeature {
         case nextStopButtonTapped
         case atStopButtonTapped
         case refreshButtonTapped
+        case confirmedBoardedTapped
+        case confirmedMissedTapped
         case delegate(Delegate)
         enum Delegate:Equatable {
             case cancelRoute
             case manualAtStop
             case manualNextStop
             case refreshTimes
+            case confirmedBoarded
+            case confirmedMissed
         }
     }
     
@@ -148,6 +160,10 @@ struct ActiveJourneyDisplayFeature {
                 return .send(.delegate(.manualNextStop))
             case .refreshButtonTapped:
                 return .send(.delegate(.refreshTimes))
+            case .confirmedBoardedTapped:
+                return .send(.delegate(.confirmedBoarded))
+            case .confirmedMissedTapped:
+                return .send(.delegate(.confirmedMissed))
             case .delegate:
                 return .none
             }

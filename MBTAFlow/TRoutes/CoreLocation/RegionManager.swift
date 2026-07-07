@@ -16,7 +16,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         case approaching
     }
     
-    enum TrackingContext {
+    private enum TrackingContext {
         case arrivingOnFoot
         case emergingFromUnderground
         case ridingAlongSurface
@@ -91,7 +91,14 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.requestWhenInUseAuthorization()
     }
     
-    func registerRegion(for stop: ResolvedStop, context: TrackingContext = .arrivingOnFoot) {
+    func registerRegion(
+        for stop: ResolvedStop,
+        previousMonitoringMode: MonitoringMode?
+    ) {
+        let context = trackingContext(
+            for: stop,
+            previousMonitoringMode: previousMonitoringMode
+        )
         //remove all regions, 1 monitored maximum
         self.currentStop = stop
         self.trackingContext = context
@@ -149,6 +156,21 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         self.hasYieldedExitForCurrentStop = false
         continuation?.finish()
         continuation = nil
+    }
+    
+    private func trackingContext(
+        for stop: ResolvedStop,
+        previousMonitoringMode: MonitoringMode?
+    ) -> TrackingContext {
+        if stop.journeyRole == .boarding {
+            return .arrivingOnFoot
+        }
+        
+        if previousMonitoringMode == .surface {
+            return .ridingAlongSurface
+        }
+        
+        return .emergingFromUnderground
     }
     
     private func clearMonitoredRegions(){

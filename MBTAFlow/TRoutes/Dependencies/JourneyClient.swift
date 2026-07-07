@@ -28,6 +28,8 @@ struct JourneyClient {
     var requestNewTimes: @Sendable () async -> Void
     var nextStop: @Sendable () async -> Void
     var atStop: @Sendable () async -> Void
+    var confirmBoarded: @Sendable () async -> Void
+    var confirmMissed: @Sendable () async -> Void
     var getCurrentAuthorization: @Sendable () async -> CLAuthorizationStatus
     var requestLocationAuthorization: @Sendable () async -> Void
     var endRoute: @Sendable () async -> Void
@@ -52,6 +54,12 @@ extension JourneyClient: DependencyKey {
         },
         atStop: {
             await JourneyEngine.shared.manualEventValidator(.atStopTapped)
+        },
+        confirmBoarded: {
+            await JourneyEngine.shared.handleDepartureConfirmation(boarded: true)
+        },
+        confirmMissed: {
+            await JourneyEngine.shared.handleDepartureConfirmation(boarded: false)
         },
         getCurrentAuthorization: {
             return await RegionManager.shared.authorizationStatus

@@ -18,6 +18,7 @@ enum JourneyCommand: Equatable {
     case executeExit(stopId:String)
     case approachingStop(stopId: String)
     case missedVehicle(stopId: String)
+    case confirmDeparture(stopId: String)
     case refreshTimes(stopId: String)
     case authorizationDenied
     case monitoringFailed(stopId: String, error: locationError)
@@ -52,36 +53,15 @@ actor JourneyEngine {
               let currentStop = journey.currentStop
         else { return }
 
-        await startListeningToLocationEvents()
-        let context = determineTrackingContext(for: currentStop, in: journey)
-        await RegionManager.shared.registerRegion(for: currentStop, context: context)
-    }
-    
-    private func determineTrackingContext(for stop: ResolvedStop, in journey: JourneyState) -> RegionManager.TrackingContext {
-        // If it's an intermediate stop, we are riding on the vehicle.
-        if stop.journeyRole == .intermediate {
-            return .ridingAlongSurface
+        switch journey.monitoringMode {
+        case .surface:
+            await startListeningToLocationEvents()
+            startPredictionRefreshTimer()
+        case .underground:
+            await startListeningToUndergroundEvents()
         }
         
-        // If it's the very first stop, we are walking to the station.
-        if journey.stopIndex == 0 {
-            return .arrivingOnFoot
-        }
-        
-        // If it's a transfer stop or final stop, check the previous stop's mode
-        let prevIndex = journey.stopIndex - 1
-        if journey.stopOrder.indices.contains(prevIndex) {
-            let prevStop = journey.stopOrder[prevIndex]
-            if prevStop.monitoringMode == .underground {
-                return .emergingFromUnderground
-            } else {
-                // If previous was surface, we might just be switching vehicles.
-                // Or arriving at the final stop while riding on the surface.
-                return stop.journeyRole == .final ? .ridingAlongSurface : .arrivingOnFoot
-            }
-        }
-        
-        return .arrivingOnFoot
+        await monitorNextStop(stop: currentStop)
     }
     
     func startListeningToLocationEvents() async {
@@ -180,21 +160,84 @@ actor JourneyEngine {
                 await sendNotification(message: "Approaching \(id)")
             }
         case let .missedVehicle(stopId: id):
-            trackedVehicleId = nil
-            trackedTripId = nil
-            matchedPath = nil
-            await handleJourneyAction(.backtrackToStop)
+            print("JourneyEngine missedVehicle for \(id)")
+            await handleMissedVehicle(stopId: id)
         case let .refreshTimes(stopId: id):
             if let currentStop = currentJourney.currentStop,
                currentStop.mbtaStopId == id {
                 await handleJourneyAction(.evaluatePredictionRefresh)
             }
+        case let .confirmDeparture(stopId: id):
+            print("JourneyEngine confirmDeparture for \(id)")
+            guard var journey = userDefaultsClient.loadActiveJourney(),
+                  journey.currentStop?.mbtaStopId == id,
+                  journey.movementStatus == .atStop else {
+                break
+            }
+            journey.pendingDepartureConfirmation = true
+            saveActiveJourneyAndPublish(journey)
+            await handleJourneyAction(.departFromStop)
         case .authorizationDenied:
             print("the user deauthorized during journey")
             
         case .monitoringFailed(stopId: let stopId, error: let error):
             print("monitoring failed for \(stopId): \(error)")
         }
+    }
+    
+    func handleDepartureConfirmation(boarded: Bool) async {
+        guard var journey = userDefaultsClient.loadActiveJourney() else { return }
+        
+        journey.pendingDepartureConfirmation = false
+        saveActiveJourneyAndPublish(journey)
+        
+        if boarded {
+            if journey.movementStatus == .atStop {
+                await handleJourneyAction(.departFromStop)
+            }
+            return
+        }
+        
+        trackedVehicleId = nil
+        trackedTripId = nil
+        matchedPath = nil
+        
+        if journey.movementStatus == .atStop,
+           let currentStop = journey.currentStop {
+            await resetAfterMissedVehicle(at: currentStop)
+        } else {
+            await handleJourneyAction(.backtrackToStop)
+        }
+    }
+    
+    private func handleMissedVehicle(stopId: String) async {
+        guard let journey = userDefaultsClient.loadActiveJourney() else { return }
+        
+        trackedVehicleId = nil
+        trackedTripId = nil
+        matchedPath = nil
+        
+        if journey.currentStop?.mbtaStopId == stopId,
+           journey.movementStatus == .atStop,
+           let currentStop = journey.currentStop {
+            await resetAfterMissedVehicle(at: currentStop)
+        } else if journey.movementStatus == .enRoute {
+            await handleJourneyAction(.backtrackToStop)
+        } else {
+            print("JourneyEngine ignored missedVehicle \(stopId) current: \(journey.currentStop?.mbtaStopId ?? "nil") status: \(journey.movementStatus)")
+        }
+    }
+    
+    private func resetAfterMissedVehicle(at stop: ResolvedStop) async {
+        guard var journey = userDefaultsClient.loadActiveJourney() else { return }
+        
+        journey.pendingDepartureConfirmation = false
+        journey.movementStatus = .atStop
+        journey.predictionState = .loading(stopId: stop.mbtaStopId)
+        saveActiveJourneyAndPublish(journey)
+        
+        await monitorNextStop(stop: stop)
+        await fetchPredictions(for: stop)
     }
     
     //ask for more time in background?
@@ -259,9 +302,7 @@ actor JourneyEngine {
         }
         saveActiveJourneyAndPublish(currentJourney)
     }
-//    func monitorCurrentStop(stop:ResolvedStop) async {
-//        
-//    }
+
     func monitorNextStop(stop:ResolvedStop) async {
         guard let currentJourney = userDefaultsClient.loadActiveJourney() else { return }
         let mode = currentJourney.monitoringMode
@@ -270,8 +311,10 @@ actor JourneyEngine {
         switch mode {
         case .surface:
             print("surface monitoring")
-            let context = determineTrackingContext(for: stop, in: currentJourney)
-            await RegionManager.shared.registerRegion(for: stop, context: context)
+            await RegionManager.shared.registerRegion(
+                for: stop,
+                previousMonitoringMode: currentJourney.previousStop?.monitoringMode
+            )
             // Capture vehicle ID at boarding/transfer stops so it's available
             // if the mode switches to underground mid-leg.
             if isWaitingToBoard {

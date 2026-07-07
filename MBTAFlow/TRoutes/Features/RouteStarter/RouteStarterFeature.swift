@@ -98,6 +98,18 @@ struct RouteStarterFeature {
                 return .run { _ in
                     await requestNewTimes()
                 }
+                
+            case .activeJourneyDisplay(.delegate(.confirmedBoarded)):
+                let confirmBoarded = journeyClient.confirmBoarded
+                return .run { _ in
+                    await confirmBoarded()
+                }
+                
+            case .activeJourneyDisplay(.delegate(.confirmedMissed)):
+                let confirmMissed = journeyClient.confirmMissed
+                return .run { _ in
+                    await confirmMissed()
+                }
 
             // This starts the route from inside the app; permission flow remains here.
             case let .routeSelector(.delegate(.startRoute(id))):

@@ -28,6 +28,10 @@ struct ActiveJourneyDisplayView: View {
                 cancelButton
             }
             
+            if store.journey?.pendingDepartureConfirmation == true {
+                departureConfirmationPrompt
+            }
+            
             HStack(spacing: 10) {
                 if store.shouldShowRefreshButton {
                     refreshButton
@@ -98,6 +102,38 @@ struct ActiveJourneyDisplayView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Cancel route")
+    }
+    
+    private var departureConfirmationPrompt: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Did you catch the train?")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+            
+            HStack(spacing: 8) {
+                Button {
+                    store.send(.confirmedBoardedTapped)
+                } label: {
+                    Label("Yes", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button {
+                    store.send(.confirmedMissedTapped)
+                } label: {
+                    Label("No, Missed it", systemImage: "xmark.circle.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
     
     private var movementIconColor: Color {
