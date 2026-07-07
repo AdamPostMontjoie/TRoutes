@@ -15,17 +15,52 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         case cruising
         case approaching
     }
+    
+    enum TrackingContext {
+        case arrivingOnFoot
+        case emergingFromUnderground
+        case ridingAlongSurface
+        
+        var entryDistance: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 60
+            case .emergingFromUnderground: return 200
+            case .ridingAlongSurface: return 120
+            }
+        }
+        
+        var exitDistance: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 100
+            case .emergingFromUnderground: return 250
+            case .ridingAlongSurface: return 150
+            }
+        }
+        
+        var requiredAccuracy: CLLocationAccuracy {
+            switch self {
+            case .arrivingOnFoot: return 65
+            case .emergingFromUnderground: return 250
+            case .ridingAlongSurface: return 100
+            }
+        }
+        
+        var approachRegionRadius: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 200
+            case .emergingFromUnderground: return 300
+            case .ridingAlongSurface: return 200
+            }
+        }
+    }
 
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
     private var currentStop: ResolvedStop?
+    private var trackingContext: TrackingContext = .arrivingOnFoot
     private var surfaceTrackingMode: SurfaceTrackingMode = .idle
     private var hasYieldedEntryForCurrentStop = false
     private var hasYieldedExitForCurrentStop = false
-
-    private let approachRegionRadius: CLLocationDistance = 200
-    private let entryDistance: CLLocationDistance = 75
-    private let exitDistance: CLLocationDistance = 140
     
     // Guards against double state events.
     private var lastKnownState: CLRegionState?
@@ -56,9 +91,10 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.requestWhenInUseAuthorization()
     }
     
-    func registerRegion(for stop: ResolvedStop) {
+    func registerRegion(for stop: ResolvedStop, context: TrackingContext = .arrivingOnFoot) {
         //remove all regions, 1 monitored maximum
         self.currentStop = stop
+        self.trackingContext = context
         self.lastKnownState = nil
         self.surfaceTrackingMode = .cruising
         self.hasYieldedEntryForCurrentStop = false
@@ -70,7 +106,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         )
         let region = CLCircularRegion(
             center: coordinate,
-            radius: approachRegionRadius,
+            radius: context.approachRegionRadius,
             identifier: stop.mbtaStopId
         )
         region.notifyOnEntry = true
@@ -83,7 +119,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
                     return
                 }
         
-        print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: \(approachRegionRadius)m)")
+        print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Context: \(context), Radius: \(context.approachRegionRadius)m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
     }
@@ -136,7 +172,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         lastKnownState = state
             switch state {
             case .inside:
-                print("📍 CoreLocation: Already inside region upon registration.")
+                print("📍 CoreLocation: Nearby to stop, inside approach region.")
                 handleApproachRegionEntered(regionId: region.identifier)
             case .outside:
                 break
@@ -150,15 +186,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        print("entered region")
+        print("entered approach region")
         handleApproachRegionEntered(regionId: region.identifier)
     }
     
-    //on exit
+    //on exit - no longer used for exit detection, GPS distance handles exits
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
-        print("exited region")
-        continuation?.yield(.executeExit(stopId: region.identifier))
-        //stopping monitoring should be handled when new region is registered
+        print("exited approach region for \(region.identifier) - no action, GPS distance handles exit")
     }
     
     
@@ -206,7 +240,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
 
     private func handleApproachRegionEntered(regionId: String) {
-        guard currentStop?.mbtaStopId == regionId else { return }
+        guard currentStop?.mbtaStopId == regionId,
+              surfaceTrackingMode != .approaching else { return }
 
         surfaceTrackingMode = .approaching
         startApproachingLocationUpdates()
@@ -217,14 +252,14 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         guard let stop = currentStop,
               let location = locations.last,
               location.horizontalAccuracy >= 0,
-              location.horizontalAccuracy <= 100,
+              location.horizontalAccuracy <= trackingContext.requiredAccuracy,
               abs(location.timestamp.timeIntervalSinceNow) <= 10
         else { return }
 
         let stopLocation = CLLocation(latitude: stop.latitude, longitude: stop.longitude)
         let distance = location.distance(from: stopLocation)
 
-        if distance <= entryDistance, !hasYieldedEntryForCurrentStop {
+        if distance <= trackingContext.entryDistance, !hasYieldedEntryForCurrentStop {
             hasYieldedEntryForCurrentStop = true
             hasYieldedExitForCurrentStop = false
             surfaceTrackingMode = .approaching
@@ -234,7 +269,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         }
 
         if hasYieldedEntryForCurrentStop,
-           distance >= exitDistance,
+           distance >= trackingContext.exitDistance,
            !hasYieldedExitForCurrentStop {
             hasYieldedExitForCurrentStop = true
             continuation?.yield(.executeExit(stopId: stop.mbtaStopId))

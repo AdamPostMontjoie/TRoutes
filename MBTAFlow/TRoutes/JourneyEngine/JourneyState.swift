@@ -14,6 +14,7 @@ struct JourneyState: Equatable, Codable {
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
     var predictionState: PredictionState = .notNeeded
+    var transferPredictionState: PredictionState = .notNeeded
     var monitoringMode:MonitoringMode = .underground
     
     var currentLeg:ResolvedLeg? {

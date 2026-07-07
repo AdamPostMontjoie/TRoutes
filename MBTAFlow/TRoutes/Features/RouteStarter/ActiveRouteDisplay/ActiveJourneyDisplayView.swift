@@ -16,7 +16,7 @@ struct ActiveJourneyDisplayView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(stopDisplayText)
+                    Text(store.stopDisplayText)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     
@@ -118,48 +118,11 @@ struct ActiveJourneyDisplayView: View {
         }
     }
     
-    private var stopDisplayText: String {
-        guard let journey = store.journey,
-              let currentStop = journey.currentStop,
-              let finalStop = journey.stopOrder.last else {
-            return ""
-        }
-        
-        let totalStops = journey.stopOrder.count
-        let currentIndex = journey.stopIndex
-        
-        //boarding
-        if currentIndex == 0 && journey.movementStatus == .atStop {
-            return "At: \(currentStop.stopName)"
-        }
-        
-        //at final
-        if currentIndex == totalStops - 1 && journey.movementStatus == .atStop {
-            return "Arrived at \(finalStop.stopName)"
-        }
-        
-        // Calculate stops remaining to arrive at
-        let stopsRemaining = journey.movementStatus == .atStop
-            ? (totalStops - 1 - currentIndex)
-            : (totalStops - currentIndex)
-            
-        //approaching
-        if stopsRemaining == 1 {
-            return "Approaching \(finalStop.stopName)"
-        }
-        
-        //mid journey
-        let stopsText = stopsRemaining == 1 ? "1 stop" : "\(stopsRemaining) stops"
-        if journey.movementStatus == .atStop {
-            return "At: \(currentStop.stopName) • \(stopsText) to \(finalStop.stopName)"
-        } else {
-            return "En Route to: \(currentStop.stopName) • \(stopsText) to \(finalStop.stopName)"
-        }
-    }
+
     
     @ViewBuilder
     private var predictionTimesView: some View {
-        switch store.journey?.predictionState {
+        switch store.currentDisplayPredictionState {
         case let .loaded(_, times):
             Text(times.joined(separator: "  •  "))
                 .font(.caption)
