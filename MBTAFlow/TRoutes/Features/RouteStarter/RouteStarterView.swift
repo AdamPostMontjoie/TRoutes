@@ -30,8 +30,16 @@ struct RouteStarterView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4) // Adds breathing room between banner and list
                     .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
-                    if store.isDebugActive {
+                // The List takes up the remaining vertical space
+                SelectorView(
+                    store: store.scope(
+                        state: \.routeSelector,
+                        action: \.routeSelector
+                    )
+                ) {
+                    if store.isActiveJourneyPresented && store.isDebugActive {
                         DebugDashboardView(
                             store: store.scope(
                                 state: \.debugDashboardDisplay,
@@ -42,14 +50,6 @@ struct RouteStarterView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-
-                // The List takes up the remaining vertical space
-                SelectorView(
-                    store: store.scope(
-                        state: \.routeSelector,
-                        action: \.routeSelector
-                    )
-                )
                 .sheet(
                     item: $store.scope(
                         state: \.destination?.userSettings,

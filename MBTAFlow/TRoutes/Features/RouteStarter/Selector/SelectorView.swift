@@ -9,15 +9,21 @@ import ComposableArchitecture
 import SwiftUI
 
 
-struct SelectorView: View {
+struct SelectorView<Header: View>: View {
     @Bindable var store: StoreOf<SelectorFeature>
+    let header: Header
     
-    //if a user side swipes on item in list, it will present delete option.
-    //button to start route
-    //clicking on route will bring to page displaying the route info (stops, directions, etc. with another start option)
+    init(store: StoreOf<SelectorFeature>, @ViewBuilder header: () -> Header = { EmptyView() }) {
+        self.store = store
+        self.header = header()
+    }
     
     var body: some View {
         List {
+            header //supports debug dashboard
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+            
             ForEach(store.userRoutes) { userRoute in
                 NavigationLink(state: RouteReviewFeature.State(
                     route: makeUserRouteForEditing(from: userRoute)
