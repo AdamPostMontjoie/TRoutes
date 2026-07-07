@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 DEFAULT_GTFS_DIR = Path("/Users/adampost/Downloads/MBTA_GTFS")
-OUTPUT_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "MBTAFlow" / "TRoutes" / "Resources" / "JsonBuilder"
 
 
 UNDERGROUND_STATIONS_BY_ID = {

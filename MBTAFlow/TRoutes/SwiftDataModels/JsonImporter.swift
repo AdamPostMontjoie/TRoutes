@@ -18,38 +18,38 @@ class JsonImporter {
 
     func importIfNeeded() async throws -> Void {
         do {
-            print("importing stations")
+            
             var preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let stations: [JsonBuilderStation] = try decodeJsonBuilderFile(named: "stations")
             try await databaseClient.saveImportedStations(stations)
+            print("imported stations")
             
-            print("importing platforms" )
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let platforms: [JsonBuilderPlatform] = try decodeJsonBuilderFile(named: "platforms")
             try await databaseClient.saveImportedPlatforms(platforms)
+            print("imported platforms" )
             
-            print("importing patterns")
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let patterns: [JsonBuilderPattern] = try decodeJsonBuilderFile(named: "patterns")
             try await databaseClient.saveImportedPatterns(patterns)
+            print("imported patterns")
             
-            print("importing edges")
            preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
             let sequenceEdges: [JsonBuilderSequenceEdge] = try decodeJsonBuilderFile(named: "sequences")
             try await databaseClient.saveImportedSequenceEdges(sequenceEdges)
-            
+            print("imported edges")
             print("finished json importing")
             preciseTime = Date.now.formatted(
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
@@ -69,6 +69,14 @@ class JsonImporter {
 
     private func jsonBuilderFileURL(named fileName: String) throws -> URL {
         if let url = Bundle.main.url(forResource: fileName, withExtension: "json") {
+            return url
+        }
+
+        if let url = Bundle.main.url(
+            forResource: fileName,
+            withExtension: "json",
+            subdirectory: "Resources/JsonBuilder"
+        ) {
             return url
         }
 
@@ -95,6 +103,9 @@ class JsonImporter {
             .deletingLastPathComponent()
         let workspaceURL = repositoryURL.deletingLastPathComponent()
         let developmentURL = workspaceURL
+            .appending(path: "MBTAFlow")
+            .appending(path: "TRoutes")
+            .appending(path: "Resources")
             .appending(path: "JsonBuilder")
             .appending(path: "\(fileName).json")
 

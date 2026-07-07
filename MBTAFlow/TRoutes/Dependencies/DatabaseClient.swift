@@ -13,7 +13,7 @@ struct DatabaseClient {
     var saveRoute: @Sendable ([Leg]) async throws -> Void
     var updateRoute: @Sendable (UserRoute) async throws -> Void
     var deleteRoute: @Sendable (UUID) async throws -> Void
-    var fetchSavedRoutes: @Sendable () async throws -> [UserRoute]
+    var fetchSavedRoutes: @Sendable () async throws -> [ResolvedUserRoute]
     var saveImportedStations: @Sendable ([JsonBuilderStation]) async throws -> Void
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
@@ -92,15 +92,22 @@ extension DatabaseClient: DependencyKey {
 
                 let routeId = UUID()
                 let routeName = "\(firstLeg.startStop.stopName) to \(lastLeg.endStop.stopName)"
+                let timeStamp = Date()
+                let context = ModelContext(sharedContainer)
+                let userRoute = UserRoute(
+                    legs: legs,
+                    id: routeId,
+                    name: routeName,
+                    timeStamp: timeStamp
+                )
+                let resolvedRoute = try resolveUserRouteStruct(userRoute, context: context)
                 let savedRoute = Route(
                     routeId: routeId,
                     name: routeName,
-                    legs: legs,
-                    timeStamp: Date()
+                    legs: resolvedRoute.legs,
+                    timeStamp: timeStamp
                 )
-
-                
-                let context = ModelContext(sharedContainer)
+    
                 context.insert(savedRoute)
                 try context.save()
             },
@@ -117,8 +124,9 @@ extension DatabaseClient: DependencyKey {
                     return
                 }
 
+                let resolvedRoute = try resolveUserRouteStruct(newRoute, context: context)
                 savedRoute.name = newRoute.name
-                savedRoute.legs = newRoute.legs
+                savedRoute.legs = resolvedRoute.legs
                 savedRoute.timeStamp = newRoute.timeStamp
                 try context.save()
             },
@@ -143,7 +151,7 @@ extension DatabaseClient: DependencyKey {
                 )
 
                 return try context.fetch(descriptor).map { savedRoute in
-                    UserRoute(
+                    ResolvedUserRoute(
                         legs: savedRoute.legs,
                         id: savedRoute.localRouteId,
                         name: savedRoute.name,
@@ -633,7 +641,7 @@ private func makeResolvedStop(
     station: TransitStation?,
     directionId: Int
 ) throws -> ResolvedStop {
-    guard let platform else {
+    guard platform != nil else {
         throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
     }
     guard let station else {
@@ -652,8 +660,10 @@ private func makeResolvedStop(
         journeyRole = .final
     } else if isLastStopOnLeg {
         journeyRole = .transfer(overlapsNext: overlapsWithNext)
-    } else {
+    } else if stopIndex == 0 {
         journeyRole = .boarding
+    } else {
+        journeyRole = .intermediate
     }
 
     return ResolvedStop(

@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct ResolvedStop:Equatable, Identifiable {
+struct ResolvedStop:Equatable, Codable, Identifiable {
     var id: UUID
     var sourceLegId: UUID
     var legIndex: Int
@@ -46,7 +46,7 @@ struct ResolvedStop:Equatable, Identifiable {
         address: String,
         journeyRole: JourneyStopRole = .boarding,
         monitoringMode: MonitoringMode,
-        overlapsWithNext: Bool = false
+        overlapsWithNext: Bool = true
     ) {
         self.id = id
         self.sourceLegId = sourceLegId
@@ -70,7 +70,7 @@ struct ResolvedStop:Equatable, Identifiable {
     }
 }
 
-struct ResolvedPatternStop: Equatable, Identifiable {
+struct ResolvedPatternStop: Equatable, Codable, Identifiable {
     var id: String {
         "\(patternStopIndex)-\(platformId)"
     }
@@ -84,7 +84,7 @@ struct ResolvedPatternStop: Equatable, Identifiable {
 }
 
 
-struct ResolvedLeg: Equatable, Identifiable {
+struct ResolvedLeg: Equatable, Codable, Identifiable {
     var id: UUID
     var sourceLegId: UUID
     var legIndex: Int
@@ -151,7 +151,7 @@ struct ResolvedLeg: Equatable, Identifiable {
     }
 }
 
-struct ResolvedUserRoute: Equatable, Identifiable {
+struct ResolvedUserRoute: Equatable, Codable, Identifiable {
     var legs: [ResolvedLeg]
     var id: UUID
     var name: String
@@ -174,6 +174,8 @@ private extension JourneyStopRole {
             return .boardingStop
         case .transfer:
             return .transferStop
+        case .intermediate:
+            return .intermediateStop
         case .final:
             return .finalStop
         }

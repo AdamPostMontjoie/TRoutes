@@ -24,6 +24,8 @@ struct Stop: Codable, Equatable, Identifiable {
                 return .boardingStop
             case .transfer:
                 return .transferStop
+            case .intermediate:
+                return .intermediateStop
             case .final:
                 return .finalStop
             }
@@ -34,6 +36,8 @@ struct Stop: Codable, Equatable, Identifiable {
                 journeyRole = .boarding
             case .transferStop:
                 journeyRole = .transfer(overlapsNext: overlapsWithNext)
+            case .intermediateStop:
+                journeyRole = .intermediate
             case .finalStop:
                 journeyRole = .final
             }
@@ -107,12 +111,14 @@ struct Stop: Codable, Equatable, Identifiable {
 enum JourneyStopRole: Codable, Equatable {
     case boarding
     case transfer(overlapsNext: Bool)
+    case intermediate
     case final
 }
 
 enum StopType: Codable, Equatable {
     case boardingStop
     case transferStop
+    case intermediateStop
     case finalStop
 }
 

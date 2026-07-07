@@ -17,43 +17,40 @@ struct SelectorView: View {
     //clicking on route will bring to page displaying the route info (stops, directions, etc. with another start option)
     
     var body: some View {
-        NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
-            List {
-                ForEach(store.userRoutes) { userRoute in
-                    NavigationLink(state: RouteReviewFeature.State(route: userRoute)) {
-                        HStack {
-                            Text(userRoute.name)
+        List {
+            ForEach(store.userRoutes) { userRoute in
+                NavigationLink(state: RouteReviewFeature.State(
+                    route: makeUserRouteForEditing(from: userRoute)
+                )) {
+                    HStack {
+                        Text(userRoute.name)
 
-                            Spacer()
+                        Spacer()
 
-                            Button {
-                                store.send(.startButtonTapped(userRoute.id))
-                            } label: {
-                                Text("Start")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.blue)
-                        }
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            store.send(.deleteButtonTapped(userRoute.id))
+                        Button {
+                            store.send(.startButtonTapped(userRoute.id))
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Text("Start")
                         }
-                        .tint(.red)
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
                     }
-                    
                 }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        store.send(.deleteButtonTapped(userRoute.id))
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .tint(.red)
+                }
+                
             }
-            .listStyle(.plain)
-        } destination: { store in
-            RouteReviewView(store: store)
         }
+        .listStyle(.plain)
         .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
         .onAppear {
             store.send(.fetchRoutesFromDisk)
         }
     }
 }
-

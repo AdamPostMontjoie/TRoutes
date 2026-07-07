@@ -12,7 +12,12 @@ struct RouteStarterView: View {
     @Bindable var store: StoreOf<RouteStarterFeature>
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(
+            path: $store.scope(
+                state: \.routeSelector.path,
+                action: \.routeSelector.path
+            )
+        ) {
             VStack(spacing: 0) {
                 // The Banner now sits structurally above the list on the Y-axis
                 if store.isActiveJourneyPresented {
@@ -48,6 +53,8 @@ struct RouteStarterView: View {
             }
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
+        } destination: { store in
+            RouteReviewView(store: store)
         }
         .sheet(
             item: $store.scope(

@@ -11,7 +11,7 @@ import Foundation
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
     //predictions
-    var fetchTransitTimes: @Sendable (Stop) async throws -> [TransitPrediction]
+    var fetchTransitTimes: @Sendable (ResolvedStop) async throws -> [TransitPrediction]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]

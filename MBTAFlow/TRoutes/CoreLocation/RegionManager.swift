@@ -10,9 +10,57 @@ import ComposableArchitecture
 
 @MainActor
 class RegionManager: NSObject, CLLocationManagerDelegate {
+    private enum SurfaceTrackingMode {
+        case idle
+        case cruising
+        case approaching
+    }
+    
+    private enum TrackingContext {
+        case arrivingOnFoot
+        case emergingFromUnderground
+        case ridingAlongSurface
+        
+        var entryDistance: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 60
+            case .emergingFromUnderground: return 200
+            case .ridingAlongSurface: return 120
+            }
+        }
+        
+        var exitDistance: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 100
+            case .emergingFromUnderground: return 250
+            case .ridingAlongSurface: return 150
+            }
+        }
+        
+        var requiredAccuracy: CLLocationAccuracy {
+            switch self {
+            case .arrivingOnFoot: return 65
+            case .emergingFromUnderground: return 250
+            case .ridingAlongSurface: return 100
+            }
+        }
+        
+        var approachRegionRadius: CLLocationDistance {
+            switch self {
+            case .arrivingOnFoot: return 200
+            case .emergingFromUnderground: return 300
+            case .ridingAlongSurface: return 200
+            }
+        }
+    }
+
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
-    private var currentStop: Stop?
+    private var currentStop: ResolvedStop?
+    private var trackingContext: TrackingContext = .arrivingOnFoot
+    private var surfaceTrackingMode: SurfaceTrackingMode = .idle
+    private var hasYieldedEntryForCurrentStop = false
+    private var hasYieldedExitForCurrentStop = false
     
     // Guards against double state events.
     private var lastKnownState: CLRegionState?
@@ -39,25 +87,25 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.authorizationStatus
     }
     
-    func requestAlwaysAuthorization() {
-        locationManager.requestAlwaysAuthorization()
-        //potential fallback
-     //   locationManager.startMonitoringSignificantLocationChanges()
+    func requestLocationAuthorization() {
+        locationManager.requestWhenInUseAuthorization()
     }
     
-    func startMonitoring(firstStop:Stop) {
-        self.currentStop = firstStop
-        if currentStop != nil{
-            registerRegion(for: currentStop!)
-        } else {
-            return
-        }
-    }
-    
-    func registerRegion(for stop: Stop) {
+    func registerRegion(
+        for stop: ResolvedStop,
+        previousMonitoringMode: MonitoringMode?
+    ) {
+        let context = trackingContext(
+            for: stop,
+            previousMonitoringMode: previousMonitoringMode
+        )
         //remove all regions, 1 monitored maximum
         self.currentStop = stop
+        self.trackingContext = context
         self.lastKnownState = nil
+        self.surfaceTrackingMode = .cruising
+        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedExitForCurrentStop = false
         clearMonitoredRegions()
         let coordinate = CLLocationCoordinate2D(
             latitude: stop.latitude,
@@ -65,34 +113,66 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         )
         let region = CLCircularRegion(
             center: coordinate,
-            radius: 100,
+            radius: context.approachRegionRadius,
             identifier: stop.mbtaStopId
         )
         region.notifyOnEntry = true
-        region.notifyOnExit = true
+        region.notifyOnExit = false
+
+        startCruisingLocationUpdates()
+
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else {
                     print("⚠️ CoreLocation: Monitoring NOT available on this device/simulator.")
                     return
                 }
         
-        print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Radius: 100m)")
+        print("📍 CoreLocation: REGISTERED region for \(stop.stopName) (Context: \(context), Radius: \(context.approachRegionRadius)m)")
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { return }
         locationManager.startMonitoring(for: region)
     }
     
     private func authorizationDenied(){
         continuation?.yield(.authorizationDenied)
-        self.stopAll()
+        self.killManager()
     }
     
-    func stopAll() {
+    func stopFunction() {
         clearMonitoredRegions()
+        locationManager.stopUpdatingLocation()
         self.currentStop = nil
         self.lastKnownState = nil
+        self.surfaceTrackingMode = .idle
+        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedExitForCurrentStop = false
+    }
+    
+    func killManager(){
+        clearMonitoredRegions()
+        locationManager.stopUpdatingLocation()
+        self.currentStop = nil
+        self.lastKnownState = nil
+        self.surfaceTrackingMode = .idle
+        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedExitForCurrentStop = false
         continuation?.finish()
         continuation = nil
-        //clear persisted user defaults
     }
+    
+    private func trackingContext(
+        for stop: ResolvedStop,
+        previousMonitoringMode: MonitoringMode?
+    ) -> TrackingContext {
+        if stop.journeyRole == .boarding {
+            return .arrivingOnFoot
+        }
+        
+        if previousMonitoringMode == .surface {
+            return .ridingAlongSurface
+        }
+        
+        return .emergingFromUnderground
+    }
+    
     private func clearMonitoredRegions(){
         locationManager.monitoredRegions.forEach {
             print("Removing montitored region")
@@ -114,8 +194,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         lastKnownState = state
             switch state {
             case .inside:
-                print("📍 CoreLocation: Already inside region upon registration.")
-                continuation?.yield(.executeEntry(stopId: region.identifier))
+                print("📍 CoreLocation: Nearby to stop, inside approach region.")
+                handleApproachRegionEntered(regionId: region.identifier)
             case .outside:
                 break
             case .unknown:
@@ -128,15 +208,13 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     //on enter
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        print("entered region")
-        continuation?.yield(.executeEntry(stopId: region.identifier))
+        print("entered approach region")
+        handleApproachRegionEntered(regionId: region.identifier)
     }
     
-    //on exit
+    //on exit - no longer used for exit detection, GPS distance handles exits
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
-        print("exited region")
-        continuation?.yield(.executeExit(stopId: region.identifier))
-        //stopping monitoring should be handled when new region is registered
+        print("exited approach region for \(region.identifier) - no action, GPS distance handles exit")
     }
     
     
@@ -162,6 +240,62 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
                     mappedError = .unknown
                 }
             continuation?.yield(.monitoringFailed(stopId: id, error: mappedError ))
+        }
+    }
+
+    private func startCruisingLocationUpdates() {
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.pausesLocationUpdatesAutomatically = true
+        locationManager.activityType = .otherNavigation
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.distanceFilter = 50
+        locationManager.startUpdatingLocation()
+    }
+
+    private func startApproachingLocationUpdates() {
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.pausesLocationUpdatesAutomatically = true
+        locationManager.activityType = .otherNavigation
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        locationManager.distanceFilter = 10
+        locationManager.startUpdatingLocation()
+    }
+
+    private func handleApproachRegionEntered(regionId: String) {
+        guard currentStop?.mbtaStopId == regionId,
+              surfaceTrackingMode != .approaching else { return }
+
+        surfaceTrackingMode = .approaching
+        startApproachingLocationUpdates()
+        continuation?.yield(.approachingStop(stopId: regionId))
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let stop = currentStop,
+              let location = locations.last,
+              location.horizontalAccuracy >= 0,
+              location.horizontalAccuracy <= trackingContext.requiredAccuracy,
+              abs(location.timestamp.timeIntervalSinceNow) <= 10
+        else { return }
+
+        let stopLocation = CLLocation(latitude: stop.latitude, longitude: stop.longitude)
+        let distance = location.distance(from: stopLocation)
+
+        if distance <= trackingContext.entryDistance, !hasYieldedEntryForCurrentStop {
+            hasYieldedEntryForCurrentStop = true
+            hasYieldedExitForCurrentStop = false
+            surfaceTrackingMode = .approaching
+            startApproachingLocationUpdates()
+            continuation?.yield(.executeEntry(stopId: stop.mbtaStopId))
+            return
+        }
+
+        if hasYieldedEntryForCurrentStop,
+           distance >= trackingContext.exitDistance,
+           !hasYieldedExitForCurrentStop {
+            hasYieldedExitForCurrentStop = true
+            continuation?.yield(.executeExit(stopId: stop.mbtaStopId))
+            return
         }
     }
 }
