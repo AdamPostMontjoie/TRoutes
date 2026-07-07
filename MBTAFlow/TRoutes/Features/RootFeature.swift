@@ -11,8 +11,8 @@ import ComposableArchitecture
 struct RootFeature {
     @ObservableState
     struct State: Equatable {
+        var application = ApplicationState()
         var starter = RouteStarterFeature.State()
-        
     }
     
     enum Action {
