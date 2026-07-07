@@ -26,7 +26,7 @@ final class TransitStation {
         latitude: Double,
         longitude: Double,
         municipality: String? = nil,
-        monitoringMode: String = "aboveground",
+        monitoringMode: String = "surface",
         platformIds: [String] = [],
         platforms: [TransitPlatform] = []
     ) {

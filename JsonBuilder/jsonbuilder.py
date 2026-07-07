@@ -48,7 +48,7 @@ UNDERGROUND_STATIONS_BY_ID = {
 def monitoring_mode(station_id, station_name):
     expected_name = UNDERGROUND_STATIONS_BY_ID.get(station_id)
     if expected_name is None:
-        return "aboveground"
+        return "surface"
     if expected_name != station_name:
         raise ValueError(
             f"Underground station ID/name mismatch for {station_id}: "
@@ -183,13 +183,17 @@ def stop_name(stop):
 
 def transit_type(stop):
     vehicle_type = stop.get("vehicle_type", "")
-    if vehicle_type in {"0", "1"}:
-        return "rapid_transit"
+    if vehicle_type == "0":
+        return "light rail"
+    if vehicle_type == "1":
+        return "heavy rail"
     if vehicle_type == "2":
-        return "commuter_rail"
+        return "commuter rail"
+    if vehicle_type == "3":
+        return "bus"
     if vehicle_type == "4":
         return "ferry"
-    return "surface"
+    raise ValueError(f"Unknown vehicle_type {vehicle_type!r} for stop {stop['stop_id']}")
 
 
 def build_static_json(gtfs_dir, route_ids):
@@ -237,6 +241,8 @@ def build_static_json(gtfs_dir, route_ids):
             continue
 
         parent_id = stop.get("parent_station") or platform_id
+        station = stops.get(parent_id, stop)
+        station_name = station.get("stop_name", parent_id)
         platforms.append(
             {
                 "platformId": platform_id,
@@ -244,6 +250,7 @@ def build_static_json(gtfs_dir, route_ids):
                 "name": stop_name(stop),
                 "latitude": float(stop["stop_lat"]) if stop.get("stop_lat") else None,
                 "longitude": float(stop["stop_lon"]) if stop.get("stop_lon") else None,
+                "monitoringMode": monitoring_mode(parent_id, station_name),
                 "transitType": transit_type(stop),
                 "patterns": sorted(platform_pattern_ids[platform_id]),
             }
