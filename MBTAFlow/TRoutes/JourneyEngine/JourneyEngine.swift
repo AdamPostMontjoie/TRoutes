@@ -48,6 +48,15 @@ actor JourneyEngine {
     private var trackedTripId: String?
     private var trackedBoardingStopId: String?
     
+    // Surface Handoff Reconciliation
+    struct RecentlyDepartedVehicle {
+        let vehicleId: String
+        let tripId: String
+        let timestamp: Date
+    }
+    private var surfaceDepartureQueue: [RecentlyDepartedVehicle] = []
+    
+    //add state reconciliation checks
     func restoreActiveJourneyIfNeeded() async {
         guard let journey = userDefaultsClient.loadActiveJourney(),
               let currentStop = journey.currentStop
@@ -152,6 +161,25 @@ actor JourneyEngine {
             case let .executeExit(stopId:id):
             if currentJourney.movementStatus == .atStop && currentJourney.currentStop?.mbtaStopId == id {
                 print("JourneyEngine accepted exit \(id)")
+                
+                //if we exit on surface, we grab the last known vehicle to have exited, or the currently tracked one if none exists
+                //this is to handle overwriting the tracked vehicle with the predictions api before exit has been registered
+                if currentJourney.monitoringMode == .surface {
+                    surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 45 }
+                    //could be increased in reliability by making api call to check position
+                    if let recent = surfaceDepartureQueue.last {
+                        print("JourneyEngine: Surface geofence exit matched with recently departed vehicle \(recent.vehicleId). Reconciling.")
+                        trackedVehicleId = recent.vehicleId
+                        trackedTripId = recent.tripId
+                        if let trip = trackedTripId {
+                            await refreshTripTrackingData(tripId: trip)
+                        }
+                    } else {
+                        print("JourneyEngine: Surface geofence exit with no recently departed vehicles in grace period. Keeping current tracked vehicle.")
+                    }
+                    surfaceDepartureQueue.removeAll()
+                }
+                
                 await handleJourneyAction(.departFromStop)
             } else {
                 print("JourneyEngine ignored exit \(id) current: \(currentJourney.currentStop?.mbtaStopId ?? "nil") status: \(currentJourney.movementStatus)")
@@ -183,11 +211,10 @@ actor JourneyEngine {
         case .locationAuthorizationDenied:
             journeyUpdateContinuation?.yield(.journeyTerminated(.locationAuthorizationDenied))
             await endRoute()
-            //yield an error for the user
-            
+        
         case .monitoringFailed(stopId: let stopId, error: let error):
             print("monitoring failed for \(stopId): \(error)")
-            //Possibly yield notification in UG mode as well, Transit does on their app
+            //Possibly yield warning notification in UG mode as well, Transit does on their app
             //Perhaps if we become less reliant on api only in that mode
             let isSurface = currentJourney.monitoringMode == .surface
             let userMessage = (isSurface && error == .locationUnknown) ? "GPS signal lost or inaccurate. Tracking may be degraded." : nil
@@ -211,6 +238,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         matchedPath = nil
+        surfaceDepartureQueue.removeAll()
         
         if journey.movementStatus == .atStop,
            let currentStop = journey.currentStop {
@@ -228,6 +256,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         matchedPath = nil
+        surfaceDepartureQueue.removeAll()
         
         if journey.currentStop?.mbtaStopId == stopId,
            journey.movementStatus == .atStop,
@@ -391,7 +420,34 @@ actor JourneyEngine {
                 freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
             } else {
                 freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
-                //heavily gated later, just to test passing
+                
+                if freshJourney.monitoringMode == .surface,
+                   freshJourney.movementStatus == .atStop,
+                   freshJourney.currentStop?.journeyRole != .final,
+                   freshJourney.currentStop?.journeyRole != .intermediate {
+                    
+                    if let currentVehicle = trackedVehicleId, let currentTrip = trackedTripId {
+                        let isStillPredicted = predictionResults.contains { $0.vehicleId == currentVehicle && $0.tripId == currentTrip }
+                        if !isStillPredicted {
+                            print("JourneyEngine: Tracked vehicle \(currentVehicle) departed surface stop according to API. Entering grace period.")
+                            surfaceDepartureQueue.append(
+                                RecentlyDepartedVehicle(vehicleId: currentVehicle, tripId: currentTrip, timestamp: Date())
+                            )
+                            
+                            if let nextPrediction = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
+                               let nextTrip = nextPrediction.tripId {
+                                trackedVehicleId = nextPrediction.vehicleId
+                                trackedTripId = nextTrip
+                                print("JourneyEngine: Locked onto next vehicle \(nextPrediction.vehicleId ?? "") for surface tracking")
+                            } else {
+                                trackedVehicleId = nil
+                                trackedTripId = nil
+                            }
+                        }
+                    }
+                    
+                    surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 45 }
+                }
             }
         case .failure:
             freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
@@ -529,6 +585,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
+        surfaceDepartureQueue.removeAll()
         await RegionManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }
