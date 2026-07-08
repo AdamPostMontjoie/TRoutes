@@ -112,6 +112,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         locationManager.allowsBackgroundLocationUpdates = true
         locationManager.pausesLocationUpdatesAutomatically = false
         locationManager.activityType = .otherNavigation
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        locationManager.distanceFilter = 50 // Low polling initially
         locationManager.startUpdatingLocation()
 
         guard currentVehicle.currentVehicleId != nil else {
@@ -265,6 +267,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         }
 
         phase = .evaluatingDeparture
+        locationManager.distanceFilter = kCLDistanceFilterNone // High frequency for the 30s evaluation window
         evaluatingDepartureStartTime = Date()
         print("UGM entering evaluatingDeparture phase")
         evaluateDepartureProximity()
@@ -306,6 +309,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                    vehicleDistanceFromBoardingStop > Self.boardedStationDistanceThreshold {
                     print("UGM departure resolved: BOARDED (\(Int(distanceToVehicle))m from vehicle)")
                     phase = .trackingVehicle
+                    locationManager.distanceFilter = 50 // Return to low battery polling
                     evaluatingDepartureStartTime = nil
                     highConfidenceMissedCount = 0
                     continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
@@ -317,6 +321,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                    userDistanceFromBoardingStop > Self.boardedStationDistanceThreshold {
                     print("UGM departure resolved: BOARDED (user \(Int(userDistanceFromBoardingStop))m from stop)")
                     phase = .trackingVehicle
+                    locationManager.distanceFilter = 50 // Return to low battery polling
                     evaluatingDepartureStartTime = nil
                     highConfidenceMissedCount = 0
                     continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
@@ -330,6 +335,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                     if highConfidenceMissedCount >= 2 {
                         print("UGM departure resolved: MISSED (\(Int(distanceToVehicle))m from vehicle)")
                         phase = .idle
+                        locationManager.distanceFilter = 50 // Return to low battery polling
                         evaluatingDepartureStartTime = nil
                         highConfidenceMissedCount = 0
                         continuation?.yield(.missedVehicle(stopId: currentStopToMonitorId))
@@ -351,6 +357,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
            Date().timeIntervalSince(startTime) > Self.departureEvaluationTimeout {
             print("UGM departure eval: 30s timeout, requesting user confirmation")
             phase = .idle
+            locationManager.distanceFilter = 50 // Return to low battery polling
             evaluatingDepartureStartTime = nil
             highConfidenceMissedCount = 0
             continuation?.yield(.confirmDeparture(stopId: currentStopToMonitorId))
