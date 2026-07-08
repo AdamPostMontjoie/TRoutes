@@ -11,6 +11,7 @@ import Foundation
 enum LocationAlertMode:Equatable {
     case firstTime
     case changeSettings
+    case routeInterrupted
 }
 
 @Reducer

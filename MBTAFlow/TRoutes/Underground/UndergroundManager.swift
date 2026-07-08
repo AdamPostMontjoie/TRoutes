@@ -473,6 +473,19 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     ){
         
     }
-
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        if status == .denied || status == .restricted {
+            if self.currentStopToMonitorId != nil || self.phase != .idle {
+                self.authorizationDenied()
+            }
+        }
+    }
+    
+    private func authorizationDenied() {
+        continuation?.yield(.locationAuthorizationDenied)
+        self.killManager()
+    }
 
 }

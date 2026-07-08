@@ -20,7 +20,7 @@ enum JourneyCommand: Equatable {
     case missedVehicle(stopId: String)
     case confirmDeparture(stopId: String)
     case refreshTimes(stopId: String)
-    case authorizationDenied
+    case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError)
 }
 
@@ -180,12 +180,14 @@ actor JourneyEngine {
             journey.pendingDepartureConfirmation = true
             saveActiveJourneyAndPublish(journey)
             await handleJourneyAction(.departFromStop)
-        case .authorizationDenied:
-            print("the user deauthorized during journey")
+        case .locationAuthorizationDenied:
+            journeyUpdateContinuation?.yield(.journeyTerminated(.locationAuthorizationDenied))
+            await endRoute()
+            //yield an error for the user
             
         case .monitoringFailed(stopId: let stopId, error: let error):
             print("monitoring failed for \(stopId): \(error)")
-            //Possibly yield in UG mode as well, Transit does on their app
+            //Possibly yield notification in UG mode as well, Transit does on their app
             //Perhaps if we become less reliant on api only in that mode
             let isSurface = currentJourney.monitoringMode == .surface
             let userMessage = (isSurface && error == .locationUnknown) ? "GPS signal lost or inaccurate. Tracking may be degraded." : nil
@@ -529,12 +531,6 @@ actor JourneyEngine {
         trackedBoardingStopId = nil
         await RegionManager.shared.killManager()
         await UndergroundManager.shared.killManager()
-    }
-    func authorizationDenied(){
-        
-    }
-    func monitoringFailed(){
-        
     }
     
     // MARK: - Prediction Refresh Timer (surface mode)

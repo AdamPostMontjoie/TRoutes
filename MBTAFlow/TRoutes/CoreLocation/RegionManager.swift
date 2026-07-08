@@ -168,7 +168,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
     
     private func authorizationDenied(){
-        continuation?.yield(.authorizationDenied)
+        continuation?.yield(.locationAuthorizationDenied)
         self.killManager()
     }
     
@@ -213,6 +213,15 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.monitoredRegions.forEach {
             print("Removing montitored region")
             locationManager.stopMonitoring(for: $0)
+        }
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        if status == .denied || status == .restricted {
+            if self.currentStop != nil {
+                self.authorizationDenied()
+            }
         }
     }
     
