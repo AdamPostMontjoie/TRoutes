@@ -101,9 +101,10 @@ struct ActiveJourneyDisplayView: View {
                 .foregroundStyle(.tertiary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Cancel route")
+        .accessibilityLabel("Cancel Journey")
     }
     
+
     private var departureConfirmationPrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Did you catch the train?")

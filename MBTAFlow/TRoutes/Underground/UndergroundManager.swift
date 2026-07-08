@@ -82,7 +82,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     // Evaluating departure state
     private var evaluatingDepartureStartTime: Date?
-    private static let departureEvaluationTimeout: TimeInterval = 45
+    private var highConfidenceMissedCount: Int = 0
+
+    private static let departureEvaluationTimeout: TimeInterval = 30
     private static let boardedProximityThreshold: CLLocationDistance = 75
     private static let boardedStationDistanceThreshold: CLLocationDistance = 100
     private static let missedDistanceThreshold: CLLocationDistance = 200
@@ -139,6 +141,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         currentVehiclePosition = nil
         preparedCommand = nil
         evaluatingDepartureStartTime = nil
+        highConfidenceMissedCount = 0
         phase = waitToBoard ? .waitingToBoard: .trackingVehicle
         
         boardingStopCoordinate = CLLocationCoordinate2D(
@@ -223,7 +226,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                 continuation?.yield(.refreshTimes(stopId: stopId))
             }
             // Poll faster during departure evaluation for quicker resolution
-            let pollInterval: TimeInterval = phase == .evaluatingDeparture ? 10 : 15
+            let pollInterval: TimeInterval = phase == .evaluatingDeparture ? 5 : 15
             setTimer(time: pollInterval)
         }        
     }
@@ -261,7 +264,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             return
         }
 
-        // Instead of immediately yielding exit, enter the evaluating phase
         phase = .evaluatingDeparture
         evaluatingDepartureStartTime = Date()
         print("UGM entering evaluatingDeparture phase")
@@ -295,17 +297,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             
             print("UGM departure eval: user-to-vehicle distance: \(Int(distanceToVehicle))m, user-from-stop: \(userDistanceFromBoardingStop.map { "\(Int($0))m" } ?? "nil"), vehicle-from-stop: \(vehicleDistanceFromBoardingStop.map { "\(Int($0))m" } ?? "nil"), location age: \(Int(locationAge))s, accuracy: \(Int(userLocation.horizontalAccuracy))m")
             
-            // Only trust recent GPS fixes (< 30s old) with reasonable accuracy
-            if locationAge < 30 && userLocation.horizontalAccuracy < 100 {
-                // Condition A: User has moved away from the boarding stop.
-                if let userDistanceFromBoardingStop,
-                   userDistanceFromBoardingStop > Self.boardedStationDistanceThreshold {
-                    print("UGM departure resolved: BOARDED (user \(Int(userDistanceFromBoardingStop))m from stop)")
-                    phase = .trackingVehicle
-                    evaluatingDepartureStartTime = nil
-                    continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
-                    return
-                }
+            // FRESHNESS & ACCURACY FILTER (Mass Ave plunge fix)
+            if locationAge < 15 && userLocation.horizontalAccuracy <= 50 {
                 
                 // Condition A: User remains close to the vehicle after it has actually left the stop.
                 if distanceToVehicle < Self.boardedProximityThreshold,
@@ -314,35 +307,57 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                     print("UGM departure resolved: BOARDED (\(Int(distanceToVehicle))m from vehicle)")
                     phase = .trackingVehicle
                     evaluatingDepartureStartTime = nil
+                    highConfidenceMissedCount = 0
                     continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
                     return
                 }
                 
-                // Condition B: Vehicle is far away from user (missed)
-                if distanceToVehicle > Self.missedDistanceThreshold {
-                    print("UGM departure resolved: MISSED (\(Int(distanceToVehicle))m from vehicle)")
-                    phase = .idle
+                // Condition B: User has moved away from the boarding stop (e.g. they took a bus instead).
+                if let userDistanceFromBoardingStop,
+                   userDistanceFromBoardingStop > Self.boardedStationDistanceThreshold {
+                    print("UGM departure resolved: BOARDED (user \(Int(userDistanceFromBoardingStop))m from stop)")
+                    phase = .trackingVehicle
                     evaluatingDepartureStartTime = nil
-                    continuation?.yield(.missedVehicle(stopId: currentStopToMonitorId))
+                    highConfidenceMissedCount = 0
+                    continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
                     return
+                }
+                
+                // Condition C: Vehicle is far away from user, user is still at station (Missed)
+                if distanceToVehicle > Self.missedDistanceThreshold {
+                    highConfidenceMissedCount += 1
+                    print("UGM departure eval: High confidence missed. Count: \(highConfidenceMissedCount)")
+                    if highConfidenceMissedCount >= 2 {
+                        print("UGM departure resolved: MISSED (\(Int(distanceToVehicle))m from vehicle)")
+                        phase = .idle
+                        evaluatingDepartureStartTime = nil
+                        highConfidenceMissedCount = 0
+                        continuation?.yield(.missedVehicle(stopId: currentStopToMonitorId))
+                        return
+                    }
+                } else {
+                    highConfidenceMissedCount = 0
                 }
                 
                 // In between thresholds — wait for next poll
                 print("UGM departure eval: inconclusive (\(Int(distanceToVehicle))m), waiting for next poll")
+            } else {
+                print("UGM departure eval: location discarded (age: \(Int(locationAge))s, accuracy: \(Int(userLocation.horizontalAccuracy))m)")
             }
         }
         
-        // GPS is stale, unavailable, or inconclusive — ask the user after a short wait.
+        // Timer expiration: The "Unsure" fallback
         if let startTime = evaluatingDepartureStartTime,
            Date().timeIntervalSince(startTime) > Self.departureEvaluationTimeout {
-            print("UGM departure eval: timed out, requesting user confirmation")
+            print("UGM departure eval: 30s timeout, requesting user confirmation")
             phase = .idle
             evaluatingDepartureStartTime = nil
+            highConfidenceMissedCount = 0
             continuation?.yield(.confirmDeparture(stopId: currentStopToMonitorId))
             return
         }
         
-        print("UGM departure eval: GPS unavailable/stale, waiting...")
+        print("UGM departure eval: continuing to wait...")
     }
 
     private func evaluateTrackedVehicleProgress() {
@@ -431,6 +446,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         isFirstStop = false
         hasYieldedInitialEntry = false
         evaluatingDepartureStartTime = nil
+        highConfidenceMissedCount = 0
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

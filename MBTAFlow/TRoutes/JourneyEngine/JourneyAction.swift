@@ -68,6 +68,7 @@ enum JourneyAction: Equatable {
                 message: "transfered to \(nextStop.mbtaStopId)",
                 userMessage: "Transfer here for the \(nextStop.mbtaRouteId)"
             )
+            
         case .intermediate:
             state.predictionState = .notNeeded
             
