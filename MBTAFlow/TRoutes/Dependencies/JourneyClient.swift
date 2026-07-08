@@ -19,7 +19,12 @@ enum locationError: Error, Equatable {
 
 enum JourneyUpdate: Equatable {
     case activeJourneyChanged(JourneyState?)
+    case journeyTerminated(JourneyTerminationReason)
 }
+enum JourneyTerminationReason: Equatable {
+    case locationAuthorizationDenied
+}
+
 
 ///The layer between UI and the Journey Engine
 struct JourneyClient {

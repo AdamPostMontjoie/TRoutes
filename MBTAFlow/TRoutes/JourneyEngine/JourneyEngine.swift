@@ -181,6 +181,7 @@ actor JourneyEngine {
             saveActiveJourneyAndPublish(journey)
             await handleJourneyAction(.departFromStop)
         case .locationAuthorizationDenied:
+            journeyUpdateContinuation?.yield(.journeyTerminated(.locationAuthorizationDenied))
             await endRoute()
             //yield an error for the user
             

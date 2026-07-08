@@ -62,10 +62,6 @@ struct RouteStarterFeature {
         case endRoute
         
         case destination(PresentationAction<Destination.Action>)
-        enum Alert: Equatable {
-            // e.g., case rateLimitAcknowledged
-            // e.g., case openSettingsTapped
-        }
         
         case journeyUpdateReceived(JourneyUpdate)
     }
@@ -223,6 +219,11 @@ struct RouteStarterFeature {
                 case let .activeJourneyChanged(journey):
                     state.activeJourney = journey
                     state.isActiveJourneyPresented = journey != nil
+                case let .journeyTerminated(reason):
+                    if reason == .locationAuthorizationDenied {
+                        state.destination = .locationAlert(.init(mode: .routeInterrupted))
+                    }
+                    return .none
                 }
                 return .none
 
@@ -243,8 +244,6 @@ struct RouteStarterFeature {
 extension RouteStarterFeature {
     @Reducer
     enum Destination {
-        // Standard TCA Alert (for rate limits, timeouts, etc.)
-        case alert(AlertState<RouteStarterFeature.Action.Alert>)
         case createRoute(CreateRouteFeature)
         case userSettings(UserSettingsFeature)
         case locationAlert(LocationAlertFeature)
