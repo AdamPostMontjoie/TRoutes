@@ -50,14 +50,6 @@ struct RouteStarterView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .sheet(
-                    item: $store.scope(
-                        state: \.destination?.userSettings,
-                        action: \.destination.userSettings
-                    )
-                ) { userSettingsStore in
-                    UserSettingsView(store: userSettingsStore)
-                }
             }
             .navigationTitle("Routes")
             .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
@@ -81,6 +73,16 @@ struct RouteStarterView: View {
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isDebugActive)
+            
+            // CONSOLIDATE ALL PRESENTATIONS HERE TO FIX DOUBLE TAP BUGS
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.userSettings,
+                    action: \.destination.userSettings
+                )
+            ) { userSettingsStore in
+                UserSettingsView(store: userSettingsStore)
+            }
             .sheet(
                 item: $store.scope(
                     state: \.destination?.locationAlert,
@@ -88,35 +90,34 @@ struct RouteStarterView: View {
                 )
             ) { locationAlertStore in
                 LocationAlertView(store: locationAlertStore)
-                    // Prevents the user from swiping the sheet away without making a choice
                     .interactiveDismissDisabled()
             }
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.welcome,
+                    action: \.destination.welcome
+                )
+            ) { welcomeStore in
+                WelcomeView(store: welcomeStore)
+                    .interactiveDismissDisabled()
+            }
+            .fullScreenCover(
+                item: $store.scope(
+                    state: \.destination?.createRoute,
+                    action: \.destination.createRoute
+                )
+            ) { createRouteStore in
+                CreateRouteView(store: createRouteStore)
+                    .interactiveDismissDisabled(true)
+            }
+            .alert(
+                $store.scope(
+                    state: \.destination?.alert,
+                    action: \.destination.alert
+                )
+            )
         } destination: { store in
             RouteReviewView(store: store)
-        }
-        .fullScreenCover(
-            item: $store.scope(
-                state: \.destination?.createRoute,
-                action: \.destination.createRoute
-            )
-        ) { createRouteStore in
-            CreateRouteView(store: createRouteStore)
-                .interactiveDismissDisabled(true)
-        }
-        .alert(
-            $store.scope(
-                state: \.destination?.alert,
-                action: \.destination.alert
-            )
-        )
-        .sheet(
-            item: $store.scope(
-                state: \.destination?.welcome,
-                action: \.destination.welcome
-            )
-        ) { welcomeStore in
-            WelcomeView(store: welcomeStore)
-                .interactiveDismissDisabled()
         }
         .task {
             store.send(.checkOnboarding)

@@ -39,9 +39,9 @@ enum JourneyAction: Equatable {
             
             // Look ahead to see if the next stop requires a different monitoring mode,
             if let nextStop = state.nextStop {
-                if nextStop.monitoringMode != state.monitoringMode {
-                    state.monitoringMode = nextStop.monitoringMode
-                    effects.append(.switchMonitoringMode(nextStop.monitoringMode))
+                if state.monitoringMode == .surface && nextStop.monitoringMode == .underground {
+                    state.monitoringMode = .underground
+                    effects.append(.switchMonitoringMode(.underground))
                 }
                 effects.append(.monitorStop(stop))
             }
@@ -75,9 +75,9 @@ enum JourneyAction: Equatable {
             // Look ahead to see if the next stop requires a different monitoring mode,
             var effects: [JourneyEffect] = []
             if let nextStop = state.nextStop {
-                if nextStop.monitoringMode != state.monitoringMode {
-                    state.monitoringMode = nextStop.monitoringMode
-                    effects.append(.switchMonitoringMode(nextStop.monitoringMode))
+                if state.monitoringMode == .surface && nextStop.monitoringMode == .underground {
+                    state.monitoringMode = .underground
+                    effects.append(.switchMonitoringMode(.underground))
                 }
                 effects.append(.monitorStop(stop))
             }
