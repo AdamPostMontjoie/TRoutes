@@ -39,7 +39,7 @@ struct RouteStarterView: View {
                         action: \.routeSelector
                     )
                 ) {
-                    if store.isActiveJourneyPresented && store.isDebugActive {
+                    if store.isDebugActive {
                         DebugDashboardView(
                             store: store.scope(
                                 state: \.debugDashboardDisplay,

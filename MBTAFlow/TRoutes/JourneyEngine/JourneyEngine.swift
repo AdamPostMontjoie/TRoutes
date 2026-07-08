@@ -60,12 +60,12 @@ actor JourneyEngine {
     }
     private var surfaceDepartureQueue: [RecentlyDepartedVehicle] = []
     
-    // MARK: - Lifecycle & Reconciliation
+    // MARK: - Lifecycle & State Reconciliation
     
     //add state reconciliation checks
     func restoreActiveJourneyIfNeeded() async {
         guard let journey = userDefaultsClient.loadActiveJourney(),
-              let currentStop = journey.currentStop
+              journey.currentStop != nil
         else { return }
         
         // Restore in-memory caching variables
@@ -94,9 +94,8 @@ actor JourneyEngine {
                 trackedVehicleId: trackedVehicleId
             )
             
-            // Save reconciled state and publish
             saveActiveJourneyAndPublish(reconciledJourney)
-            print("JourneyEngine: Reconciled journey state successfully. Resuming tracking.")
+            await sendNotification(debug: "Journey Engine Reconciled Position Successfully")
             
             switch reconciledJourney.monitoringMode {
             case .surface:

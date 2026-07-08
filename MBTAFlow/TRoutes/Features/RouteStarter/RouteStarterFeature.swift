@@ -33,8 +33,13 @@ struct RouteStarterFeature {
             }
         }
         var routeSelector = SelectorFeature.State()
-        var isActiveJourneyPresented = false
+        
         var activeJourney: JourneyState?
+        
+        var isActiveJourneyPresented: Bool {
+            activeJourney != nil
+        }
+        
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
         // Holds route while user tries to setup location permissions.
@@ -64,12 +69,14 @@ struct RouteStarterFeature {
         case destination(PresentationAction<Destination.Action>)
         
         case journeyUpdateReceived(JourneyUpdate)
+        case startListeningToJourneyUpdates
         
         enum Alert: Equatable {
             case dismissReconciliationAlert
         }
     }
     
+    @Dependency(\.userDefaultsClient) var userDefaultsClient
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.liveActivityClient) var liveActivityClient
@@ -218,17 +225,24 @@ struct RouteStarterFeature {
                     }
                 }
 
+            case .startListeningToJourneyUpdates:
+                let beginRouteStream = journeyClient.beginRouteStream
+                return .run { send in
+                    let stream = await beginRouteStream()
+                    for await update in stream {
+                        await send(.journeyUpdateReceived(update))
+                    }
+                }
+
             case let .journeyUpdateReceived(update):
                 switch update {
                 case let .activeJourneyChanged(journey):
                     state.activeJourney = journey
-                    state.isActiveJourneyPresented = journey != nil
                 case let .journeyTerminated(reason):
                     if reason == .locationAuthorizationDenied {
                         state.destination = .locationAlert(.init(mode: .routeInterrupted))
                     } else if reason == .trackingReconciliationFailed {
                         state.activeJourney = nil
-                        state.isActiveJourneyPresented = false
                         state.destination = .alert(.trackingReconciliationFailed)
                     }
                     return .none
