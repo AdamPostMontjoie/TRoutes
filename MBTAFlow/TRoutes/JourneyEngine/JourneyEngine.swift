@@ -109,6 +109,9 @@ actor JourneyEngine {
                 await monitorNextStop(stop: freshStop)
             }
             
+        } catch PositionReconciler.ReconcileError.timeout {
+            print("JourneyEngine: Journey state expired (30min timeout). Dumping silently.")
+            await endRoute()
         } catch {
             print("JourneyEngine: PositionReconciler failed to reconcile journey state. Terminating journey. Error: \(error)")
             await endRouteWithReconciliationFailure()
@@ -628,6 +631,7 @@ actor JourneyEngine {
         journeyToSave.trackedVehicleId = self.trackedVehicleId
         journeyToSave.trackedTripId = self.trackedTripId
         journeyToSave.trackedBoardingStopId = self.trackedBoardingStopId
+        journeyToSave.timeSaved = Date()
         
         userDefaultsClient.saveActiveJourney(journeyToSave)
         journeyUpdateContinuation?.yield(.activeJourneyChanged(journeyToSave))

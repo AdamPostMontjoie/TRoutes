@@ -16,9 +16,15 @@ actor PositionReconciler {
     
     enum ReconcileError: Error {
         case unableToReconcile
+        case timeout
     }
     
     func reconcile(journey: JourneyState, currentLocation: CLLocation, trackedVehicleId: String?) async throws -> JourneyState {
+        // Timeout check (30 minutes)
+        if Date().timeIntervalSince(journey.timeSaved) > 1800 {
+            throw ReconcileError.timeout
+        }
+        
         //Check if we can use the tracked vehicle.
         if let vehicleState = try? await reconcileWithTrackedVehicle(
             journey: journey,
