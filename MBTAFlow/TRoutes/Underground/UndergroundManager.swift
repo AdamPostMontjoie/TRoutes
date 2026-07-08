@@ -457,6 +457,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            print("UGM: Polling location [\(location.coordinate.latitude), \(location.coordinate.longitude)]")
+        }
         guard phase == .waitingToBoard,
               isFirstStop,
               !hasYieldedInitialEntry,

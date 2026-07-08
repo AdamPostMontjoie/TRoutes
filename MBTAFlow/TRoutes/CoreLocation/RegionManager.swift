@@ -316,6 +316,9 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            print("RGM: Polling location [\(location.coordinate.latitude), \(location.coordinate.longitude)]")
+        }
         guard let stop = currentStop,
               let location = locations.last,
               location.horizontalAccuracy >= 0,
