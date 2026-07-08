@@ -15,7 +15,10 @@ struct ActiveJourneyDisplayFeature {
         var journey: JourneyState?
         
         var shouldShowStopActionButton: Bool {
-            journey?.currentStop?.stopType != .finalStop || journey?.movementStatus == .enRoute
+            if journey?.pendingDepartureConfirmation == true {
+                return false
+            }
+            return journey?.currentStop?.stopType != .finalStop || journey?.movementStatus == .enRoute
         }
         
         var movementIconName: String {
@@ -27,12 +30,103 @@ struct ActiveJourneyDisplayFeature {
             }
         }
         
+        var currentDisplayPredictionState: PredictionState? {
+            if journey?.movementStatus == .atStop {
+                return journey?.predictionState
+            } else if journey?.movementStatus == .enRoute {
+                // If approaching a transfer, prefer transfer predictions.
+                if let journey = journey,
+                   let currentLeg = journey.currentLeg,
+                   let currentStop = journey.currentStop {
+                   
+                    let legTotalStops = currentLeg.stops.count
+                    let legCurrentIndex = currentStop.legStopIndex
+                    let stopsRemainingInLeg = legTotalStops - legCurrentIndex
+                    let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
+                    
+                    if isTransferLeg && stopsRemainingInLeg == 1 {
+                        switch journey.transferPredictionState {
+                        case .notNeeded:
+                            break
+                        case .loaded, .unavailable, .loading:
+                            return journey.transferPredictionState
+                        }
+                    }
+                }
+                return journey?.predictionState
+            }
+            return nil
+        }
+        
         var shouldShowRefreshButton: Bool {
-            switch journey?.predictionState {
+            switch currentDisplayPredictionState {
             case .loaded, .unavailable,.loading:
                 return true
             case  .notNeeded, .none:
                 return false
+            }
+        }
+        
+        var stopDisplayText: String {
+            guard let journey = journey,
+                  let currentStop = journey.currentStop,
+                  let currentLeg = journey.currentLeg,
+                  let legFinalStop = currentLeg.stops.last,
+                  let finalStop = journey.stopOrder.last else {
+                return ""
+            }
+            
+            let totalStops = journey.stopOrder.count
+            let currentIndex = journey.stopIndex
+            
+            //boarding
+            if currentIndex == 0 && journey.movementStatus == .atStop {
+                return "At: \(currentStop.stopName)"
+            }
+            
+            //at final
+            if currentIndex == totalStops - 1 && journey.movementStatus == .atStop {
+                return "Arrived at \(finalStop.stopName)"
+            }
+            
+            let legTotalStops = currentLeg.stops.count
+            let legCurrentIndex = currentStop.legStopIndex
+            
+            // Calculate stops remaining in the current leg
+            let stopsRemainingInLeg = journey.movementStatus == .atStop
+                ? (legTotalStops - 1 - legCurrentIndex)
+                : (legTotalStops - legCurrentIndex)
+                
+            let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
+            
+            //transfer at next stop
+            if isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
+                return "Transfer at next stop: \(legFinalStop.stopName)"
+            }
+            
+            //en route to transfer stop
+            if isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
+                return "Approaching: \(currentStop.stopName) (Transfer)"
+            }
+            
+            //one stop remaining in journey (.final)
+            if !isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
+                return "Get off at next stop: \(legFinalStop.stopName)"
+            }
+            
+            //on way to last stop (.final)
+            if !isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
+                return "Approaching: \(currentStop.stopName). This is your stop"
+            }
+            
+            //intermediate stops
+            let stopsText = stopsRemainingInLeg == 1 ? "1 stop" : "\(stopsRemainingInLeg) stops"
+            let destinationName = isTransferLeg ? "\(legFinalStop.stopName) (Transfer)" : legFinalStop.stopName
+            
+            if journey.movementStatus == .atStop {
+                return "At: \(currentStop.stopName) • \(stopsText) to \(destinationName)"
+            } else {
+                return "En Route to: \(currentStop.stopName) • \(stopsText) to \(destinationName)"
             }
         }
     }
@@ -42,12 +136,16 @@ struct ActiveJourneyDisplayFeature {
         case nextStopButtonTapped
         case atStopButtonTapped
         case refreshButtonTapped
+        case confirmedBoardedTapped
+        case confirmedMissedTapped
         case delegate(Delegate)
         enum Delegate:Equatable {
             case cancelRoute
             case manualAtStop
             case manualNextStop
             case refreshTimes
+            case confirmedBoarded
+            case confirmedMissed
         }
     }
     
@@ -62,6 +160,10 @@ struct ActiveJourneyDisplayFeature {
                 return .send(.delegate(.manualNextStop))
             case .refreshButtonTapped:
                 return .send(.delegate(.refreshTimes))
+            case .confirmedBoardedTapped:
+                return .send(.delegate(.confirmedBoarded))
+            case .confirmedMissedTapped:
+                return .send(.delegate(.confirmedMissed))
             case .delegate:
                 return .none
             }

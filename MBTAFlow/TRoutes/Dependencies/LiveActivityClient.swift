@@ -9,7 +9,7 @@ import ComposableArchitecture
 
 //this is the dependency that updates the widget
 struct LiveActivityClient {
-    var startActivity: @Sendable (RouteStruct) async -> Void
+    var startActivity: @Sendable (UserRoute) async -> Void
     var updateActivity: @Sendable (JourneyState) async -> Void
     var endActivity: @Sendable () async -> Void
 }

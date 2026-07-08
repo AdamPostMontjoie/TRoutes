@@ -10,13 +10,18 @@ import Foundation
 
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
-    var fetchTransitTimes: @Sendable (Stop) async throws -> [String]
+    //predictions
+    var fetchTransitTimes: @Sendable (ResolvedStop) async throws -> [TransitPrediction]
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
-    //for use on lines that don't have a single direction
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
     var fetchRoutes: @Sendable (String, String) async throws -> String
+    //position
+    var fetchVehicleData: @Sendable (String) async throws -> VehicleData
+    var fetchTripTrackingData: @Sendable (String) async throws -> LiveTripTrackingData
 }
+
+
 
 let header = "https://api-v3.mbta.com/"
 
@@ -57,9 +62,8 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop in
-            //it seems as if the predictions endpoint will return outdated times. potential solution is to pull more than 3
             //filter out any that are in past and then return next 3.
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=6") else {
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
                 throw MBTAError.networkError
             }
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")
@@ -85,38 +89,54 @@ extension MBTAClient:DependencyKey {
                 
                 let calendarComparator = Calendar.current
                 let now = Date()
-                let upcomingTimes = predictionResponse.data.lazy.compactMap { prediction -> String? in
+                var seenVehicleIds = Set<String>()
+                var upcomingTimes: [TransitPrediction] = []
+                
+                for prediction in predictionResponse.data {
+                    let display: String
+                    
                     // 1. Physical signs prioritize specific statuses over timestamps
                     if let status = prediction.attributes.status {
-                        return status
-                    }
-                    
-                    // 2. If no status, calculate the "minutes away" countdown
-                    if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
-                       let date = isoFormatter.date(from: timeString),
-                       date >= now { // Filter out past times
-                        
+                        display = status
+                    } else if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
+                              let date = isoFormatter.date(from: timeString),
+                              date >= now {
+                        // 2. If no status, calculate the "minutes away" countdown
                         let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
-                        
-                        if minutesAway <= 0 {
-                            return "Arriving"
-                        } else {
-                            return "\(minutesAway) min"
-                        }
+                        display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
+                    } else {
+                        continue
                     }
                     
-                    // Returning nil automatically drops the item from the final array
-                    return nil
+                    let vehicleId = prediction.relationships.vehicle?.data?.id
+                    if let vehicleId, !seenVehicleIds.insert(vehicleId).inserted {
+                        continue
+                    }
+                    
+                    upcomingTimes.append(
+                        TransitPrediction(
+                            display: display,
+                            vehicleId: vehicleId,
+                            predictionId: prediction.id,
+                            tripId: prediction.relationships.trip?.data?.id,
+                            stopId: prediction.relationships.stop?.data?.id,
+                            directionId: prediction.attributes.directionId,
+                            stopSequence: prediction.attributes.stopSequence
+                        )
+                    )
+                    
+                    if upcomingTimes.count == 3 {
+                        break
+                    }
                 }
-                return Array(upcomingTimes.prefix(3))
+                
+                return upcomingTimes
             } catch {
                 throw MBTAError.decodingError
             }
         },
-        //this will be called immediately if red line, etc, but after if it's green line. both use routes endpoint
        
         fetchDirections: { routeId in
-                    // If the user selected Blue Line, routeId is "Blue or sum shit"
                     guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                         throw MBTAError.networkError
                     }
@@ -152,9 +172,8 @@ extension MBTAClient:DependencyKey {
                     }
                 },
     
-        //this is required for green line, bus, cr, ferry
+        //for use on lines that don't have a single direction
         fetchBranches: { filterKey, filterValue in
-            // Added direction_names and direction_destinations to the fields filter
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
@@ -205,8 +224,6 @@ extension MBTAClient:DependencyKey {
             }
         },
         fetchStops: { directionId, routeId in
-            //we are going to want to configure this based on direction, flip stop order and stuff
-            
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw MBTAError.networkError
                         }
@@ -225,12 +242,11 @@ extension MBTAClient:DependencyKey {
                             let totalStops = stopResponse.data.count
                             
                             for (index, stopData) in stopResponse.data.enumerated() {
-                                
-                                
                                 let stop = Stop(
                                     id: UUID(),
                                     mbtaStopId: stopData.id,
                                     mbtaRouteId: routeId,
+                                    mbtaDirectionId: directionId,
                                     stopName: stopData.attributes.name ?? "stop",
                                     longitude: stopData.attributes.longitude ?? 0.0,
                                     latitude: stopData.attributes.latitude ?? 0.0,
@@ -248,6 +264,60 @@ extension MBTAClient:DependencyKey {
         fetchRoutes: { filterKey,filterValue in
             
             return "routes"
+        },
+        fetchVehicleData: { vehicleId in
+            guard let encodedVehicleId = vehicleId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(header)vehicles/\(encodedVehicleId)") else {
+                throw MBTAError.networkError
+            }
+            print("MBTAClient fetchVehicle URL: \(url.absoluteString)")
+            
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            do {
+                let vehicleResponse = try decoder.decode(VehicleResponse.self, from: data)
+                let attributes = vehicleResponse.data.attributes
+                return VehicleData(
+                    id: vehicleResponse.data.id,
+                    bearing: attributes.bearing,
+                    directionId: attributes.directionId,
+                    routeId: vehicleResponse.data.relationships?.route?.data?.id,
+                    tripId: vehicleResponse.data.relationships?.trip?.data?.id,
+                    stopId: vehicleResponse.data.relationships?.stop?.data?.id,
+                    latitude: attributes.latitude,
+                    longitude: attributes.longitude,
+                    currentStopSequence: attributes.currentStopSequence,
+                    currentStatus: attributes.currentStatus,
+                    speed: attributes.speed
+                )
+            } catch {
+                throw MBTAError.decodingError
+            }
+        },
+
+        fetchTripTrackingData: { tripId in
+            guard let encodedTripId = tripId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(header)trips/\(encodedTripId)?include=stops,predictions,vehicle,route_pattern") else {
+                throw MBTAError.networkError
+            }
+            print("MBTAClient fetchTripTrackingData URL: \(url.absoluteString)")
+
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            do {
+                let tripResponse = try decoder.decode(TripTrackingResponse.self, from: data)
+                return makeLiveTripTrackingData(from: tripResponse)
+            } catch {
+                throw MBTAError.decodingError
+            }
         }
     )
     static let testValue: Self = .liveValue //TODO figure out what the hell this is even about later
@@ -258,6 +328,52 @@ extension DependencyValues {
         get { self[MBTAClient.self] }
         set { self[MBTAClient.self] = newValue }
     }
+}
+
+private func makeLiveTripTrackingData(from response: TripTrackingResponse) -> LiveTripTrackingData {
+    let included = response.included ?? []
+    let includedById = Dictionary(uniqueKeysWithValues: included.map { ($0.id, $0) })
+    let vehicleId = response.data.relationships.vehicle?.data?.id
+    let includedVehicle = vehicleId.flatMap { includedById[$0] }
+    let stopNodes = response.data.relationships.stops?.data ?? []
+    let predictionNodes = response.data.relationships.predictions?.data ?? []
+
+    let stops = stopNodes.enumerated().compactMap { index, node -> LiveTripStop? in
+        guard node.type == "stop" else { return nil }
+        let includedStop = includedById[node.id]
+        return LiveTripStop(
+            stopId: node.id,
+            parentStationId: includedStop?.relationships?.parentStation?.data?.id,
+            name: includedStop?.attributes?.name,
+            orderIndex: index
+        )
+    }
+
+    let predictions = predictionNodes.compactMap { node -> LiveTripPrediction? in
+        guard node.type == "prediction",
+              let includedPrediction = includedById[node.id],
+              let stopId = includedPrediction.relationships?.stop?.data?.id else {
+            return nil
+        }
+
+        return LiveTripPrediction(
+            stopId: stopId,
+            apiStopSequence: includedPrediction.attributes?.stopSequence,
+            arrivalTime: includedPrediction.attributes?.arrivalTime,
+            departureTime: includedPrediction.attributes?.departureTime
+        )
+    }
+
+    return LiveTripTrackingData(
+        tripId: response.data.id,
+        vehicleId: vehicleId,
+        routePatternId: response.data.relationships.routePattern?.data?.id,
+        vehicleStopId: includedVehicle?.relationships?.stop?.data?.id,
+        vehicleStatus: includedVehicle?.attributes?.currentStatus,
+        vehicleApiStopSequence: includedVehicle?.attributes?.currentStopSequence,
+        stops: stops,
+        predictions: predictions
+    )
 }
 
 

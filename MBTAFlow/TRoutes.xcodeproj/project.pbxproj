@@ -400,7 +400,6 @@
 				INFOPLIST_FILE = TRoutes/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need background location to update your Live Activity while your phone is locked.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -438,7 +437,6 @@
 				INFOPLIST_FILE = TRoutes/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We need background location to update your Live Activity while your phone is locked.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

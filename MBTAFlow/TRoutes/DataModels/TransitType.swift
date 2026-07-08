@@ -57,6 +57,15 @@ enum TransitType: String, Codable, CaseIterable {
         }
     }
 }
+
+enum GTFSTransitType: String, Codable, Equatable {
+    case bus
+    case lightRail = "light rail"
+    case heavyRail = "heavy rail"
+    case commuterRail = "commuter rail"
+    case ferry
+}
+
 //this is how the MBTA API configures it first, maybe use?
 enum RouteType: String, Codable {
     case bus

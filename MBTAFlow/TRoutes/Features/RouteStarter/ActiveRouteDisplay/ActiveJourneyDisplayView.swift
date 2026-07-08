@@ -16,7 +16,7 @@ struct ActiveJourneyDisplayView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(stopDisplayText)
+                    Text(store.stopDisplayText)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     
@@ -26,6 +26,10 @@ struct ActiveJourneyDisplayView: View {
                 Spacer()
                 
                 cancelButton
+            }
+            
+            if store.journey?.pendingDepartureConfirmation == true {
+                departureConfirmationPrompt
             }
             
             HStack(spacing: 10) {
@@ -100,6 +104,38 @@ struct ActiveJourneyDisplayView: View {
         .accessibilityLabel("Cancel route")
     }
     
+    private var departureConfirmationPrompt: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Did you catch the train?")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+            
+            HStack(spacing: 8) {
+                Button {
+                    store.send(.confirmedBoardedTapped)
+                } label: {
+                    Label("Yes", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button {
+                    store.send(.confirmedMissedTapped)
+                } label: {
+                    Label("No, Missed it", systemImage: "xmark.circle.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+    
     private var movementIconColor: Color {
         switch store.journey?.movementStatus {
         case .enRoute, .none:
@@ -118,22 +154,11 @@ struct ActiveJourneyDisplayView: View {
         }
     }
     
-    private var stopDisplayText: String {
-            guard let journey = store.journey, let stopName = journey.currentStop?.stopName else {
-                return ""
-            }
-            
-            switch journey.movementStatus {
-            case .atStop:
-                return "At: \(stopName)"
-            case .enRoute:
-                return "En route to: \(stopName)"
-            }
-        }
+
     
     @ViewBuilder
     private var predictionTimesView: some View {
-        switch store.journey?.predictionState {
+        switch store.currentDisplayPredictionState {
         case let .loaded(_, times):
             Text(times.joined(separator: "  •  "))
                 .font(.caption)

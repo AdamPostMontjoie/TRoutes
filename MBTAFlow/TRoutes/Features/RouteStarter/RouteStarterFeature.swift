@@ -23,32 +23,45 @@ struct RouteStarterFeature {
                 // without allowing child mutations.
             }
         }
+        var debugDashboardDisplay:DebugDashboardFeature.State {
+            get {
+                DebugDashboardFeature.State(journey: activeJourney)
+            }
+            set {
+                // Intentionally blank to satisfy WritableKeyPath requirement
+                // without allowing child mutations.
+            }
+        }
         var routeSelector = SelectorFeature.State()
         var isActiveJourneyPresented = false
         var activeJourney: JourneyState?
+        var isDebugAvailable = DebugAvailability.current
+        @Shared(.isDebugEnabled) var isDebugEnabled = true
         // Holds route while user tries to setup location permissions.
-        var pendingRoute: RouteStruct?
+        var pendingRoute: ResolvedUserRoute?
         
         @Presents var destination: Destination.State?
+
+        var isDebugActive: Bool {
+            isDebugAvailable && isDebugEnabled
+        }
     }
     
     enum Action: Equatable {
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
+        case debugDashboardDisplay(DebugDashboardFeature.Action)
         case onCreateButtonTapped
+        case onSettingsButtonTapped
         case routeSelector(SelectorFeature.Action)
         
         // Setup actions
-        case startRouteRequested(RouteStruct)
-        case locationAuthorizationStatusReceived(RouteStruct, CLAuthorizationStatus)
+        case startRouteRequested(ResolvedUserRoute)
+        case locationAuthorizationStatusReceived(ResolvedUserRoute, CLAuthorizationStatus)
         case locationPermissionRequestFinished(CLAuthorizationStatus)
-        case beginRoute(RouteStruct)
+        case beginRoute(ResolvedUserRoute)
         case endRoute
         
         case destination(PresentationAction<Destination.Action>)
-        enum Alert: Equatable {
-            // e.g., case rateLimitAcknowledged
-            // e.g., case openSettingsTapped
-        }
         
         case journeyUpdateReceived(JourneyUpdate)
     }
@@ -61,6 +74,9 @@ struct RouteStarterFeature {
         Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {
             ActiveJourneyDisplayFeature()
         }
+        Scope(state: \.debugDashboardDisplay, action: \.debugDashboardDisplay) {
+            DebugDashboardFeature()
+        }
         Scope(state: \.routeSelector, action: \.routeSelector) {
             SelectorFeature()
         }
@@ -69,7 +85,9 @@ struct RouteStarterFeature {
             case .onCreateButtonTapped:
                 state.destination = .createRoute(CreateRouteFeature.State())
                 return .none
-
+            case .onSettingsButtonTapped:
+                state.destination = .userSettings(UserSettingsFeature.State())
+                return .none
             case .destination(.presented(.createRoute(.delegate(.routeSaved)))):
                 state.destination = nil
                 return .send(.routeSelector(.fetchRoutesFromDisk))
@@ -98,6 +116,18 @@ struct RouteStarterFeature {
                 return .run { _ in
                     await requestNewTimes()
                 }
+                
+            case .activeJourneyDisplay(.delegate(.confirmedBoarded)):
+                let confirmBoarded = journeyClient.confirmBoarded
+                return .run { _ in
+                    await confirmBoarded()
+                }
+                
+            case .activeJourneyDisplay(.delegate(.confirmedMissed)):
+                let confirmMissed = journeyClient.confirmMissed
+                return .run { _ in
+                    await confirmMissed()
+                }
 
             // This starts the route from inside the app; permission flow remains here.
             case let .routeSelector(.delegate(.startRoute(id))):
@@ -116,7 +146,7 @@ struct RouteStarterFeature {
             case let .locationAuthorizationStatusReceived(route, status):
                 print(status.rawValue)
                 switch status {
-                case .authorizedAlways:
+                case .authorizedWhenInUse, .authorizedAlways:
                     return .send(.beginRoute(route))
 
                 case .notDetermined:
@@ -124,10 +154,9 @@ struct RouteStarterFeature {
                     state.destination = .locationAlert(LocationAlertFeature.State(mode: .firstTime))
                     return .none
                     
-                case .denied, .restricted, .authorizedWhenInUse:
+                case .denied, .restricted:
                     state.destination = .locationAlert(LocationAlertFeature.State(mode: .changeSettings))
                     return .none
-
                 @unknown default:
                     return .none
                 }
@@ -136,11 +165,11 @@ struct RouteStarterFeature {
                 guard let pendingRoute = state.pendingRoute else { return .none }
 
                 switch status {
-                case .authorizedAlways:
+                case .authorizedAlways, .authorizedWhenInUse:
                     state.pendingRoute = nil
                     return .send(.beginRoute(pendingRoute))
 
-                case .denied, .restricted, .authorizedWhenInUse:
+                case .denied, .restricted:
                     state.destination = .locationAlert(.init(mode: .changeSettings))
                     return .none
 
@@ -190,6 +219,11 @@ struct RouteStarterFeature {
                 case let .activeJourneyChanged(journey):
                     state.activeJourney = journey
                     state.isActiveJourneyPresented = journey != nil
+                case let .journeyTerminated(reason):
+                    if reason == .locationAuthorizationDenied {
+                        state.destination = .locationAlert(.init(mode: .routeInterrupted))
+                    }
+                    return .none
                 }
                 return .none
 
@@ -199,7 +233,7 @@ struct RouteStarterFeature {
                     await endRoute()
                 }
 
-            case .activeJourneyDisplay, .routeSelector, .destination:
+            case .activeJourneyDisplay, .debugDashboardDisplay, .routeSelector, .destination:
                 return .none
             }
         }
@@ -210,9 +244,8 @@ struct RouteStarterFeature {
 extension RouteStarterFeature {
     @Reducer
     enum Destination {
-        // Standard TCA Alert (for rate limits, timeouts, etc.)
-        case alert(AlertState<RouteStarterFeature.Action.Alert>)
         case createRoute(CreateRouteFeature)
+        case userSettings(UserSettingsFeature)
         case locationAlert(LocationAlertFeature)
     }
 }

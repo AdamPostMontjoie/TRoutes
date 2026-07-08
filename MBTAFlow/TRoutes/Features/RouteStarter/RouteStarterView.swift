@@ -12,7 +12,12 @@ struct RouteStarterView: View {
     @Bindable var store: StoreOf<RouteStarterFeature>
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(
+            path: $store.scope(
+                state: \.routeSelector.path,
+                action: \.routeSelector.path
+            )
+        ) {
             VStack(spacing: 0) {
                 // The Banner now sits structurally above the list on the Y-axis
                 if store.isActiveJourneyPresented {
@@ -33,12 +38,39 @@ struct RouteStarterView: View {
                         state: \.routeSelector,
                         action: \.routeSelector
                     )
-                )
+                ) {
+                    if store.isActiveJourneyPresented && store.isDebugActive {
+                        DebugDashboardView(
+                            store: store.scope(
+                                state: \.debugDashboardDisplay,
+                                action: \.debugDashboardDisplay
+                            )
+                        )
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .sheet(
+                    item: $store.scope(
+                        state: \.destination?.userSettings,
+                        action: \.destination.userSettings
+                    )
+                ) { userSettingsStore in
+                    UserSettingsView(store: userSettingsStore)
+                }
             }
             .navigationTitle("Routes")
             .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        store.send(.onSettingsButtonTapped)
+                    } label : {
+                        Image(systemName: "gear")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
+                    
                     Button {
                         store.send(.onCreateButtonTapped)
                     } label: {
@@ -48,16 +80,19 @@ struct RouteStarterView: View {
             }
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
-        }
-        .sheet(
-            item: $store.scope(
-                state: \.destination?.locationAlert,
-                action: \.destination.locationAlert
-            )
-        ) { locationAlertStore in
-            LocationAlertView(store: locationAlertStore)
-                // Prevents the user from swiping the sheet away without making a choice
-                .interactiveDismissDisabled()
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isDebugActive)
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.locationAlert,
+                    action: \.destination.locationAlert
+                )
+            ) { locationAlertStore in
+                LocationAlertView(store: locationAlertStore)
+                    // Prevents the user from swiping the sheet away without making a choice
+                    .interactiveDismissDisabled()
+            }
+        } destination: { store in
+            RouteReviewView(store: store)
         }
         .fullScreenCover(
             item: $store.scope(
