@@ -12,9 +12,6 @@ struct UserDefaultsClient {
     var saveActiveJourney: @Sendable (JourneyState) -> Void
     var loadActiveJourney: @Sendable () -> JourneyState?
     var clearActiveJourney: @Sendable () -> Void
-    
-    var setDebugNotifications: @Sendable (Bool) -> Void
-    var areDebugNotificationsEnabled: @Sendable () -> Bool
 }
 
 extension UserDefaultsClient: DependencyKey {
@@ -40,12 +37,6 @@ extension UserDefaultsClient: DependencyKey {
             },
             clearActiveJourney: {
                 UserDefaults(suiteName: suiteName)?.removeObject(forKey: activeJourneyStateKey)
-            },
-            setDebugNotifications: { enabled in
-                UserDefaults.standard.set(enabled, forKey: "enableDebugNotifications")
-            },
-            areDebugNotificationsEnabled: {
-                return UserDefaults.standard.bool(forKey: "enableDebugNotifications")
             }
         )
     }()
@@ -53,9 +44,7 @@ extension UserDefaultsClient: DependencyKey {
     static let testValue = Self(
         saveActiveJourney: { _ in },
         loadActiveJourney: { nil },
-        clearActiveJourney: { },
-        setDebugNotifications: { _ in },
-        areDebugNotificationsEnabled: {false}
+        clearActiveJourney: { }
     )
 }
 

@@ -109,5 +109,17 @@ struct RouteStarterView: View {
                 action: \.destination.alert
             )
         )
+        .sheet(
+            item: $store.scope(
+                state: \.destination?.welcome,
+                action: \.destination.welcome
+            )
+        ) { welcomeStore in
+            WelcomeView(store: welcomeStore)
+                .interactiveDismissDisabled()
+        }
+        .task {
+            store.send(.task)
+        }
     }
 }

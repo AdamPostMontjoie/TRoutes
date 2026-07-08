@@ -12,7 +12,6 @@ import Foundation
 struct ApplicationState: Equatable {
     var isDebugAvailable = DebugAvailability.current
     @Shared(.isDebugEnabled) var isDebugEnabled = true
-
     var isDebugActive: Bool {
         isDebugAvailable && isDebugEnabled
     }

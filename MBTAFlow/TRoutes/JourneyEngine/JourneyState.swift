@@ -1,3 +1,5 @@
+import Foundation
+
 //
 //  JourneyState.swift
 //  MBTAFlow

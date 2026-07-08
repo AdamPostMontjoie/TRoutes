@@ -42,6 +42,7 @@ struct RouteStarterFeature {
         
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
+        @Shared(.hasOnboarded) var hasOnboarded = false
         // Holds route while user tries to setup location permissions.
         var pendingRoute: ResolvedUserRoute?
         
@@ -53,6 +54,7 @@ struct RouteStarterFeature {
     }
     
     enum Action: Equatable {
+        case task
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
         case debugDashboardDisplay(DebugDashboardFeature.Action)
         case onCreateButtonTapped
@@ -93,6 +95,12 @@ struct RouteStarterFeature {
         }
         Reduce { state, action in
             switch action {
+            case .task:
+                if !state.hasOnboarded {
+                    state.destination = .welcome(WelcomeFeature.State())
+                }
+                return .none
+                
             case .onCreateButtonTapped:
                 state.destination = .createRoute(CreateRouteFeature.State())
                 return .none
@@ -195,11 +203,11 @@ struct RouteStarterFeature {
             case .destination(.presented(.locationAlert(.delegate(.requestPermissionsInApp)))):
                 state.destination = nil
                 let requestLocationPermissions = journeyClient.requestLocationAuthorization
-                let requestNotificationPermissions = notificationsClient.requestAuthorization
+                
                 let getCurrentStatus = journeyClient.getCurrentAuthorization
                 return .run { send in
                     await requestLocationPermissions()
-                    await requestNotificationPermissions()
+                    
                     let status = await getCurrentStatus()
                     await send(.locationPermissionRequestFinished(status))
                 }
@@ -256,6 +264,11 @@ struct RouteStarterFeature {
                 state.destination = nil
                 return .none
 
+            case .destination(.presented(.welcome(.delegate(.continueTapped)))):
+                return .run { [notificationsClient] _ in
+                    await notificationsClient.requestAuthorization()
+                }
+
             case .activeJourneyDisplay, .debugDashboardDisplay, .routeSelector, .destination:
                 return .none
             }
@@ -271,6 +284,7 @@ extension RouteStarterFeature {
         case userSettings(UserSettingsFeature)
         case locationAlert(LocationAlertFeature)
         case alert(AlertState<RouteStarterFeature.Action.Alert>)
+        case welcome(WelcomeFeature)
     }
 }
 
