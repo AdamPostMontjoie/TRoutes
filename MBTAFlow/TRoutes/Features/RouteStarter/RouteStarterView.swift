@@ -119,7 +119,7 @@ struct RouteStarterView: View {
                 .interactiveDismissDisabled()
         }
         .task {
-            store.send(.task)
+            store.send(.checkOnboarding)
         }
     }
 }

@@ -54,7 +54,7 @@ struct RouteStarterFeature {
     }
     
     enum Action: Equatable {
-        case task
+        case checkOnboarding
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
         case debugDashboardDisplay(DebugDashboardFeature.Action)
         case onCreateButtonTapped
@@ -95,7 +95,7 @@ struct RouteStarterFeature {
         }
         Reduce { state, action in
             switch action {
-            case .task:
+            case .checkOnboarding:
                 if !state.hasOnboarded {
                     state.destination = .welcome(WelcomeFeature.State())
                 }
