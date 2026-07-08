@@ -23,12 +23,14 @@ enum JourneyUpdate: Equatable {
 }
 enum JourneyTerminationReason: Equatable {
     case locationAuthorizationDenied
+    case trackingReconciliationFailed
 }
 
 
 ///The layer between UI and the Journey Engine
 struct JourneyClient {
-    var beginRoute: @Sendable (ResolvedUserRoute) async -> AsyncStream<JourneyUpdate>
+    var beginRoute: @Sendable (ResolvedUserRoute) async -> Void
+    var makeJourneyUpdateStream: @Sendable () async -> AsyncStream<JourneyUpdate>
     var openSettings: @Sendable () -> Void
     var requestNewTimes: @Sendable () async -> Void
     var nextStop: @Sendable () async -> Void
@@ -42,9 +44,8 @@ struct JourneyClient {
 
 extension JourneyClient: DependencyKey {
     static let liveValue = Self(
-        beginRoute: { route in
-            return await JourneyEngine.shared.beginRoute(route:route)
-        },
+        beginRoute: { await JourneyEngine.shared.beginRoute(route: $0) },
+        makeJourneyUpdateStream: { await JourneyEngine.shared.makeJourneyUpdateStream() },
         openSettings: {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             Task {

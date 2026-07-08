@@ -39,7 +39,7 @@ struct RouteStarterView: View {
                         action: \.routeSelector
                     )
                 ) {
-                    if store.isActiveJourneyPresented && store.isDebugActive {
+                    if store.isDebugActive {
                         DebugDashboardView(
                             store: store.scope(
                                 state: \.debugDashboardDisplay,
@@ -103,5 +103,11 @@ struct RouteStarterView: View {
             CreateRouteView(store: createRouteStore)
                 .interactiveDismissDisabled(true)
         }
+        .alert(
+            $store.scope(
+                state: \.destination?.alert,
+                action: \.destination.alert
+            )
+        )
     }
 }

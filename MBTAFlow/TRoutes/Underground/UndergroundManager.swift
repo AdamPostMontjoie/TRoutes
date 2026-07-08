@@ -22,6 +22,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         locationManager.delegate = self
     }
 
+    // MARK: - Types & Properties
+    
     private enum VehicleTrackingPhase {
         case idle
         case waitingToBoard
@@ -95,6 +97,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var apiTimer: Timer?
     
     @Dependency(\.mbtaClient) var mbtaClient
+    
+    // MARK: - Lifecycle & Stream
     
     func makeEventStream() -> AsyncStream<JourneyCommand> {
         AsyncStream { continuation in
@@ -172,6 +176,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         continuation = nil
     }
     
+    // MARK: - API Polling
+    
     //polls api for where the current vehicle is.
     //we will initially assume user always takes first available vehicle/vehicle of next time
     //this will not be accurate, so need to use incoming location data to determine
@@ -192,12 +198,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             print("error fetching vehicle data: \(error)")
             handleVehicleFetchError(error: error)
         }
-    }
-    
-    //this will be used to display an ETA when we're in movement by polling the next stop, and to figure out dynamic timer setting (?). May do for region manager later
-    //stop events endpoint looks good for this
-    private func fetchVehicleArrivalEstimation() async {
-        
     }
 
     private func handleVehicleData(vehicleData:VehicleData) async {
@@ -259,6 +259,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         )
     }
 
+    // MARK: - State Machine Evaluation
+    
     private func evaluateBoardingProgress() {
         let hasDepartedStop = vehicleHasDepartedStop()
         print("UGM boarding departed: \(hasDepartedStop)")
@@ -382,6 +384,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    // MARK: - State Helpers
+    
     private func vehicleHasDepartedStop() -> Bool {
         guard let currentStopToMonitorId,
               let previousVehiclePosition,
@@ -425,6 +429,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         print("this is where we could deal with internet issues, like timeout errors or api issues")
     }
     
+    // MARK: - Timers & Tracking Reset
+    
     //dynamic, and it ending means it's time to fetch vehicle info again.
     private func setTimer(time: TimeInterval) {
         cancelTimer()
@@ -456,6 +462,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         highConfidenceMissedCount = 0
     }
 
+    // MARK: - CLLocationManagerDelegate
+    
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.last {
             print("UGM: Polling location [\(location.coordinate.latitude), \(location.coordinate.longitude)]")

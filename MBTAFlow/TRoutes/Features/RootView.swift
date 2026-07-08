@@ -15,5 +15,8 @@ struct RootView: View {
         RouteStarterView(
             store: store.scope(state: \.starter, action: \.starterTab)
         )
+        .task {
+            store.send(.starterTab(.startListeningToJourneyUpdates))
+        }
     }
 }

@@ -18,6 +18,13 @@ struct JourneyState: Equatable, Codable {
     var monitoringMode:MonitoringMode = .underground
     var pendingDepartureConfirmation: Bool = false
     
+    // Persisted vehicle tracking properties
+    var trackedVehicleId: String? = nil
+    var trackedTripId: String? = nil
+    var trackedBoardingStopId: String? = nil
+    
+    var timeSaved: Date = Date()
+    
     var currentLeg:ResolvedLeg? {
         guard legOrder.indices.contains(legIndex) else {
             return nil
@@ -71,6 +78,10 @@ struct JourneyState: Equatable, Codable {
         case transferPredictionState
         case monitoringMode
         case pendingDepartureConfirmation
+        case trackedVehicleId
+        case trackedTripId
+        case trackedBoardingStopId
+        case timeSaved
     }
     
     init(from decoder: Decoder) throws {
@@ -86,6 +97,10 @@ struct JourneyState: Equatable, Codable {
         transferPredictionState = try container.decode(PredictionState.self, forKey: .transferPredictionState)
         monitoringMode = try container.decode(MonitoringMode.self, forKey: .monitoringMode)
         pendingDepartureConfirmation = try container.decodeIfPresent(Bool.self, forKey: .pendingDepartureConfirmation) ?? false
+        trackedVehicleId = try container.decodeIfPresent(String.self, forKey: .trackedVehicleId)
+        trackedTripId = try container.decodeIfPresent(String.self, forKey: .trackedTripId)
+        trackedBoardingStopId = try container.decodeIfPresent(String.self, forKey: .trackedBoardingStopId)
+        timeSaved = try container.decodeIfPresent(Date.self, forKey: .timeSaved) ?? Date()
     }
     
     //determine monitoring mode here? or in journey actions?

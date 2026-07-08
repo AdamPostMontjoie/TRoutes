@@ -10,6 +10,9 @@ import ComposableArchitecture
 
 @MainActor
 class RegionManager: NSObject, CLLocationManagerDelegate {
+    
+    // MARK: - Types & Properties
+    
     private enum SurfaceTrackingMode {
         case idle
         case cruising
@@ -103,6 +106,16 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     
     static let shared = RegionManager()
     
+    var currentDeviceLocation: CLLocation? {
+        return locationManager.location
+    }
+    
+    var authorizationStatus: CLAuthorizationStatus {
+        locationManager.authorizationStatus
+    }
+    
+    // MARK: - Lifecycle & Stream
+    
     override init() {
         super.init()
         locationManager.delegate = self
@@ -119,13 +132,38 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
-    var authorizationStatus: CLAuthorizationStatus {
-        locationManager.authorizationStatus
-    }
-    
     func requestLocationAuthorization() {
         locationManager.requestWhenInUseAuthorization()
     }
+    
+    private func authorizationDenied(){
+        continuation?.yield(.locationAuthorizationDenied)
+        self.killManager()
+    }
+    
+    func stopFunction() {
+        clearMonitoredRegions()
+        locationManager.stopUpdatingLocation()
+        self.currentStop = nil
+        self.lastKnownState = nil
+        self.surfaceTrackingMode = .idle
+        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedExitForCurrentStop = false
+    }
+    
+    func killManager(){
+        clearMonitoredRegions()
+        locationManager.stopUpdatingLocation()
+        self.currentStop = nil
+        self.lastKnownState = nil
+        self.surfaceTrackingMode = .idle
+        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedExitForCurrentStop = false
+        continuation?.finish()
+        continuation = nil
+    }
+    
+    // MARK: - Region Setup
     
     func registerRegion(
         for stop: ResolvedStop,
@@ -167,33 +205,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         locationManager.startMonitoring(for: region)
     }
     
-    private func authorizationDenied(){
-        continuation?.yield(.locationAuthorizationDenied)
-        self.killManager()
-    }
-    
-    func stopFunction() {
-        clearMonitoredRegions()
-        locationManager.stopUpdatingLocation()
-        self.currentStop = nil
-        self.lastKnownState = nil
-        self.surfaceTrackingMode = .idle
-        self.hasYieldedEntryForCurrentStop = false
-        self.hasYieldedExitForCurrentStop = false
-    }
-    
-    func killManager(){
-        clearMonitoredRegions()
-        locationManager.stopUpdatingLocation()
-        self.currentStop = nil
-        self.lastKnownState = nil
-        self.surfaceTrackingMode = .idle
-        self.hasYieldedEntryForCurrentStop = false
-        self.hasYieldedExitForCurrentStop = false
-        continuation?.finish()
-        continuation = nil
-    }
-    
     private func trackingContext(
         for stop: ResolvedStop,
         previousMonitoringMode: MonitoringMode?
@@ -216,6 +227,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
+    // MARK: - CLLocationManagerDelegate (Authorization)
+    
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         if status == .denied || status == .restricted {
@@ -225,6 +238,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
+    // MARK: - CLLocationManagerDelegate (Region Monitoring)
+    
     func locationManager( _ manager: CLLocationManager, didStartMonitoringFor region: CLRegion)
     {
         //when we setup secondary regions, we will need a way to check which one this is
@@ -232,6 +247,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         //request state only once we know that we're monitoring so we can avoid false unknowns during monitoring start
         locationManager.requestState(for: region)
     }
+    
     //checks if we're already inside of the zone
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         //iOS may automatically fire did determine state on start monitoring, ignore if no change
@@ -262,8 +278,6 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
         print("exited approach region for \(region.identifier) - no action, GPS distance handles exit")
     }
     
-    
-    
     //on error
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         if let id = region?.identifier {
@@ -287,6 +301,8 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
             continuation?.yield(.monitoringFailed(stopId: id, error: mappedError ))
         }
     }
+
+    // MARK: - CLLocationManagerDelegate (Location Updates)
 
     private func startCruisingLocationUpdates() {
         locationManager.allowsBackgroundLocationUpdates = true

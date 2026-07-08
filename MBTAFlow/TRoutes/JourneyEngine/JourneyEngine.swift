@@ -31,11 +31,15 @@ actor JourneyEngine {
     ///Singleton
     static let shared = JourneyEngine()
     
+    // MARK: - Dependencies & Properties
+    
     @Dependency(\.userDefaultsClient) var userDefaultsClient
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
     @Dependency(\.mbtaClient) var mbtaClient
     @Dependency(\.databaseClient) var databaseClient
+    
+    private let positionReconciler = PositionReconciler()
     
     private var journeyUpdateContinuation: AsyncStream<JourneyUpdate>.Continuation?
     private var locationListeningTask: Task<Void, Never>?
@@ -48,21 +52,78 @@ actor JourneyEngine {
     private var trackedTripId: String?
     private var trackedBoardingStopId: String?
     
+    // Surface Handoff Reconciliation
+    struct RecentlyDepartedVehicle {
+        let vehicleId: String
+        let tripId: String
+        let timestamp: Date
+    }
+    private var surfaceDepartureQueue: [RecentlyDepartedVehicle] = []
+    
+    // MARK: - Lifecycle & State Reconciliation
+    
+    //add state reconciliation checks
     func restoreActiveJourneyIfNeeded() async {
         guard let journey = userDefaultsClient.loadActiveJourney(),
-              let currentStop = journey.currentStop
+              journey.currentStop != nil
         else { return }
-
-        switch journey.monitoringMode {
-        case .surface:
-            await startListeningToLocationEvents()
-            startPredictionRefreshTimer()
-        case .underground:
-            await startListeningToUndergroundEvents()
+        
+        // Restore in-memory caching variables
+        self.trackedVehicleId = journey.trackedVehicleId
+        self.trackedTripId = journey.trackedTripId
+        self.trackedBoardingStopId = journey.trackedBoardingStopId
+        
+        // Start location updates briefly to get a location anchor if needed
+        var location = await RegionManager.shared.currentDeviceLocation
+        if location == nil {
+            print("JourneyEngine: Location is nil on boot. Waiting 1.5 seconds for GPS warm up...")
+            try? await Task.sleep(for: .seconds(1.5))
+            location = await RegionManager.shared.currentDeviceLocation
         }
         
-        await monitorNextStop(stop: currentStop)
+        guard let location = location else {
+            print("JourneyEngine: Unable to get location for reconciliation. Terminating journey.")
+            await endRouteWithReconciliationFailure()
+            return
+        }
+        
+        do {
+            let reconciledJourney = try await positionReconciler.reconcile(
+                journey: journey,
+                currentLocation: location,
+                trackedVehicleId: trackedVehicleId
+            )
+            
+            saveActiveJourneyAndPublish(reconciledJourney)
+            await sendNotification(debug: "Journey Engine Reconciled Position Successfully")
+            
+            switch reconciledJourney.monitoringMode {
+            case .surface:
+                await startListeningToLocationEvents()
+                startPredictionRefreshTimer()
+            case .underground:
+                await startListeningToUndergroundEvents()
+            }
+            
+            if let freshStop = reconciledJourney.currentStop {
+                await monitorNextStop(stop: freshStop)
+            }
+            
+        } catch PositionReconciler.ReconcileError.timeout {
+            print("JourneyEngine: Journey state expired (30min timeout). Dumping silently.")
+            await endRoute()
+        } catch {
+            print("JourneyEngine: PositionReconciler failed to reconcile journey state. Terminating journey. Error: \(error)")
+            await endRouteWithReconciliationFailure()
+        }
     }
+    
+    private func endRouteWithReconciliationFailure() async {
+        journeyUpdateContinuation?.yield(.journeyTerminated(.trackingReconciliationFailed))
+        await endRoute()
+    }
+    
+    // MARK: - Stream Listeners
     
     func startListeningToLocationEvents() async {
         guard locationListeningTask == nil else { return }
@@ -102,12 +163,21 @@ actor JourneyEngine {
         await RegionManager.shared.requestLocationAuthorization()
     }
     
-    //this is what is called to start fresh route
-    //This needs to be modified once we start differentiating between streams. 
-    func beginRoute(route:ResolvedUserRoute) async -> AsyncStream<JourneyUpdate> {
+    ///Streams active journey to UI
+    func makeJourneyUpdateStream() async -> AsyncStream<JourneyUpdate> {
         let (stream, continuation) = AsyncStream<JourneyUpdate>.makeStream()
         self.journeyUpdateContinuation = continuation
         
+        // Hydrate UI immediately if there is a saved journey running
+        if let journey = userDefaultsClient.loadActiveJourney() {
+            continuation.yield(.activeJourneyChanged(journey))
+        }
+        
+        return stream
+    }
+    
+    ///Starts the route
+    func beginRoute(route:ResolvedUserRoute) async {
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         let destinationName = route.legs.last?.endStop.stopName ?? "your destination"
@@ -122,9 +192,9 @@ actor JourneyEngine {
             await monitorNextStop(stop: firstStop)
             await self.fetchPredictions(for: firstStop)
         }
-        
-        return stream
     }
+    
+    // MARK: - Action Validation (Inputs)
     
     //this will handle both widget and in app i think
     func manualEventValidator(_ event:ManualEvent) async{
@@ -152,6 +222,25 @@ actor JourneyEngine {
             case let .executeExit(stopId:id):
             if currentJourney.movementStatus == .atStop && currentJourney.currentStop?.mbtaStopId == id {
                 print("JourneyEngine accepted exit \(id)")
+                
+                //if we exit on surface, we grab the last known vehicle to have exited, or the currently tracked one if none exists
+                //this is to handle overwriting the tracked vehicle with the predictions api before exit has been registered
+                if currentJourney.monitoringMode == .surface {
+                    surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 45 }
+                    //could be increased in reliability by making api call to check position
+                    if let recent = surfaceDepartureQueue.last {
+                        print("JourneyEngine: Surface geofence exit matched with recently departed vehicle \(recent.vehicleId). Reconciling.")
+                        trackedVehicleId = recent.vehicleId
+                        trackedTripId = recent.tripId
+                        if let trip = trackedTripId {
+                            await refreshTripTrackingData(tripId: trip)
+                        }
+                    } else {
+                        print("JourneyEngine: Surface geofence exit with no recently departed vehicles in grace period. Keeping current tracked vehicle.")
+                    }
+                    surfaceDepartureQueue.removeAll()
+                }
+                
                 await handleJourneyAction(.departFromStop)
             } else {
                 print("JourneyEngine ignored exit \(id) current: \(currentJourney.currentStop?.mbtaStopId ?? "nil") status: \(currentJourney.movementStatus)")
@@ -183,11 +272,10 @@ actor JourneyEngine {
         case .locationAuthorizationDenied:
             journeyUpdateContinuation?.yield(.journeyTerminated(.locationAuthorizationDenied))
             await endRoute()
-            //yield an error for the user
-            
+        
         case .monitoringFailed(stopId: let stopId, error: let error):
             print("monitoring failed for \(stopId): \(error)")
-            //Possibly yield notification in UG mode as well, Transit does on their app
+            //Possibly yield warning notification in UG mode as well, Transit does on their app
             //Perhaps if we become less reliant on api only in that mode
             let isSurface = currentJourney.monitoringMode == .surface
             let userMessage = (isSurface && error == .locationUnknown) ? "GPS signal lost or inaccurate. Tracking may be degraded." : nil
@@ -211,6 +299,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         matchedPath = nil
+        surfaceDepartureQueue.removeAll()
         
         if journey.movementStatus == .atStop,
            let currentStop = journey.currentStop {
@@ -228,6 +317,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         matchedPath = nil
+        surfaceDepartureQueue.removeAll()
         
         if journey.currentStop?.mbtaStopId == stopId,
            journey.movementStatus == .atStop,
@@ -251,6 +341,8 @@ actor JourneyEngine {
         await monitorNextStop(stop: stop)
         await fetchPredictions(for: stop)
     }
+    
+    // MARK: - Journey Effects (Outputs)
     
     //ask for more time in background?
     private func handleJourneyAction(_ action: JourneyAction) async {
@@ -355,6 +447,8 @@ actor JourneyEngine {
         
     }
     
+    // MARK: - MBTA API & Predictions
+    
     func manualRefreshPredictions() async {
         guard var currentJourney = userDefaultsClient.loadActiveJourney(),
               let currentStop = currentJourney.currentStop else { return }
@@ -391,7 +485,34 @@ actor JourneyEngine {
                 freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
             } else {
                 freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
-                //heavily gated later, just to test passing
+                
+                if freshJourney.monitoringMode == .surface,
+                   freshJourney.movementStatus == .atStop,
+                   freshJourney.currentStop?.journeyRole != .final,
+                   freshJourney.currentStop?.journeyRole != .intermediate {
+                    
+                    if let currentVehicle = trackedVehicleId, let currentTrip = trackedTripId {
+                        let isStillPredicted = predictionResults.contains { $0.vehicleId == currentVehicle && $0.tripId == currentTrip }
+                        if !isStillPredicted {
+                            print("JourneyEngine: Tracked vehicle \(currentVehicle) departed surface stop according to API. Entering grace period.")
+                            surfaceDepartureQueue.append(
+                                RecentlyDepartedVehicle(vehicleId: currentVehicle, tripId: currentTrip, timestamp: Date())
+                            )
+                            
+                            if let nextPrediction = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
+                               let nextTrip = nextPrediction.tripId {
+                                trackedVehicleId = nextPrediction.vehicleId
+                                trackedTripId = nextTrip
+                                print("JourneyEngine: Locked onto next vehicle \(nextPrediction.vehicleId ?? "") for surface tracking")
+                            } else {
+                                trackedVehicleId = nil
+                                trackedTripId = nil
+                            }
+                        }
+                    }
+                    
+                    surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 45 }
+                }
             }
         case .failure:
             freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
@@ -503,9 +624,17 @@ actor JourneyEngine {
     
 
     
+    // MARK: - State Publishing Helpers
+    
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
-        userDefaultsClient.saveActiveJourney(journey)
-        journeyUpdateContinuation?.yield(.activeJourneyChanged(journey))
+        var journeyToSave = journey
+        journeyToSave.trackedVehicleId = self.trackedVehicleId
+        journeyToSave.trackedTripId = self.trackedTripId
+        journeyToSave.trackedBoardingStopId = self.trackedBoardingStopId
+        journeyToSave.timeSaved = Date()
+        
+        userDefaultsClient.saveActiveJourney(journeyToSave)
+        journeyUpdateContinuation?.yield(.activeJourneyChanged(journeyToSave))
     }
     
     private func clearActiveJourneyAndPublish() {
@@ -529,9 +658,12 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
+        surfaceDepartureQueue.removeAll()
         await RegionManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }
+    
+    // MARK: - Timers
     
     // MARK: - Prediction Refresh Timer (surface mode)
     
