@@ -159,7 +159,7 @@ struct ActiveJourneyDisplayView: View {
     
     @ViewBuilder
     private var predictionTimesView: some View {
-        switch store.currentDisplayPredictionState {
+        switch store.currentDisplayPredictionLoadingState {
         case let .loaded(_, times):
             Text(times.joined(separator: "  •  "))
                 .font(.caption)
@@ -178,7 +178,7 @@ struct ActiveJourneyDisplayView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-        case .notNeeded, .none:
+        case .none:
             EmptyView()
         }
     }

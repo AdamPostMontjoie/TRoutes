@@ -60,10 +60,14 @@ struct JourneyCommandValidator {
                let currentStop = state.currentStop {
                 state.pendingDepartureConfirmation = false
                 state.movementStatus = .atStop
-                state.predictionState = .loading(stopId: currentStop.mbtaStopId)
+                state.predictionState = PredictionState(
+                    predictedStop: currentStop,
+                    predictedStopType: .boarding,
+                    loadingState: .loading(stopId: currentStop.mbtaStopId)
+                )
                 
                 effects.append(.monitorStop(currentStop))
-                effects.append(.fetchPredictions(currentStop))
+                effects.append(.fetchPredictions)
             } else if state.movementStatus == .enRoute {
                 effects.append(contentsOf: JourneyAction.backtrackToStop.reduce(state: &state))
             } else {
@@ -114,9 +118,13 @@ struct JourneyCommandValidator {
         
         if state.movementStatus == .atStop,
            let currentStop = state.currentStop {
-            state.predictionState = .loading(stopId: currentStop.mbtaStopId)
+            state.predictionState = PredictionState(
+                predictedStop: currentStop,
+                predictedStopType: .boarding,
+                loadingState: .loading(stopId: currentStop.mbtaStopId)
+            )
             effects.append(.monitorStop(currentStop))
-            effects.append(.fetchPredictions(currentStop))
+            effects.append(.fetchPredictions)
         } else {
             effects.append(contentsOf: JourneyAction.backtrackToStop.reduce(state: &state))
         }

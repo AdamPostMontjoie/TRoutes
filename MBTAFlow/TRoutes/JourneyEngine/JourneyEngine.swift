@@ -210,7 +210,7 @@ actor JourneyEngine {
                 await startListeningToUndergroundEvents()
             }
             await monitorNextStop(stop: firstStop)
-            await self.fetchPredictions(for: firstStop)
+            await self.fetchPredictions()
         }
     }
     
@@ -257,13 +257,9 @@ actor JourneyEngine {
                 print("JourneyEngine effect: registerRegion for \(stop.mbtaStopId)")
                 await monitorNextStop(stop: stop)
                 
-            case let .fetchPredictions(stop):
-                print("JourneyEngine effect: fetchPredictions for \(stop.mbtaStopId)")
-                await fetchPredictions(for: stop)
-                
-            case let .fetchTransferPredictions(stop):
-                print("JourneyEngine effect: fetchTransferPredictions for \(stop.mbtaStopId)")
-                await fetchTransferPredictions(for: stop)
+            case .fetchPredictions:
+                print("JourneyEngine effect: fetchPredictions")
+                await fetchPredictions()
                 
             case let .sendNotification(debug, user):
                 print("JourneyEngine effect: sendNotification - \(debug)")
@@ -364,7 +360,7 @@ actor JourneyEngine {
     
     func manualRefreshPredictions() async {
         guard var currentJourney = userDefaultsClient.loadActiveJourney(),
-              let currentStop = currentJourney.currentStop else { return }
+              var currentPrediction = currentJourney.predictionState else { return }
 
         // Debounce: prevent spamming refresh
         let now = Date()
@@ -372,114 +368,86 @@ actor JourneyEngine {
             return
         }
         lastManualRefresh = now
-
-        currentJourney.predictionState = .loading(stopId: currentStop.mbtaStopId)
-        saveActiveJourneyAndPublish(currentJourney)
-
-        await fetchPredictions(for: currentStop)
-    }
-    
-    
-    private func fetchPredictions(for stop: ResolvedStop) async {
-        do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop, .currentStopPrediction)
-            
-            await savePredictionResult(for: stop, result: .success(predictionResponse))
-        } catch {
-            await savePredictionResult(for: stop, result: .failure(error))
-        }
-    }
-    
-
-    private func savePredictionResult(for stop: ResolvedStop, result: Result<[TransitPrediction], Error>) async {
-        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-        guard freshJourney.currentStop?.mbtaStopId == stop.mbtaStopId else {
-            print("User manually advanced route during API call. Discarding stale times.")
-            return
-        }
         
+        currentPrediction.loadingState = .loading(stopId: currentPrediction.predictedStop.mbtaStopId)
+        currentJourney.predictionState = currentPrediction
+        saveActiveJourneyAndPublish(currentJourney)
+        
+        await fetchPredictions()
+    }
+    
+    
+    private func fetchPredictions() async {
+        guard let currentJourney = userDefaultsClient.loadActiveJourney(),
+              let currentPrediction = currentJourney.predictionState else { return }
+              
+        let requestType: MBTARequestType = currentPrediction.predictedStopType == .boarding ? .currentStopPrediction : .transferPrediction
+        
+        do {
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(currentPrediction.predictedStop, requestType)
+            await savePredictionResult(result: .success(predictionResponse))
+        } catch {
+            await savePredictionResult(result: .failure(error))
+        }
+    }
+    
+    
+    private func savePredictionResult(result: Result<[TransitPrediction], Error>) async {
+        guard var freshJourney = userDefaultsClient.loadActiveJourney(),
+              var currentPrediction = freshJourney.predictionState else { return }
+              
         switch result {
         case let .success(predictionResults):
             let times = predictionResults.map(\.display)
             if times.isEmpty {
-                freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
+                currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "No predictions available")
             } else {
-                freshJourney.predictionState = .loaded(stopId: stop.mbtaStopId, times:times)
+                currentPrediction.loadingState = .loaded(stopId: currentPrediction.predictedStop.mbtaStopId, times: times)
                 
-                if freshJourney.monitoringMode == .surface,
-                   freshJourney.movementStatus == .atStop,
-                   freshJourney.currentStop?.journeyRole != .final,
-                   freshJourney.currentStop?.journeyRole != .intermediate {
-                    
-                    if let currentVehicle = trackedVehicleId, let currentTrip = trackedTripId {
-                        let isStillPredicted = predictionResults.contains { $0.vehicleId == currentVehicle && $0.tripId == currentTrip }
-                        if !isStillPredicted {
-                            print("JourneyEngine: Tracked vehicle \(currentVehicle) departed surface stop according to API. Entering grace period.")
-                            surfaceDepartureQueue.append(
-                                RecentlyDepartedVehicle(vehicleId: currentVehicle, tripId: currentTrip, timestamp: Date())
-                            )
-                            
-                            if let nextPrediction = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
-                               let nextTrip = nextPrediction.tripId {
-                                trackedVehicleId = nextPrediction.vehicleId
-                                trackedTripId = nextTrip
-                                print("JourneyEngine: Locked onto next vehicle \(nextPrediction.vehicleId ?? "") for surface tracking")
-                            } else {
-                                trackedVehicleId = nil
-                                trackedTripId = nil
+                if currentPrediction.predictedStopType == .boarding {
+                    if freshJourney.monitoringMode == .surface,
+                       freshJourney.movementStatus == .atStop,
+                       freshJourney.currentStop?.journeyRole != .final,
+                       freshJourney.currentStop?.journeyRole != .intermediate {
+                        
+                        if let currentVehicle = trackedVehicleId, let currentTrip = trackedTripId {
+                            let isStillPredicted = predictionResults.contains { $0.vehicleId == currentVehicle && $0.tripId == currentTrip }
+                            if !isStillPredicted {
+                                print("JourneyEngine: Tracked vehicle \(currentVehicle) departed surface stop according to API. Entering grace period.")
+                                surfaceDepartureQueue.append(
+                                    RecentlyDepartedVehicle(vehicleId: currentVehicle, tripId: currentTrip, timestamp: Date())
+                                )
+                                
+                                if let nextPrediction = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
+                                   let nextTrip = nextPrediction.tripId {
+                                    trackedVehicleId = nextPrediction.vehicleId
+                                    trackedTripId = nextTrip
+                                    print("JourneyEngine: Locked onto next vehicle \(nextPrediction.vehicleId ?? "") for surface tracking")
+                                } else {
+                                    trackedVehicleId = nil
+                                    trackedTripId = nil
+                                }
                             }
                         }
+                        
+                        surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 60 }
                     }
-                    
-                    surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 60 }
                 }
             }
         case .failure(let error):
             if let mbtaError = error as? MBTAError, (mbtaError == .rateLimitDropped || mbtaError == .rateLimited) {
-                if case .loading = freshJourney.predictionState {
-                    freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Rate limit reached. Try again.")
+                //this should not propogate downwards to banner unless it's 
+                if case .loading = currentPrediction.loadingState {
+                    currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "Rate limit reached. Try again.")
                 } else {
                     return
                 }
             } else {
-                freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
+                currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "Cannot reach predictions")
             }
         }
         
-        saveActiveJourneyAndPublish(freshJourney)
-    }
-    
-    private func fetchTransferPredictions(for stop: ResolvedStop) async {
-        do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop, .transferPrediction)
-            await saveTransferPredictionResult(for: stop, result: .success(predictionResponse))
-        } catch {
-            await saveTransferPredictionResult(for: stop, result: .failure(error))
-        }
-    }
-    
-    private func saveTransferPredictionResult(for stop: ResolvedStop, result: Result<[TransitPrediction], Error>) async {
-        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-        switch result {
-        case let .success(predictionResults):
-            let times = predictionResults.map(\.display)
-            if times.isEmpty {
-                freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
-            } else {
-                freshJourney.transferPredictionState = .loaded(stopId: stop.mbtaStopId, times: times)
-            }
-        case .failure(let error):
-            if let mbtaError = error as? MBTAError, (mbtaError == .rateLimitDropped || mbtaError == .rateLimited) {
-                if case .loading = freshJourney.transferPredictionState {
-                    freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "Rate limit reached. Try again.")
-                } else {
-                    return
-                }
-            } else {
-                freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
-            }
-        }
-        
+        freshJourney.predictionState = currentPrediction
         saveActiveJourneyAndPublish(freshJourney)
     }
     
@@ -551,8 +519,6 @@ actor JourneyEngine {
         return matchedPath?.matches(leg: currentLeg, tripId: trackedTripId) == true
     }
     
-
-    
     // MARK: - State Publishing Helpers
     
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
@@ -595,8 +561,6 @@ actor JourneyEngine {
     }
     
     // MARK: - Timers
-    
-    // MARK: - Prediction Refresh Timer (surface mode)
     
     private func startPredictionRefreshTimer() {
         stopPredictionRefreshTimer()

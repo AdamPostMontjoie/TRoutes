@@ -35,8 +35,12 @@ enum JourneyAction: Equatable {
         
         switch stop.journeyRole {
         case .boarding:
-            state.predictionState = .loading(stopId: stop.mbtaStopId)
-            var effects: [JourneyEffect] = [.fetchPredictions(stop)]
+            state.predictionState = PredictionState(
+                predictedStop: stop,
+                predictedStopType: .boarding,
+                loadingState: .loading(stopId: stop.mbtaStopId)
+            )
+            var effects: [JourneyEffect] = [.fetchPredictions]
             
             // Look ahead to see if the next stop requires a different monitoring mode,
             if let nextStop = state.nextStop {
@@ -51,7 +55,7 @@ enum JourneyAction: Equatable {
             
         case let .transfer(overlapsNext):
             guard overlapsNext else {
-                state.predictionState = .notNeeded
+                state.predictionState = nil
                 return [.sendNotification("entered \(stop.mbtaStopId)")]
             }
             
@@ -61,7 +65,11 @@ enum JourneyAction: Equatable {
             }
             
             state.movementStatus = .atStop
-            state.predictionState = .loading(stopId: nextStop.mbtaStopId)
+            state.predictionState = PredictionState(
+                predictedStop: nextStop,
+                predictedStopType: .boarding,
+                loadingState: .loading(stopId: nextStop.mbtaStopId)
+            )
             return effectsForNextStop(
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
@@ -71,7 +79,7 @@ enum JourneyAction: Equatable {
             )
             
         case .intermediate:
-            state.predictionState = .notNeeded
+            state.predictionState = nil
             
             // Look ahead to see if the next stop requires a different monitoring mode,
             var effects: [JourneyEffect] = []
@@ -104,13 +112,11 @@ enum JourneyAction: Equatable {
                 return []
             }
             
-            state.predictionState = .notNeeded
-            let transferPredictionStop = prepareTransferPredictionState(state: &state, nextStop: nextStop)
+            prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
-                fetchPredictions: false,
-                transferPredictionStop: transferPredictionStop,
+                fetchPredictions: state.predictionState != nil,
                 message: "left \(stop.mbtaStopId)"
             )
             
@@ -124,13 +130,11 @@ enum JourneyAction: Equatable {
                 return []
             }
             
-            state.predictionState = .notNeeded
-            let transferPredictionStop = prepareTransferPredictionState(state: &state, nextStop: nextStop)
+            prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
-                fetchPredictions: false,
-                transferPredictionStop: transferPredictionStop,
+                fetchPredictions: state.predictionState != nil,
                 message: "left \(stop.mbtaStopId)"
             )
         case .intermediate:
@@ -139,13 +143,11 @@ enum JourneyAction: Equatable {
                 return []
             }
             
-            state.predictionState = .notNeeded
-            let transferPredictionStop = prepareTransferPredictionState(state: &state, nextStop: nextStop)
+            prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
-                fetchPredictions: false,
-                transferPredictionStop: transferPredictionStop,
+                fetchPredictions: state.predictionState != nil,
                 message: "left \(stop.mbtaStopId)"
             )
         case .final:
@@ -156,14 +158,17 @@ enum JourneyAction: Equatable {
         }
     }
     
-    private func prepareTransferPredictionState(state: inout JourneyState, nextStop: ResolvedStop) -> ResolvedStop? {
+    private func prepareTransferPredictionState(state: inout JourneyState, nextStop: ResolvedStop) {
         guard let transferPredictionStop = transferPredictionStop(state: state, transferStop: nextStop) else {
-            state.transferPredictionState = .notNeeded
-            return nil
+            state.predictionState = nil
+            return
         }
 
-        state.transferPredictionState = .loading(stopId: transferPredictionStop.mbtaStopId)
-        return transferPredictionStop
+        state.predictionState = PredictionState(
+            predictedStop: transferPredictionStop,
+            predictedStopType: .transfer,
+            loadingState: .loading(stopId: transferPredictionStop.mbtaStopId)
+        )
     }
     private func backtrackToStop(state: inout JourneyState) -> [JourneyEffect] {
         guard let prevStop = state.backtrackToPreviousStop() else {
@@ -172,54 +177,28 @@ enum JourneyAction: Equatable {
         
         state.pendingDepartureConfirmation = false
         state.movementStatus = .atStop
-        state.predictionState = .loading(stopId: prevStop.mbtaStopId)
+        state.predictionState = PredictionState(
+            predictedStop: prevStop,
+            predictedStopType: .boarding,
+            loadingState: .loading(stopId: prevStop.mbtaStopId)
+        )
         
         // Return effects to switch mode if needed and re-monitor the stop
         var effects: [JourneyEffect] = []
         effects.append(.monitorStop(prevStop))
-        effects.append(.fetchPredictions(prevStop))
+        effects.append(.fetchPredictions)
         effects.append(.sendNotification("Backtracked to \(prevStop.stopName)"))
         return effects
     }
     
     private func evaluatePredictionRefresh(state: inout JourneyState) -> [JourneyEffect] {
-        guard let currentStop = state.currentStop else { return [] }
-        
-        var effects: [JourneyEffect] = []
-        switch state.predictionState {
-        case .loaded, .unavailable, .loading:
-            effects.append(.fetchPredictions(currentStop))
-        case .notNeeded:
-            break
-        }
-        
-        if state.movementStatus == .enRoute {
-            switch state.transferPredictionState {
-            case .loaded, .unavailable, .loading:
-                if let currentLeg = state.currentLeg, let legFinalStop = currentLeg.stops.last {
-                    let legTotalStops = currentLeg.stops.count
-                    let legCurrentIndex = currentStop.legStopIndex
-                    let stopsRemainingInLeg = legTotalStops - legCurrentIndex
-                    let isTransferLeg = state.legIndex < state.legOrder.count - 1
-                    
-                    if isTransferLeg && stopsRemainingInLeg == 1 {
-                        let transferPredictionStop = transferPredictionStop(state: state, transferStop: legFinalStop)
-                        if let transferPredictionStop {
-                            effects.append(.fetchTransferPredictions(transferPredictionStop))
-                        }
-                    }
-                }
-            case .notNeeded:
-                break
-            }
-        }
-        return effects
+        guard state.predictionState != nil else { return [] }
+        return [.fetchPredictions]
     }
     private func effectsForNextStop(
         _ nextStop: ResolvedStop,
         previousMonitoringMode: MonitoringMode,
         fetchPredictions: Bool,
-        transferPredictionStop: ResolvedStop? = nil,
         message: String,
         userMessage: String? = nil
     ) -> [JourneyEffect] {
@@ -229,10 +208,7 @@ enum JourneyAction: Equatable {
         }
         effects.append(.monitorStop(nextStop))
         if fetchPredictions {
-            effects.append(.fetchPredictions(nextStop))
-        }
-        if let transferPredictionStop {
-            effects.append(.fetchTransferPredictions(transferPredictionStop))
+            effects.append(.fetchPredictions)
         }
         effects.append(.sendNotification(message, user: userMessage))
         return effects
@@ -248,8 +224,7 @@ enum JourneyAction: Equatable {
 
 enum JourneyEffect: Equatable {
     case monitorStop(ResolvedStop) // rename start monitoring for?
-    case fetchPredictions(ResolvedStop)
-    case fetchTransferPredictions(ResolvedStop)
+    case fetchPredictions
     case switchMonitoringMode(MonitoringMode)
     case sendNotification(_ debug: String, user: String? = nil)
     case endRoute

@@ -30,39 +30,15 @@ struct ActiveJourneyDisplayFeature {
             }
         }
         
-        var currentDisplayPredictionState: PredictionState? {
-            if journey?.movementStatus == .atStop {
-                return journey?.predictionState
-            } else if journey?.movementStatus == .enRoute {
-                // If approaching a transfer, prefer transfer predictions.
-                if let journey = journey,
-                   let currentLeg = journey.currentLeg,
-                   let currentStop = journey.currentStop {
-                   
-                    let legTotalStops = currentLeg.stops.count
-                    let legCurrentIndex = currentStop.legStopIndex
-                    let stopsRemainingInLeg = legTotalStops - legCurrentIndex
-                    let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
-                    
-                    if isTransferLeg && stopsRemainingInLeg == 1 {
-                        switch journey.transferPredictionState {
-                        case .notNeeded:
-                            break
-                        case .loaded, .unavailable, .loading:
-                            return journey.transferPredictionState
-                        }
-                    }
-                }
-                return journey?.predictionState
-            }
-            return nil
+        var currentDisplayPredictionLoadingState: PredictionLoadingState? {
+            return journey?.predictionState?.loadingState
         }
         
         var shouldShowRefreshButton: Bool {
-            switch currentDisplayPredictionState {
+            switch currentDisplayPredictionLoadingState {
             case .loaded, .unavailable,.loading:
                 return true
-            case  .notNeeded, .none:
+            case .none:
                 return false
             }
         }
