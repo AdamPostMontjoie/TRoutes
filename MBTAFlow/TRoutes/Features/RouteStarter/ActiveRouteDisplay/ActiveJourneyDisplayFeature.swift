@@ -34,6 +34,10 @@ struct ActiveJourneyDisplayFeature {
             return journey?.predictionState?.loadingState
         }
         
+        var currentPredictionType: PredictionTargetType? {
+            return journey?.predictionState?.predictedStopType
+        }
+        
         var shouldShowRefreshButton: Bool {
             switch currentDisplayPredictionLoadingState {
             case .loaded, .unavailable,.loading:

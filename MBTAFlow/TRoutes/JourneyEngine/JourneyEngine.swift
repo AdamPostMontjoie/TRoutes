@@ -14,11 +14,11 @@ enum ManualEvent: Equatable {
 }
 
 enum JourneyCommand: Equatable {
-    case executeEntry(stopId:String)
-    case executeExit(stopId:String)
-    case approachingStop(stopId: String)
-    case missedVehicle(stopId: String)
-    case confirmDeparture(stopId: String)
+    case executeEntry(stopId:String)//user has entered the stop
+    case executeExit(stopId:String)//user has left the stop
+    case approachingStop(stopId: String)//user is nearing the stop
+    case missedVehicle(stopId: String)//we missed the train
+    case confirmDeparture(stopId: String)//w
     case refreshTimes(stopId: String)
     case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError)
@@ -49,6 +49,7 @@ actor JourneyEngine {
     private var predictionRefreshTask: Task<Void, Never>?
     private var loadingTask: Task<Void, Never>?
     private var lastManualRefresh: Date?
+    private var lastPredictionFetchTime: Date?
     
     //underground fields
     private var matchedPath:MatchedLegPath?
@@ -99,7 +100,6 @@ actor JourneyEngine {
             switch reconciledJourney.monitoringMode {
             case .surface:
                 await startListeningToLocationEvents()
-                startPredictionRefreshTimer()
             case .underground:
                 await startListeningToUndergroundEvents()
             }
@@ -197,7 +197,6 @@ actor JourneyEngine {
         if let firstStop = journey.currentStop {
             if firstStop.monitoringMode == .surface {
                 await startListeningToLocationEvents()
-                startPredictionRefreshTimer()
             } else {
                 await startListeningToUndergroundEvents()
             }
@@ -294,11 +293,9 @@ actor JourneyEngine {
             //start RGM
             print("surface monitoring")
             await startListeningToLocationEvents()
-            startPredictionRefreshTimer()
         case .underground:
             //end RGM
             await RegionManager.shared.stopFunction()
-            stopPredictionRefreshTimer()
             //start UGM
             print("underground monitoring")
             await startListeningToUndergroundEvents()
@@ -365,7 +362,7 @@ actor JourneyEngine {
         guard let currentJourney = userDefaultsClient.loadActiveJourney(),
               let currentPrediction = currentJourney.predictionState else { return }
         
-        resetPredictionRefreshTimer() //resets timer to save on rate
+        lastPredictionFetchTime = Date()
         
         let requestType: MBTARequestType = currentPrediction.predictedStopType == .boarding ? .currentStopPrediction : .transferPrediction
 
@@ -394,9 +391,24 @@ actor JourneyEngine {
                 // Track top vehicle for underground handoff
                 if currentPrediction.predictedStopType == .boarding,
                    freshJourney.movementStatus == .atStop {
-                    if let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
+        
+                    if trackedVehicleId == nil, let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
+                        let isNewVehicle = trackedVehicleId != firstValid.vehicleId
                         trackedVehicleId = firstValid.vehicleId
                         trackedTripId = firstValid.tripId
+                        
+                        if isNewVehicle, freshJourney.monitoringMode == .underground {
+                            print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(currentPrediction.predictedStop.mbtaStopId)")
+                            await UndergroundManager.shared.setTrackedVehicle(
+                                vehicleId: firstValid.vehicleId!,
+                                tripId: firstValid.tripId!,
+                                boardingStopId: currentPrediction.predictedStop.mbtaStopId,
+                                waitToBoard: true,
+                                stopLatitude: currentPrediction.predictedStop.latitude,
+                                stopLongitude: currentPrediction.predictedStop.longitude,
+                                isFirstStop: freshJourney.stopIndex == 0
+                            )
+                        }
                     }
                 }
             }
@@ -461,6 +473,16 @@ actor JourneyEngine {
     
     // MARK: - State Publishing Helpers
     
+    private func managePredictionTimer(for journey: JourneyState) {
+        if journey.predictionState != nil {
+            if predictionRefreshTask == nil {
+                startPredictionRefreshTimer()
+            }
+        } else {
+            stopPredictionRefreshTimer()
+        }
+    }
+    
     private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
         var journeyToSave = journey
         journeyToSave.trackedVehicleId = self.trackedVehicleId
@@ -469,6 +491,8 @@ actor JourneyEngine {
         journeyToSave.timeSaved = Date()
         
         userDefaultsClient.saveActiveJourney(journeyToSave)
+        managePredictionTimer(for: journeyToSave)
+        
         for continuation in journeyUpdateContinuations.values {
             continuation.yield(.activeJourneyChanged(journeyToSave))
         }
@@ -476,6 +500,7 @@ actor JourneyEngine {
     
     private func clearActiveJourneyAndPublish() {
         userDefaultsClient.clearActiveJourney()
+        stopPredictionRefreshTimer()
         for continuation in journeyUpdateContinuations.values {
             continuation.yield(.activeJourneyChanged(nil))
         }
@@ -506,18 +531,19 @@ actor JourneyEngine {
         stopPredictionRefreshTimer()
         predictionRefreshTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+                let now = Date()
+                let timeSinceLastFetch = now.timeIntervalSince(lastPredictionFetchTime ?? .distantPast)
+                let timeToWait = max(1.0, 15.0 - timeSinceLastFetch)
+                
+                try? await Task.sleep(for: .seconds(timeToWait))
+                
                 guard !Task.isCancelled else { break }
+                
                 if let journey = userDefaultsClient.loadActiveJourney(), let stop = journey.currentStop {
                     await ValidateJourneyCommand(.refreshTimes(stopId: stop.mbtaStopId))
                 }
             }
         }
-    }
-    
-    private func resetPredictionRefreshTimer(){
-        stopPredictionRefreshTimer()
-        startPredictionRefreshTimer()
     }
     
     private func stopPredictionRefreshTimer() {

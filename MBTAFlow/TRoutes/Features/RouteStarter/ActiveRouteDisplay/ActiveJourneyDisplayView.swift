@@ -161,7 +161,8 @@ struct ActiveJourneyDisplayView: View {
     private var predictionTimesView: some View {
         switch store.currentDisplayPredictionLoadingState {
         case let .loaded(_, times):
-            Text(times.joined(separator: "  •  "))
+            let prefix = store.currentPredictionType == .transfer ? "Transfer Stop: " : ""
+            Text("\(prefix)\(times.joined(separator: ", "))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
