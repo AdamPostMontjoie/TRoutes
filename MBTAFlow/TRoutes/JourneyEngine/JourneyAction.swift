@@ -252,4 +252,8 @@ enum JourneyEffect: Equatable {
     case switchMonitoringMode(MonitoringMode)
     case sendNotification(_ debug: String, user: String? = nil)
     case endRoute
+    
+    case updateTrackedVehicle(vehicleId: String?, tripId: String?)
+    case resetTrackingState
+    case refreshTripTrackingData(tripId: String)
 }

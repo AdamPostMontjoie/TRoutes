@@ -29,15 +29,12 @@ extension NotificationsClient: DependencyKey {
             guard DebugAvailability.isDebugActive else {
                 return
             }
-            print("sening notification")
-            
-            // 2. Construct the payload
+
             let content = UNMutableNotificationContent()
             content.title = "MBTAFlow Debug"
             content.body = log
             content.sound = .default
-            
-            // 3. nil trigger guarantees immediate delivery
+
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
                 content: content,

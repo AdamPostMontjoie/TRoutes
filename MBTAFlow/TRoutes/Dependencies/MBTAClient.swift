@@ -15,7 +15,6 @@ struct MBTAClient {
     var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String) async throws -> [Stop]
-    var fetchRoutes: @Sendable (String, String) async throws -> String
     //position
     var fetchVehicleData: @Sendable (String) async throws -> VehicleData
     var fetchTripTrackingData: @Sendable (String) async throws -> LiveTripTrackingData
@@ -260,10 +259,6 @@ extension MBTAClient:DependencyKey {
                         } catch {
                             throw MBTAError.decodingError
                         }
-        },
-        fetchRoutes: { filterKey,filterValue in
-            
-            return "routes"
         },
         fetchVehicleData: { vehicleId in
             guard let encodedVehicleId = vehicleId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
