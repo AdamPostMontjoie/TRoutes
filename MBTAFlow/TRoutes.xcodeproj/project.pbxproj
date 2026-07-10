@@ -11,6 +11,7 @@
 		96318B9B2FC4BC4600534049 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96318B9A2FC4BC4600534049 /* WidgetKit.framework */; };
 		96318B9D2FC4BC4600534049 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96318B9C2FC4BC4600534049 /* SwiftUI.framework */; };
 		96318BAE2FC4BC4700534049 /* TRoutesWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 96318B982FC4BC4600534049 /* TRoutesWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		96A682673001637F00BFA41E /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = 96A682663001637F00BFA41E /* DequeModule */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +88,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				96318B542FC1FAEA00534049 /* ComposableArchitecture in Frameworks */,
+				96A682673001637F00BFA41E /* DequeModule in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,6 +156,7 @@
 			name = TRoutes;
 			packageProductDependencies = (
 				96318B532FC1FAEA00534049 /* ComposableArchitecture */,
+				96A682663001637F00BFA41E /* DequeModule */,
 			);
 			productName = MBTAFlow;
 			productReference = 96318B422FC1F7FA00534049 /* TRoutes.app */;
@@ -210,6 +213,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				96318B522FC1FAEA00534049 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				96A682653001637F00BFA41E /* XCRemoteSwiftPackageReference "swift-collections" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 96318B432FC1F7FA00534049 /* Products */;
@@ -563,6 +567,14 @@
 				minimumVersion = 1.25.5;
 			};
 		};
+		96A682653001637F00BFA41E /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -570,6 +582,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 96318B522FC1FAEA00534049 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
+		};
+		96A682663001637F00BFA41E /* DequeModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96A682653001637F00BFA41E /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = DequeModule;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -11,13 +11,13 @@ import Foundation
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
     //predictions
-    var fetchTransitTimes: @Sendable (ResolvedStop) async throws -> [TransitPrediction]
-    var fetchDirections: @Sendable (String) async throws -> [TransitDirection]
-    var fetchBranches: @Sendable (String, String) async throws -> [TransitBranch]
-    var fetchStops: @Sendable (Int, String) async throws -> [Stop]
+    var fetchTransitTimes: @Sendable (ResolvedStop, MBTARequestType) async throws -> [TransitPrediction]
+    var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
+    var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
+    var fetchStops: @Sendable (Int, String, MBTARequestType) async throws -> [Stop]
     //position
-    var fetchVehicleData: @Sendable (String) async throws -> VehicleData
-    var fetchTripTrackingData: @Sendable (String) async throws -> LiveTripTrackingData
+    var fetchVehicleData: @Sendable (String, MBTARequestType) async throws -> VehicleData
+    var fetchTripTrackingData: @Sendable (String, MBTARequestType) async throws -> LiveTripTrackingData
 }
 
 
@@ -29,6 +29,7 @@ enum MBTAError: Error, Equatable {
     case badRequest(String)
     case forbidden
     case rateLimited
+    case rateLimitDropped
     case serverError(Int)
     case timeoutError
     case decodingError
@@ -60,7 +61,12 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
-        fetchTransitTimes: { stop in
+        fetchTransitTimes: { stop, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
             //filter out any that are in past and then return next 3.
             guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
                 throw MBTAError.networkError
@@ -135,7 +141,12 @@ extension MBTAClient:DependencyKey {
             }
         },
        
-        fetchDirections: { routeId in
+        fetchDirections: { routeId, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
                     guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                         throw MBTAError.networkError
                     }
@@ -172,7 +183,12 @@ extension MBTAClient:DependencyKey {
                 },
     
         //for use on lines that don't have a single direction
-        fetchBranches: { filterKey, filterValue in
+        fetchBranches: { filterKey, filterValue, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
@@ -222,7 +238,12 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.decodingError
             }
         },
-        fetchStops: { directionId, routeId in
+        fetchStops: { directionId, routeId, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                             throw MBTAError.networkError
                         }
@@ -260,7 +281,12 @@ extension MBTAClient:DependencyKey {
                             throw MBTAError.decodingError
                         }
         },
-        fetchVehicleData: { vehicleId in
+        fetchVehicleData: { vehicleId, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
             guard let encodedVehicleId = vehicleId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                   let url = URL(string: "\(header)vehicles/\(encodedVehicleId)") else {
                 throw MBTAError.networkError
@@ -294,7 +320,13 @@ extension MBTAClient:DependencyKey {
             }
         },
 
-        fetchTripTrackingData: { tripId in
+        fetchTripTrackingData: { tripId, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
+            
             guard let encodedTripId = tripId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                   let url = URL(string: "\(header)trips/\(encodedTripId)?include=stops,predictions,vehicle,route_pattern") else {
                 throw MBTAError.networkError

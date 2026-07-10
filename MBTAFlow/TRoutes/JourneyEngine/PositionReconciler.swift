@@ -51,7 +51,7 @@ actor PositionReconciler {
             throw ReconcileError.unableToReconcile
         }
         
-        let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId)
+        let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId, .vehiclePosition)
         
         guard let vehicleStopId = vehicleData.stopId,
               let vehicleLat = vehicleData.latitude,

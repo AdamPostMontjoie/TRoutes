@@ -223,6 +223,7 @@ actor JourneyEngine {
         case .nextStopTapped:
             await self.ValidateJourneyCommand(JourneyCommand.executeExit(stopId: currentStop.mbtaStopId))
         }
+        //cases for manual missed stop and confirm train TBA
     }
     
     //did we already receive this valid command from a different source and make the change?
@@ -234,7 +235,6 @@ actor JourneyEngine {
             command: event,
             surfaceQueue: surfaceDepartureQueue
         )
-        
         saveActiveJourneyAndPublish(currentJourney)
         await runJourneyEffects(effects)
     }
@@ -372,7 +372,7 @@ actor JourneyEngine {
     
     private func fetchPredictions(for stop: ResolvedStop) async {
         do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop, .currentStopPrediction)
             
             await savePredictionResult(for: stop, result: .success(predictionResponse))
         } catch {
@@ -424,7 +424,10 @@ actor JourneyEngine {
                     surfaceDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 60 }
                 }
             }
-        case .failure:
+        case .failure(let error):
+            if let mbtaError = error as? MBTAError, mbtaError == .rateLimitDropped {
+                return
+            }
             freshJourney.predictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
         }
         
@@ -433,7 +436,7 @@ actor JourneyEngine {
     
     private func fetchTransferPredictions(for stop: ResolvedStop) async {
         do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop, .transferPrediction)
             await saveTransferPredictionResult(for: stop, result: .success(predictionResponse))
         } catch {
             await saveTransferPredictionResult(for: stop, result: .failure(error))
@@ -450,7 +453,10 @@ actor JourneyEngine {
             } else {
                 freshJourney.transferPredictionState = .loaded(stopId: stop.mbtaStopId, times: times)
             }
-        case .failure:
+        case .failure(let error):
+            if let mbtaError = error as? MBTAError, mbtaError == .rateLimitDropped {
+                return
+            }
             freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
         }
         
@@ -459,7 +465,7 @@ actor JourneyEngine {
     
     private func fetchPredictionsAndSelectVehicle(stop:ResolvedStop) async -> Bool {
         do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
+            let predictionResponse = try await mbtaClient.fetchTransitTimes(stop, .currentStopPrediction)
             
             guard let selectedPrediction = predictionResponse.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
                   let tripId = selectedPrediction.tripId else {
@@ -480,13 +486,12 @@ actor JourneyEngine {
     
     private func refreshTripTrackingData(tripId:String) async  {
         do {
-            let tripTrackingData = try await mbtaClient.fetchTripTrackingData(tripId)
+            let tripTrackingData = try await mbtaClient.fetchTripTrackingData(tripId, .patternMatching)
             // we need a new path once we get new trip data
             updateMatchedLegPath(tripTrackingData: tripTrackingData)
             
         } catch {
             handleVehicleFetchError(error: error)
-            
         }
     }
     

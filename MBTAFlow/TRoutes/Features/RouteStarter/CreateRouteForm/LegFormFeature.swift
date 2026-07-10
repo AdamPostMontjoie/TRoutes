@@ -204,7 +204,7 @@ struct LegFormFeature {
                     effects.append(
                         .run { send in
                             do {
-                                let branches = try await fetchBranches(filterKey, filterValue)
+                                let branches = try await fetchBranches(filterKey, filterValue, .formRequest)
                                 await send(.editBranchOptionsHydrated(branches))
                             } catch {
                                 await send(.apiFailure)
@@ -220,7 +220,7 @@ struct LegFormFeature {
                     effects.append(
                         .run { send in
                             do {
-                                let directions = try await fetchDirections(routeId)
+                                let directions = try await fetchDirections(routeId, .formRequest)
                                 await send(.editDirectionOptionsHydrated(directions))
                             } catch {
                                 await send(.apiFailure)
@@ -237,7 +237,7 @@ struct LegFormFeature {
                     effects.append(
                         .run { send in
                             do {
-                                let stops = try await fetchStops(direction.directionId, routeId)
+                                let stops = try await fetchStops(direction.directionId, routeId, .formRequest)
                                 await send(.editStopOptionsHydrated(stops))
                             } catch {
                                 await send(.apiFailure)
@@ -257,7 +257,7 @@ struct LegFormFeature {
                     let fetchDirections = mbtaClient.fetchDirections
                     return .run { send in
                         do {
-                            let directions = try await fetchDirections(mbtaRouteId)
+                            let directions = try await fetchDirections(mbtaRouteId, .formRequest)
                             await send(.directionsLoaded(directions))
                         } catch {
                             await send(.apiFailure)
@@ -269,7 +269,7 @@ struct LegFormFeature {
                     let fetchBranches = mbtaClient.fetchBranches
                     return .run { send in
                         do {
-                            let branches = try await fetchBranches(filterKey, filterValue)
+                            let branches = try await fetchBranches(filterKey, filterValue, .formRequest)
                             await send(.branchesLoaded(branches))
                         } catch {
                             await send(.apiFailure)
@@ -295,7 +295,7 @@ struct LegFormFeature {
                     let fetchDirections = mbtaClient.fetchDirections
                     return .run { send in
                         do {
-                            let directions = try await fetchDirections(branch.id)
+                            let directions = try await fetchDirections(branch.id, .formRequest)
                             await send(.directionsLoaded(directions))
                         } catch {
                             await send(.apiFailure)
@@ -320,7 +320,7 @@ struct LegFormFeature {
                 let fetchStops = mbtaClient.fetchStops
                 return .run { send in
                     do {
-                        let stops = try await fetchStops(direction.directionId, mbtaRouteId)
+                        let stops = try await fetchStops(direction.directionId, mbtaRouteId, .formRequest)
                         await send(.stopsLoaded(stops))
                     } catch {
                         await send(.apiFailure)

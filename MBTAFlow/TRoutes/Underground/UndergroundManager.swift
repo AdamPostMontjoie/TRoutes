@@ -187,7 +187,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             return
         }
         do {
-            let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId)
+            let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId, .vehiclePosition)
             guard currentVehicle.currentVehicleId == vehicleId else {
                 print("Ignoring stale underground vehicle response for \(vehicleId)")
                 return
