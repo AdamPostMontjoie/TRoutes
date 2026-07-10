@@ -51,6 +51,7 @@ playground.xcworkspace
 .env
 .vscode
 .agents
+.agents/AGENTS.md
 
 Carthage/Build/
 
