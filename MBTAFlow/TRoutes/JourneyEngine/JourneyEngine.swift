@@ -64,8 +64,6 @@ actor JourneyEngine {
     //boarding train queues
     //require more complex solution, not done here
     private var surfaceDepartureQueue: [RecentlyDepartedVehicle] = []
-    private var transferDepartureQueue: [RecentlyDepartedVehicle] = []
-    private var previousTransferPredictions: [TransitPrediction] = []
     
     // MARK: - Lifecycle & State Reconciliation
     
@@ -322,8 +320,6 @@ actor JourneyEngine {
         trackedTripId = nil
         matchedPath = nil
         surfaceDepartureQueue.removeAll()
-        transferDepartureQueue.removeAll()
-        previousTransferPredictions.removeAll()
         
         if journey.movementStatus == .atStop,
            let currentStop = journey.currentStop {
@@ -342,8 +338,6 @@ actor JourneyEngine {
         trackedTripId = nil
         matchedPath = nil
         surfaceDepartureQueue.removeAll()
-        transferDepartureQueue.removeAll()
-        previousTransferPredictions.removeAll()
         
         if journey.currentStop?.mbtaStopId == stopId,
            journey.movementStatus == .atStop,
@@ -565,18 +559,6 @@ actor JourneyEngine {
                 freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "No predictions available")
             } else {
                 freshJourney.transferPredictionState = .loaded(stopId: stop.mbtaStopId, times: times)
-                
-                let currentValidPredictions = predictionResults.filter { $0.vehicleId != nil && $0.tripId != nil }
-                for oldPred in previousTransferPredictions {
-                    if let oldVehicle = oldPred.vehicleId, let oldTrip = oldPred.tripId {
-                        if !currentValidPredictions.contains(where: { $0.vehicleId == oldVehicle && $0.tripId == oldTrip }) {
-                            print("JourneyEngine: Transfer vehicle \(oldVehicle) departed. Adding to transfer queue.")
-                            transferDepartureQueue.append(RecentlyDepartedVehicle(vehicleId: oldVehicle, tripId: oldTrip, timestamp: Date()))
-                        }
-                    }
-                }
-                transferDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 60 }
-                previousTransferPredictions = currentValidPredictions
             }
         case .failure:
             freshJourney.transferPredictionState = .unavailable(stopId: stop.mbtaStopId, message: "Cannot reach predictions")
@@ -588,19 +570,6 @@ actor JourneyEngine {
     private func fetchPredictionsAndSelectVehicle(stop:ResolvedStop) async -> Bool {
         do {
             let predictionResponse = try await mbtaClient.fetchTransitTimes(stop)
-            
-            transferDepartureQueue.removeAll { Date().timeIntervalSince($0.timestamp) > 60 }
-            if let recentTransfer = transferDepartureQueue.last {
-                print("JourneyEngine: Selected recently departed transfer vehicle \(recentTransfer.vehicleId) from queue")
-                trackedVehicleId = recentTransfer.vehicleId
-                trackedTripId = recentTransfer.tripId
-                trackedBoardingStopId = stop.mbtaStopId
-                await refreshTripTrackingData(tripId: recentTransfer.tripId)
-                
-                transferDepartureQueue.removeAll()
-                
-                return true
-            }
             
             guard let selectedPrediction = predictionResponse.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
                   let tripId = selectedPrediction.tripId else {
@@ -713,8 +682,6 @@ actor JourneyEngine {
         trackedTripId = nil
         trackedBoardingStopId = nil
         surfaceDepartureQueue.removeAll()
-        transferDepartureQueue.removeAll()
-        previousTransferPredictions.removeAll()
         await RegionManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }
