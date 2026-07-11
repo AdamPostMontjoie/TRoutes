@@ -15,8 +15,7 @@ struct JourneyState: Equatable, Codable {
     var stopIndex: Int = 0
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
-    var predictionState: PredictionState = .notNeeded
-    var transferPredictionState: PredictionState = .notNeeded
+    var predictionState: PredictionState? = nil
     var monitoringMode:MonitoringMode = .underground
     var pendingDepartureConfirmation: Bool = false
     
@@ -24,6 +23,8 @@ struct JourneyState: Equatable, Codable {
     var trackedVehicleId: String? = nil
     var trackedTripId: String? = nil
     var trackedBoardingStopId: String? = nil
+    
+    var arrivedTrains: [ArrivedTrain] = []
     
     var timeSaved: Date = Date()
     
@@ -66,7 +67,15 @@ struct JourneyState: Equatable, Codable {
         self.stopOrder = stops
         self.legOrder = route.legs
         self.monitoringMode = stops.first?.monitoringMode ?? .underground
-        self.predictionState = stops.first.map { .loading(stopId: $0.mbtaStopId) } ?? .notNeeded
+        if let firstStop = stops.first {
+            self.predictionState = PredictionState(
+                predictedStop: firstStop,
+                predictedStopType: .boarding,
+                loadingState: .loading(stopId: firstStop.mbtaStopId)
+            )
+        } else {
+            self.predictionState = nil
+        }
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -77,13 +86,13 @@ struct JourneyState: Equatable, Codable {
         case legIndex
         case movementStatus
         case predictionState
-        case transferPredictionState
         case monitoringMode
         case pendingDepartureConfirmation
         case trackedVehicleId
         case trackedTripId
         case trackedBoardingStopId
         case timeSaved
+        case arrivedTrains
     }
     
     init(from decoder: Decoder) throws {
@@ -95,14 +104,14 @@ struct JourneyState: Equatable, Codable {
         stopIndex = try container.decode(Int.self, forKey: .stopIndex)
         legIndex = try container.decode(Int.self, forKey: .legIndex)
         movementStatus = try container.decode(MovementStatus.self, forKey: .movementStatus)
-        predictionState = try container.decode(PredictionState.self, forKey: .predictionState)
-        transferPredictionState = try container.decode(PredictionState.self, forKey: .transferPredictionState)
+        predictionState = try container.decodeIfPresent(PredictionState.self, forKey: .predictionState)
         monitoringMode = try container.decode(MonitoringMode.self, forKey: .monitoringMode)
         pendingDepartureConfirmation = try container.decodeIfPresent(Bool.self, forKey: .pendingDepartureConfirmation) ?? false
         trackedVehicleId = try container.decodeIfPresent(String.self, forKey: .trackedVehicleId)
         trackedTripId = try container.decodeIfPresent(String.self, forKey: .trackedTripId)
         trackedBoardingStopId = try container.decodeIfPresent(String.self, forKey: .trackedBoardingStopId)
         timeSaved = try container.decodeIfPresent(Date.self, forKey: .timeSaved) ?? Date()
+        arrivedTrains = try container.decodeIfPresent([ArrivedTrain].self, forKey: .arrivedTrains) ?? []
     }
     
     //determine monitoring mode here? or in journey actions?
@@ -120,7 +129,7 @@ struct JourneyState: Equatable, Codable {
 
         return nextStop
     }
-    //go back to prev stop
+    
     mutating func backtrackToPreviousStop() -> ResolvedStop? {
         guard let prevStop = previousStop else { return nil }
         stopIndex -= 1
@@ -131,7 +140,6 @@ struct JourneyState: Equatable, Codable {
         return prevStop
     }
     
-    //
     mutating func advanceToNextLeg() -> ResolvedLeg? {
         let nextIndex = legIndex + 1
         guard legOrder.indices.contains(nextIndex) else {
@@ -144,8 +152,18 @@ struct JourneyState: Equatable, Codable {
 
 }
 
-enum PredictionState: Equatable, Codable {
-    case notNeeded
+struct PredictionState: Equatable, Codable {
+    let predictedStop:ResolvedStop
+    let predictedStopType: PredictionTargetType
+    var loadingState:PredictionLoadingState
+}
+
+enum PredictionTargetType: String, Codable, Equatable {
+    case boarding
+    case transfer
+}
+
+enum PredictionLoadingState: Equatable, Codable {
     case loading(stopId: String)
     case loaded(stopId: String, times: [String])
     case unavailable(stopId: String, message: String)
@@ -159,4 +177,10 @@ enum MovementStatus: Codable {
 enum MonitoringMode:Equatable, Codable {
     case underground
     case surface
+}
+
+struct ArrivedTrain: Equatable, Codable {
+    let vehicleId: String
+    let tripId: String
+    let arrivedAt: Date
 }

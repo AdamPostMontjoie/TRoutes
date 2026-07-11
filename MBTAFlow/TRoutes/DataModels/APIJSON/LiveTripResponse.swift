@@ -5,7 +5,7 @@
 //  Created by Adam Post on 7/3/26.
 //
 
-struct LiveTripTrackingData: Equatable {
+struct LiveTripPath: Equatable {
     let tripId: String
     let vehicleId: String?
     let routePatternId: String?

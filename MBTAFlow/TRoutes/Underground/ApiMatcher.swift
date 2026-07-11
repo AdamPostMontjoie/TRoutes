@@ -15,10 +15,10 @@ struct MatchedLegPath {
     let patternStopByEdgeSequenceNumber: [Int: ResolvedPatternStop]
     let parentStationIdByTripStopId: [String: String]
 
-    init(leg: ResolvedLeg, tripTrackingData: LiveTripTrackingData) {
+    init(leg: ResolvedLeg, tripPath: LiveTripPath) {
         sourceLegId = leg.sourceLegId
         selectedPatternId = leg.selectedPatternId
-        tripId = tripTrackingData.tripId
+        tripId = tripPath.tripId
 
         var legStopByStopId: [String: ResolvedStop] = [:]
         for stop in leg.stops {
@@ -39,7 +39,7 @@ struct MatchedLegPath {
         self.patternStopByEdgeSequenceNumber = patternStopByEdgeSequenceNumber
 
         var parentStationIdByTripStopId: [String: String] = [:]
-        for stop in tripTrackingData.stops {
+        for stop in tripPath.stops {
             if let parentStationId = stop.parentStationId {
                 parentStationIdByTripStopId[stop.stopId] = parentStationId
             }

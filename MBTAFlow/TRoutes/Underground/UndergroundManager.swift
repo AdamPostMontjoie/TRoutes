@@ -86,7 +86,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var evaluatingDepartureStartTime: Date?
     private var highConfidenceMissedCount: Int = 0
 
-    private static let departureEvaluationTimeout: TimeInterval = 30
+    private static let departureEvaluationTimeout: TimeInterval = 4
     private static let boardedProximityThreshold: CLLocationDistance = 75
     private static let boardedStationDistanceThreshold: CLLocationDistance = 100
     private static let missedDistanceThreshold: CLLocationDistance = 200
@@ -187,7 +187,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             return
         }
         do {
-            let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId)
+            let vehicleData = try await mbtaClient.fetchVehicleData(vehicleId, .vehiclePosition)
             guard currentVehicle.currentVehicleId == vehicleId else {
                 print("Ignoring stale underground vehicle response for \(vehicleId)")
                 return
@@ -224,11 +224,11 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
         if phase != .idle {
             // Refresh predictions on each poll tick
-            if let stopId = currentStopToMonitorId {
-                continuation?.yield(.refreshTimes(stopId: stopId))
-            }
+           // if let stopId = currentStopToMonitorId {
+          //      continuation?.yield(.refreshTimes(stopId: stopId))
+          //  }
             // Poll faster during departure evaluation for quicker resolution
-            let pollInterval: TimeInterval = phase == .evaluatingDeparture ? 5 : 15
+            let pollInterval: TimeInterval = phase == .evaluatingDeparture ? 9 : 15
             setTimer(time: pollInterval)
         }        
     }

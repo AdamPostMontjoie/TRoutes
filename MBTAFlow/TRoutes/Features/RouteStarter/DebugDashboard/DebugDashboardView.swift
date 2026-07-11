@@ -36,8 +36,7 @@ struct DebugDashboardView: View {
                             ("Movement", value(journey.movementStatus)),
                             ("Monitoring", value(journey.monitoringMode)),
                             ("Pending departure", journey.pendingDepartureConfirmation ? "true" : "false"),
-                            ("Prediction", predictionText(journey.predictionState)),
-                            ("Transfer prediction", predictionText(journey.transferPredictionState))
+                            ("Prediction", predictionText(journey.predictionState))
                         ]
                     )
 
@@ -133,10 +132,9 @@ struct DebugDashboardView: View {
         return "\(stop.stopName) • \(stop.mbtaStopId) • \(stop.transitType.rawValue) • \(value(stop.monitoringMode))"
     }
 
-    private func predictionText(_ predictionState: PredictionState) -> String {
-        switch predictionState {
-        case .notNeeded:
-            return "not needed"
+    private func predictionText(_ predictionState: PredictionState?) -> String {
+        guard let predictionState else { return "not needed" }
+        switch predictionState.loadingState {
         case let .loading(stopId):
             return "loading \(stopId)"
         case let .loaded(stopId, times):
