@@ -115,6 +115,7 @@ enum JourneyAction: Equatable {
                 return []
             }
             
+            state.activeLegPrediction = nil
             prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
