@@ -8,7 +8,7 @@
 import Foundation
 
 
-class JsonImporter {
+actor JsonImporter {
     private let databaseClient: DatabaseClient
     private let decoder = JSONDecoder()
 
