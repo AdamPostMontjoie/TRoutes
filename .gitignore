@@ -50,6 +50,10 @@ playground.xcworkspace
 .DS_Store
 .env
 .vscode
+.agents
+.agents/AGENTS.md
+.analysis_results.md‎
+.
 
 Carthage/Build/
 
@@ -64,3 +68,7 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Ignore top-level markdown files (e.g. analysis results) but keep README.md
+/*.md
+!/README.md
