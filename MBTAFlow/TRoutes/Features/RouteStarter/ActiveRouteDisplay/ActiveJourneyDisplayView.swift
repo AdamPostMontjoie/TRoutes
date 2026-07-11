@@ -13,42 +13,175 @@ struct ActiveJourneyDisplayView: View {
     @State private var refreshRotation = 0.0
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(store.stopDisplayText)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 16) {
+                // Top Level: Route & Destination
+                HStack(alignment: .center, spacing: 8) {
+                    if !store.shortRouteName.isEmpty {
+                        Text(store.shortRouteName)
+                            .font(.caption.bold())
+                            .foregroundStyle(transitForegroundColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(transitColor)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    if !store.routeDestination.isEmpty {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline.bold())
+                            .opacity(0.8)
+                        Text(store.routeDestination)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    Spacer()
+                    cancelButton
+                }
+                
+                // Mid Level: Context
+                ViewThatFits(in: .horizontal) {
+                    // Fits horizontally
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        currentLocationBadge
+                        if let destination = store.destinationContext {
+                            Text(destination)
+                                .font(.footnote)
+                                .opacity(0.7)
+                                .lineLimit(1)
+                        }
+                    }
                     
-                    predictionTimesView
+                    // Doesn't fit, fallback to stack
+                    VStack(alignment: .leading, spacing: 8) {
+                        currentLocationBadge
+                        if let destination = store.destinationContext {
+                            Text(destination)
+                                .font(.footnote)
+                                .opacity(0.7)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+                .padding(.leading, 10) // Push the whole stack slightly right to account for the background badge bleeding left
+                
+                // Bottom Level: Focus Data (ETAs + Train Logo)
+                if let activePrediction = store.journey?.activeLegPrediction {
+                    predictionTimesBlock(
+                        state: activePrediction.loadingState,
+                        lastObservedTimes: activePrediction.lastObservedPredictions.map { $0.display },
+                        color: transitColor,
+                        iconName: store.currentTransitType?.iconName,
+                        foregroundColor: transitForegroundColor
+                    )
+                    .padding(.top, 4)
                 }
                 
-                Spacer()
+                if store.journey?.pendingDepartureConfirmation == true {
+                    departureConfirmationPrompt
+                }
                 
-                cancelButton
+                if store.shouldShowRefreshButton || store.shouldShowStopActionButton {
+                    HStack(spacing: 16) {
+                        if store.shouldShowRefreshButton {
+                            refreshButton
+                        }
+                        
+                        if store.shouldShowStopActionButton {
+                            stopActionButton
+                        }
+                    }
+                    .padding(.top, 4)
+                }
             }
+            .padding(16)
             
-            if store.journey?.pendingDepartureConfirmation == true {
-                departureConfirmationPrompt
-            }
+            // Transfer Banner (Bottom Bleed)
+            let hasTransferContext = store.transferContext != nil
+            let hasTransferPrediction = store.journey?.transferLegPrediction?.loadingState != nil
             
-            HStack(spacing: 10) {
-                if store.shouldShowRefreshButton {
-                    refreshButton
-                }
+            if hasTransferContext || hasTransferPrediction {
+                let transferColor = nextLegColor ?? transitColor
+                let transferForeground = transferColor.isLightBackground ? Color.black : Color.white
                 
-                if store.shouldShowStopActionButton {
-                    stopActionButton
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.swap")
+                            .font(.headline)
+                        
+                        if let transferText = store.transferContext {
+                            Text(transferText)
+                                .font(.subheadline.bold())
+                        } else if let journey = store.journey,
+                                  let nextLeg = journey.legOrder.dropFirst(journey.legIndex + 1).first {
+                            Text("Upcoming Transfer: \(nextLeg.transitType.rawValue)")
+                                .font(.subheadline.bold())
+                        }
+                        
+                        Spacer()
+                    }
+                    
+                    if let transferPrediction = store.journey?.transferLegPrediction {
+                        predictionTimesBlock(
+                            state: transferPrediction.loadingState,
+                            lastObservedTimes: transferPrediction.lastObservedPredictions.map { $0.display },
+                            color: .white.opacity(0.2), // Frosted/muted background for the boxes so they don't clash with the solid colored banner
+                            iconName: nextLegIconName,
+                            foregroundColor: transferForeground
+                        )
+                        .padding(.top, 4)
+                    }
                 }
-                
-                Spacer()
+                .foregroundStyle(transferForeground)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(transferColor.gradient)
             }
         }
-        .padding(12)
+        .foregroundStyle(.primary)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.secondary.opacity(0.2), lineWidth: 1)
+        }
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
         .padding(.horizontal)
+    }
+    
+    private var transitColor: Color {
+        store.currentTransitType?.color ?? Color.accentColor
+    }
+    
+    private var transitForegroundColor: Color {
+        transitColor.isLightBackground ? .black : .white
+    }
+    
+    private var nextLegColor: Color? {
+        guard let journey = store.journey else { return nil }
+        let nextIndex = journey.legIndex + 1
+        guard nextIndex < journey.legOrder.count else { return nil }
+        return journey.legOrder[nextIndex].transitType.color
+    }
+    
+    private var nextLegIconName: String? {
+        guard let journey = store.journey else { return nil }
+        let nextIndex = journey.legIndex + 1
+        guard nextIndex < journey.legOrder.count else { return nil }
+        return journey.legOrder[nextIndex].transitType.iconName
+    }
+    
+    private var currentLocationBadge: some View {
+        Text(store.currentLocationContext)
+            .font(.subheadline)
+            .fontWeight(.bold)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.thinMaterial)
+                    .padding(.horizontal, -10)
+                    .padding(.vertical, -6)
+            }
     }
     
     private var refreshButton: some View {
@@ -60,10 +193,10 @@ struct ActiveJourneyDisplayView: View {
         } label: {
             Image(systemName: "arrow.clockwise.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.white)
+                .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(refreshRotation))
                 .frame(width: 40, height: 40)
-                .background(.green)
+                .background(.secondary.opacity(0.15))
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -85,7 +218,7 @@ struct ActiveJourneyDisplayView: View {
                 .font(.title2)
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
-                .background(movementIconColor)
+                .background(transitColor.gradient)
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -98,7 +231,7 @@ struct ActiveJourneyDisplayView: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary.opacity(0.6))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Cancel Journey")
@@ -137,15 +270,6 @@ struct ActiveJourneyDisplayView: View {
         .accessibilityElement(children: .contain)
     }
     
-    private var movementIconColor: Color {
-        switch store.journey?.movementStatus {
-        case .enRoute, .none:
-            return .red     // manual "I'm at the stop"
-        case .atStop:
-            return .blue    // manual "go to next stop"
-        }
-    }
-    
     private var stopActionAccessibilityLabel: String {
         switch store.journey?.movementStatus {
         case .enRoute, .none:
@@ -158,28 +282,79 @@ struct ActiveJourneyDisplayView: View {
 
     
     @ViewBuilder
-    private var predictionTimesView: some View {
-        switch store.currentDisplayPredictionLoadingState {
-        case let .loaded(_, times):
-            let prefix = store.currentPredictionType == .transfer ? "Transfer Stop: " : ""
-            Text("\(prefix)\(times.joined(separator: ", "))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .loading:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Loading predictions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private func timesRow(times: [String], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+        HStack(spacing: 8) {
+            ForEach(times, id: \.self) { time in
+                let bgStyle: AnyShapeStyle = (color == .white.opacity(0.2)) ? AnyShapeStyle(color) : AnyShapeStyle(color.gradient)
+                if time.lowercased().contains("stopped") {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text("Stopped")
+                    }
+                    .font(.headline.weight(.heavy))
+                    .foregroundStyle(foregroundColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(bgStyle)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .shadow(color: color == .white.opacity(0.2) ? .clear : color.opacity(0.3), radius: 4, x: 0, y: 2)
+                } else {
+                    Text(time)
+                        .font(.headline.weight(.heavy))
+                        .foregroundStyle(foregroundColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(bgStyle)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .shadow(color: color == .white.opacity(0.2) ? .clear : color.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
             }
-        case let .unavailable(_, message):
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .none:
+        }
+        .opacity(opacity)
+    }
+
+    @ViewBuilder
+    private func predictionTimesBlock(state: PredictionLoadingState?, lastObservedTimes: [String], color: Color, iconName: String?, foregroundColor: Color) -> some View {
+        if let state = state {
+            HStack(spacing: 8) {
+                if let iconName = iconName {
+                    Image(systemName: iconName)
+                        .font(.title2)
+                        .foregroundStyle(color == .white.opacity(0.2) ? foregroundColor : color)
+                }
+                
+                switch state {
+                case let .loaded(_, times):
+                    timesRow(times: times, color: color, foregroundColor: foregroundColor)
+                case .loading:
+                    if lastObservedTimes.isEmpty {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(color == .white.opacity(0.2) ? foregroundColor : color)
+                            Text("Loading predictions")
+                                .font(.headline)
+                                .foregroundStyle(foregroundColor)
+                        }
+                        .padding(.vertical, 4)
+                    } else {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(color == .white.opacity(0.2) ? foregroundColor : color)
+                            
+                            timesRow(times: lastObservedTimes, color: color, foregroundColor: foregroundColor, opacity: 0.5)
+                        }
+                    }
+                case let .unavailable(_, message):
+                    Text(message)
+                        .font(.headline)
+                        .foregroundStyle(foregroundColor)
+                        .lineLimit(1)
+                }
+            }
+        } else {
             EmptyView()
         }
     }
