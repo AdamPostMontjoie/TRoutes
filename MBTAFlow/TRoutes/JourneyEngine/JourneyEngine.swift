@@ -316,7 +316,7 @@ actor JourneyEngine {
             print("underground monitoring")
             await UndergroundManager.shared.startSession()
             
-            let isWaitingToBoard = stop.journeyRole != .final && stop.journeyRole != .intermediate
+            let isWaitingToBoard = stop.journeyRole == .boarding
             if let trackedVehicleId = currentJourney.trackedVehicleId,
                let trackedTripId = currentJourney.trackedTripId {
                 print("JourneyEngine set UGM vehicle: \(trackedVehicleId) trip: \(trackedTripId) stop: \(stop.mbtaStopId)")
