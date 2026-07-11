@@ -268,16 +268,6 @@ struct ActiveJourneyDisplayView: View {
         .accessibilityElement(children: .contain)
     }
     
-    // Note: movementIconColor unused in new design, left for compatibility if needed elsewhere
-    private var movementIconColor: Color {
-        switch store.journey?.movementStatus {
-        case .enRoute, .none:
-            return .red     // manual "I'm at the stop"
-        case .atStop:
-            return .blue    // manual "go to next stop"
-        }
-    }
-    
     private var stopActionAccessibilityLabel: String {
         switch store.journey?.movementStatus {
         case .enRoute, .none:

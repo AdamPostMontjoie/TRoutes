@@ -44,20 +44,8 @@ struct ActiveJourneyDisplayFeature {
             }
         }
         
-        var currentDisplayPredictionLoadingState: PredictionLoadingState? {
-            return journey?.transferLegPrediction?.loadingState ?? journey?.activeLegPrediction?.loadingState
-        }
-        
-        var currentPredictionType: PredictionTargetType? {
-            return journey?.transferLegPrediction?.predictedStopType ?? journey?.activeLegPrediction?.predictedStopType
-        }
-        
         var shouldShowRefreshButton: Bool {
             return isDebugActive
-        }
-        
-        var stopDisplayText: String {
-            return currentLocationContext
         }
         
         var currentLocationContext: String {
