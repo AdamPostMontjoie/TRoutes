@@ -6,6 +6,7 @@
 //
 
 import ComposableArchitecture
+import Foundation
 
 @Reducer
 struct ActiveJourneyDisplayFeature {
@@ -14,11 +15,24 @@ struct ActiveJourneyDisplayFeature {
         //direct reflection of activeJourney in RouteStartFeature
         var journey: JourneyState?
         
+        var isDebugAvailable = DebugAvailability.current
+        @Shared(.isDebugEnabled) var isDebugEnabled = true
+        var isDebugActive: Bool {
+            isDebugAvailable && isDebugEnabled
+        }
+        
         var shouldShowStopActionButton: Bool {
+            if isDebugActive { return true }
             if journey?.pendingDepartureConfirmation == true {
                 return false
             }
-            return journey?.currentStop?.stopType != .finalStop || journey?.movementStatus == .enRoute
+            guard let journey = journey else { return false }
+            if journey.movementStatus == .enRoute { return false }
+            
+            let isBoarding = journey.stopIndex == 0
+            let isTransfer = journey.currentStop?.stopType == .transferStop || journey.currentStop?.stopType == .boardingStop && journey.stopIndex > 0
+            
+            return isBoarding || isTransfer
         }
         
         var movementIconName: String {
@@ -39,75 +53,114 @@ struct ActiveJourneyDisplayFeature {
         }
         
         var shouldShowRefreshButton: Bool {
-            switch currentDisplayPredictionLoadingState {
-            case .loaded, .unavailable,.loading:
-                return true
-            case .none:
-                return false
-            }
+            return isDebugActive
         }
         
         var stopDisplayText: String {
+            return currentLocationContext
+        }
+        
+        var currentLocationContext: String {
+            guard let journey = journey, let currentStop = journey.currentStop else { return "" }
+            
+            if journey.stopIndex == 0 {
+                if journey.movementStatus == .atStop {
+                    return "At: \(currentStop.stopName)"
+                } else {
+                    return "Go to: \(currentStop.stopName)"
+                }
+            } else {
+                if journey.movementStatus == .atStop {
+                    return "At: \(currentStop.stopName)"
+                } else {
+                    return "Next Stop: \(currentStop.stopName)"
+                }
+            }
+        }
+        
+        var destinationContext: String? {
             guard let journey = journey,
-                  let currentStop = journey.currentStop,
                   let currentLeg = journey.currentLeg,
-                  let legFinalStop = currentLeg.stops.last,
-                  let finalStop = journey.stopOrder.last else {
-                return ""
-            }
-            
-            let totalStops = journey.stopOrder.count
-            let currentIndex = journey.stopIndex
-            
-            //boarding
-            if currentIndex == 0 && journey.movementStatus == .atStop {
-                return "At: \(currentStop.stopName)"
-            }
-            
-            //at final
-            if currentIndex == totalStops - 1 && journey.movementStatus == .atStop {
-                return "Arrived at \(finalStop.stopName)"
-            }
+                  let legFinalStop = currentLeg.stops.last else { return nil }
             
             let legTotalStops = currentLeg.stops.count
-            let legCurrentIndex = currentStop.legStopIndex
+            let legCurrentIndex = journey.currentStop?.legStopIndex ?? 0
             
-            // Calculate stops remaining in the current leg
+            if journey.isEndOfJourney {
+                return "Arrived at \(journey.stopOrder.last?.stopName ?? "")"
+            }
+            
             let stopsRemainingInLeg = journey.movementStatus == .atStop
-                ? (legTotalStops - 1 - legCurrentIndex)
-                : (legTotalStops - legCurrentIndex)
+                ? max(0, legTotalStops - 1 - legCurrentIndex)
+                : max(0, legTotalStops - legCurrentIndex)
                 
+            let stopsText = stopsRemainingInLeg == 1 ? "1 stop" : "\(stopsRemainingInLeg) stops"
             let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
             
-            //transfer at next stop
-            if isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
-                return "Transfer at next stop: \(legFinalStop.stopName)"
-            }
-            
-            //en route to transfer stop
-            if isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
-                return "Approaching: \(currentStop.stopName) (Transfer)"
-            }
-            
-            //one stop remaining in journey (.final)
-            if !isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
-                return "Get off at next stop: \(legFinalStop.stopName)"
-            }
-            
-            //on way to last stop (.final)
-            if !isTransferLeg && stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
-                return "Approaching: \(currentStop.stopName). This is your stop"
-            }
-            
-            //intermediate stops
-            let stopsText = stopsRemainingInLeg == 1 ? "1 stop" : "\(stopsRemainingInLeg) stops"
-            let destinationName = isTransferLeg ? "\(legFinalStop.stopName) (Transfer)" : legFinalStop.stopName
-            
-            if journey.movementStatus == .atStop {
-                return "At: \(currentStop.stopName) • \(stopsText) to \(destinationName)"
+            if isTransferLeg {
+                if stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
+                    return "Last stop before \(legFinalStop.stopName)"
+                }
+                return "\(stopsText) to \(legFinalStop.stopName)"
             } else {
-                return "En Route to: \(currentStop.stopName) • \(stopsText) to \(destinationName)"
+                if stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
+                    return "Get off at next stop"
+                }
+                return "\(stopsText) to \(legFinalStop.stopName)"
             }
+        }
+        
+        var transferContext: String? {
+            guard let journey = journey else { return nil }
+            let isTransferLeg = journey.legIndex < journey.legOrder.count - 1
+            guard isTransferLeg, let currentLeg = journey.currentLeg, let nextLeg = journey.legOrder.dropFirst(journey.legIndex + 1).first else { return nil }
+            
+            let legTotalStops = currentLeg.stops.count
+            let legCurrentIndex = journey.currentStop?.legStopIndex ?? 0
+            let stopsRemainingInLeg = journey.movementStatus == .atStop
+                ? max(0, legTotalStops - 1 - legCurrentIndex)
+                : max(0, legTotalStops - legCurrentIndex)
+                
+            let nextLineName = nextLeg.transitType.rawValue
+            
+            if stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
+                return "Transfer to \(nextLineName) at \(currentLeg.stops.last?.stopName ?? "next stop")"
+            } else if stopsRemainingInLeg == 0 {
+                return "Transfer to \(nextLineName)"
+            }
+            return nil
+        }
+        
+        var currentTransitType: TransitType? {
+            journey?.currentLeg?.transitType
+        }
+        
+        var shortRouteName: String {
+            guard let leg = journey?.currentLeg else { return "" }
+            switch leg.transitType {
+            case .redLine: return "RL"
+            case .orangeLine: return "OL"
+            case .blueLine: return "BL"
+            case .greenLine:
+                return leg.mbtaRouteId.replacingOccurrences(of: "Green-", with: "")
+            case .mattapan: return "M"
+            case .commuterRail: return "CR"
+            case .bus:
+                return leg.mbtaRouteId
+            case .ferry:
+                if leg.mbtaRouteId.hasPrefix("Boat-") {
+                    return leg.mbtaRouteId.replacingOccurrences(of: "Boat-", with: "")
+                }
+                return leg.mbtaRouteId
+            }
+        }
+        
+        var routeDestination: String {
+            guard let leg = journey?.currentLeg else { return "" }
+            if let direction = leg.transitDirection {
+                return direction.destination
+            }
+            return leg.stops.last?.stopName ?? ""
         }
     }
 

@@ -34,7 +34,7 @@ struct WelcomeFeature {
         Reduce { state, action in
             switch action {
             case .continueButtonClicked:
-                state.hasOnboarded = true
+                state.$hasOnboarded.withLock { $0 = true }
                 return .run { send in
                     await send(.delegate(.continueTapped))
                     await dismiss()
