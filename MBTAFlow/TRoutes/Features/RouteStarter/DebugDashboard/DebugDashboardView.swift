@@ -36,7 +36,9 @@ struct DebugDashboardView: View {
                             ("Movement", value(journey.movementStatus)),
                             ("Monitoring", value(journey.monitoringMode)),
                             ("Pending departure", journey.pendingDepartureConfirmation ? "true" : "false"),
-                            ("Prediction", predictionText(journey.predictionState))
+                            ("Prediction", predictionText(journey.predictionState)),
+                            ("Tracked vehicle", journey.trackedVehicleId ?? "nil"),
+                            ("Arrived trains", journey.arrivedTrains.isEmpty ? "none" : journey.arrivedTrains.map { $0.vehicleId }.joined(separator: ", "))
                         ]
                     )
 
@@ -68,19 +70,11 @@ struct DebugDashboardView: View {
                         debugSection(
                             "Current Stop",
                             rows: [
-                                ("MBTA stop", currentStop.mbtaStopId),
                                 ("Platform", currentStop.platformId),
                                 ("Station", currentStop.stationId),
                                 ("Route", currentStop.mbtaRouteId),
-                                ("Direction", "\(currentStop.mbtaDirectionId)"),
                                 ("Role", value(currentStop.journeyRole)),
-                                ("Stop type", value(currentStop.stopType)),
-                                ("Transit", currentStop.transitType.rawValue),
                                 ("Monitoring", value(currentStop.monitoringMode)),
-                                ("Leg stop index", "\(currentStop.legStopIndex)"),
-                                ("Pattern stop index", "\(currentStop.patternStopIndex)"),
-                                ("Pattern edge", "\(currentStop.patternEdgeSequenceNumber)"),
-                                ("Overlaps next", currentStop.overlapsWithNext ? "true" : "false"),
                                 ("Coordinate", coordinateText(currentStop))
                             ]
                         )
