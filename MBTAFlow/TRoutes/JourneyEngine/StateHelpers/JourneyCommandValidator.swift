@@ -21,7 +21,7 @@ struct JourneyCommandValidator {
                 print("JourneyEngine accepted exit \(id)")
                 
                 var effects: [JourneyEffect] = []
-                if let recent = state.arrivedTrains.last {
+                if let recent = state.activeLegPrediction?.arrivedTrains.last {
                     print("JourneyEngine: Exit matched with arrived train \(recent.vehicleId).")
                     effects.append(.updateTrackedVehicle(vehicleId: recent.vehicleId, tripId: recent.tripId))
                     effects.append(.refreshTripPath(tripId: recent.tripId))
@@ -55,7 +55,7 @@ struct JourneyCommandValidator {
                let currentStop = state.currentStop {
                 state.pendingDepartureConfirmation = false
                 state.movementStatus = .atStop
-                state.predictionState = PredictionState(
+                state.activeLegPrediction = PredictionState(
                     predictedStop: currentStop,
                     predictedStopType: .boarding,
                     loadingState: .loading(stopId: currentStop.mbtaStopId)
@@ -113,7 +113,7 @@ struct JourneyCommandValidator {
         
         if state.movementStatus == .atStop,
            let currentStop = state.currentStop {
-            state.predictionState = PredictionState(
+            state.activeLegPrediction = PredictionState(
                 predictedStop: currentStop,
                 predictedStopType: .boarding,
                 loadingState: .loading(stopId: currentStop.mbtaStopId)

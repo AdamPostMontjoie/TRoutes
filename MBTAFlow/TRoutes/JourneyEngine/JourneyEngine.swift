@@ -57,8 +57,6 @@ actor JourneyEngine {
     private var trackedTripId: String?
     private var trackedBoardingStopId: String?
     
-    private var lastObservedPredictions: [TransitPrediction] = []
-    
     // MARK: - Lifecycle & State Reconciliation
     
     //add state reconciliation checks
@@ -340,8 +338,7 @@ actor JourneyEngine {
     // MARK: - MBTA API & Predictions
     
     func manualRefreshPredictions() async {
-        guard var currentJourney = userDefaultsClient.loadActiveJourney(),
-              var currentPrediction = currentJourney.predictionState else { return }
+        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
 
         // Debounce: prevent spamming refresh
         let now = Date()
@@ -350,8 +347,15 @@ actor JourneyEngine {
         }
         lastManualRefresh = now
         
-        currentPrediction.loadingState = .loading(stopId: currentPrediction.predictedStop.mbtaStopId)
-        currentJourney.predictionState = currentPrediction
+        if var activePrediction = currentJourney.activeLegPrediction {
+            activePrediction.loadingState = .loading(stopId: activePrediction.predictedStop.mbtaStopId)
+            currentJourney.activeLegPrediction = activePrediction
+        }
+        if var transferPrediction = currentJourney.transferLegPrediction {
+            transferPrediction.loadingState = .loading(stopId: transferPrediction.predictedStop.mbtaStopId)
+            currentJourney.transferLegPrediction = transferPrediction
+        }
+        
         saveActiveJourneyAndPublish(currentJourney)
         
         await fetchPredictions()
@@ -359,53 +363,81 @@ actor JourneyEngine {
     
     
     private func fetchPredictions() async {
-        guard let currentJourney = userDefaultsClient.loadActiveJourney(),
-              let currentPrediction = currentJourney.predictionState else { return }
+        guard let currentJourney = userDefaultsClient.loadActiveJourney() else { return }
         
         lastPredictionFetchTime = Date()
         
-        let requestType: MBTARequestType = currentPrediction.predictedStopType == .boarding ? .currentStopPrediction : .transferPrediction
-
-        do {
-            let predictionResponse = try await mbtaClient.fetchTransitTimes(currentPrediction.predictedStop, requestType)
-            await handlePredictionResult(result: .success(predictionResponse))
-        } catch {
-            await handlePredictionResult(result: .failure(error))
+        async let activeResult: Result<[TransitPrediction], Error>? = {
+            if let active = currentJourney.activeLegPrediction {
+                do {
+                    let response = try await mbtaClient.fetchTransitTimes(active.predictedStop, .currentStopPrediction)
+                    return .success(response)
+                } catch {
+                    return .failure(error)
+                }
+            }
+            return nil
+        }()
+        
+        async let transferResult: Result<[TransitPrediction], Error>? = {
+            if let transfer = currentJourney.transferLegPrediction {
+                do {
+                    let response = try await mbtaClient.fetchTransitTimes(transfer.predictedStop, .transferPrediction)
+                    return .success(response)
+                } catch {
+                    return .failure(error)
+                }
+            }
+            return nil
+        }()
+        
+        let (active, transfer) = await (activeResult, transferResult)
+        
+        if let active = active {
+            await handlePredictionResult(result: active, isTransfer: false)
+        }
+        if let transfer = transfer {
+            await handlePredictionResult(result: transfer, isTransfer: true)
         }
     }
     
     
-    private func handlePredictionResult(result: Result<[TransitPrediction], Error>) async {
-        guard var freshJourney = userDefaultsClient.loadActiveJourney(),
-              var currentPrediction = freshJourney.predictionState else { return }
+    private func handlePredictionResult(result: Result<[TransitPrediction], Error>, isTransfer: Bool) async {
+        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
+        
+        guard var targetPrediction = isTransfer ? freshJourney.transferLegPrediction : freshJourney.activeLegPrediction else { return }
+        
         switch result {
         case let .success(predictionResults):
             let times = predictionResults.map(\.display)
             if times.isEmpty {
-                currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "No predictions available")
+                targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "No predictions available")
             } else {
-                currentPrediction.loadingState = .loaded(stopId: currentPrediction.predictedStop.mbtaStopId, times: times)
-                lastObservedPredictions = predictionResults
+                targetPrediction.loadingState = .loaded(stopId: targetPrediction.predictedStop.mbtaStopId, times: times)
+                
                 // Diff predictions to populate arrivedTrains queue
-                freshJourney.arrivedTrains = cleanArrivedTrains(freshJourney.arrivedTrains, predictionResults)
+                targetPrediction.cleanArrivedTrains(newPredictions: predictionResults)
+                
                 // Track top vehicle for underground handoff
-                if currentPrediction.predictedStopType == .boarding,
-                   freshJourney.movementStatus == .atStop {
-        
-                    if trackedVehicleId == nil, let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
-                        let isNewVehicle = trackedVehicleId != firstValid.vehicleId
+                if !isTransfer, targetPrediction.predictedStopType == .boarding, freshJourney.movementStatus == .atStop {
+                    
+                    let isTrackedInPredictions = predictionResults.contains(where: { $0.vehicleId == trackedVehicleId })
+                    let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
+                    let currentTrackedStillValid = trackedVehicleId != nil && (isTrackedInPredictions || isTrackedInArrived)
+                    
+                    if !currentTrackedStillValid, let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
                         trackedVehicleId = firstValid.vehicleId
                         trackedTripId = firstValid.tripId
                         
-                        if isNewVehicle, freshJourney.monitoringMode == .underground {
-                            print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(currentPrediction.predictedStop.mbtaStopId)")
+                        if freshJourney.monitoringMode == .underground {
+                            print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(targetPrediction.predictedStop.mbtaStopId)")
                             await UndergroundManager.shared.setTrackedVehicle(
                                 vehicleId: firstValid.vehicleId!,
                                 tripId: firstValid.tripId!,
-                                boardingStopId: currentPrediction.predictedStop.mbtaStopId,
+                                boardingStopId: targetPrediction.predictedStop.mbtaStopId,
                                 waitToBoard: true,
-                                stopLatitude: currentPrediction.predictedStop.latitude,
-                                stopLongitude: currentPrediction.predictedStop.longitude,
+                                stopLatitude: targetPrediction.predictedStop.latitude,
+                                stopLongitude: targetPrediction.predictedStop.longitude,
                                 isFirstStop: freshJourney.stopIndex == 0
                             )
                         }
@@ -414,38 +446,22 @@ actor JourneyEngine {
             }
         case .failure(let error):
             if let mbtaError = error as? MBTAError, (mbtaError == .rateLimitDropped || mbtaError == .rateLimited) {
-                //this should not propogate downwards to banner unless it's
-                if case .loading = currentPrediction.loadingState {
-                    currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "Rate limit reached. Try again.")
+                if case .loading = targetPrediction.loadingState {
+                    targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "Rate limit reached. Try again.")
                 } else {
                     return
                 }
             } else {
-                currentPrediction.loadingState = .unavailable(stopId: currentPrediction.predictedStop.mbtaStopId, message: "Cannot reach predictions")
+                targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "Cannot reach predictions")
             }
         }
         
-        freshJourney.predictionState = currentPrediction
-        saveActiveJourneyAndPublish(freshJourney)
-    }
-    
-    private func cleanArrivedTrains(_ arrivedTrains:[ArrivedTrain], _ predictions: [TransitPrediction]) ->[ArrivedTrain]{
-        let newTripIds = Set(predictions.compactMap { $0.tripId })
-        var arrivedTrains = arrivedTrains
-        for oldPrediction in lastObservedPredictions {
-            guard let tripId = oldPrediction.tripId else { continue }
-            if !newTripIds.contains(tripId) {
-                let text = oldPrediction.display.lowercased()
-                if text == "1 min" || text == "1m" || text == "arriving" || text == "arr" {
-                    if let vehicleId = oldPrediction.vehicleId {
-                        print("JourneyEngine: Train \(vehicleId) arrived and dropped off predictions.")
-                        arrivedTrains.append(ArrivedTrain(vehicleId: vehicleId, tripId: tripId, arrivedAt: Date()))
-                    }
-                }
-            }
+        if isTransfer {
+            freshJourney.transferLegPrediction = targetPrediction
+        } else {
+            freshJourney.activeLegPrediction = targetPrediction
         }
-        arrivedTrains.removeAll { Date().timeIntervalSince($0.arrivedAt) > 180 }
-        return arrivedTrains
+        saveActiveJourneyAndPublish(freshJourney)
     }
     
 
@@ -474,7 +490,7 @@ actor JourneyEngine {
     // MARK: - State Publishing Helpers
     
     private func managePredictionTimer(for journey: JourneyState) {
-        if journey.predictionState != nil {
+        if journey.activeLegPrediction != nil || journey.transferLegPrediction != nil {
             if predictionRefreshTask == nil {
                 startPredictionRefreshTimer()
             }
@@ -520,7 +536,6 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
-        lastObservedPredictions.removeAll()
         await RegionManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }

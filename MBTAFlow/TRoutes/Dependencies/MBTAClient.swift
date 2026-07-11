@@ -105,14 +105,22 @@ extension MBTAClient:DependencyKey {
                     // 1. Physical signs prioritize specific statuses over timestamps
                     if let status = prediction.attributes.status {
                         display = status
-                    } else if let timeString = prediction.attributes.arrivalTime ?? prediction.attributes.departureTime,
-                              let date = isoFormatter.date(from: timeString),
-                              date >= now {
-                        // 2. If no status, calculate the "minutes away" countdown
-                        let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
-                        display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
                     } else {
-                        continue
+                        let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
+                        let departureDate = prediction.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
+                        
+                        // It is dwelling if arrival is in the past but departure is in the future
+                        let isDwelling = (arrivalDate != nil && arrivalDate! < now) && (departureDate != nil && departureDate! >= now)
+                        
+                        if isDwelling {
+                            display = "Boarding"
+                        } else if let date = arrivalDate ?? departureDate, date >= now {
+                            // 2. If no status, calculate the "minutes away" countdown
+                            let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
+                            display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
+                        } else {
+                            continue
+                        }
                     }
                     
                     let vehicleId = prediction.relationships.vehicle?.data?.id

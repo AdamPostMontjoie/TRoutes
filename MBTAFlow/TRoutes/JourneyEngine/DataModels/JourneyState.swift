@@ -15,7 +15,8 @@ struct JourneyState: Equatable, Codable {
     var stopIndex: Int = 0
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
-    var predictionState: PredictionState? = nil
+    var activeLegPrediction: PredictionState? = nil
+    var transferLegPrediction: PredictionState? = nil
     var monitoringMode:MonitoringMode = .underground
     var pendingDepartureConfirmation: Bool = false
     
@@ -23,8 +24,6 @@ struct JourneyState: Equatable, Codable {
     var trackedVehicleId: String? = nil
     var trackedTripId: String? = nil
     var trackedBoardingStopId: String? = nil
-    
-    var arrivedTrains: [ArrivedTrain] = []
     
     var timeSaved: Date = Date()
     
@@ -68,13 +67,13 @@ struct JourneyState: Equatable, Codable {
         self.legOrder = route.legs
         self.monitoringMode = stops.first?.monitoringMode ?? .underground
         if let firstStop = stops.first {
-            self.predictionState = PredictionState(
+            self.activeLegPrediction = PredictionState(
                 predictedStop: firstStop,
                 predictedStopType: .boarding,
                 loadingState: .loading(stopId: firstStop.mbtaStopId)
             )
         } else {
-            self.predictionState = nil
+            self.activeLegPrediction = nil
         }
     }
     
@@ -85,14 +84,14 @@ struct JourneyState: Equatable, Codable {
         case stopIndex
         case legIndex
         case movementStatus
-        case predictionState
+        case activeLegPrediction
+        case transferLegPrediction
         case monitoringMode
         case pendingDepartureConfirmation
         case trackedVehicleId
         case trackedTripId
         case trackedBoardingStopId
         case timeSaved
-        case arrivedTrains
     }
     
     init(from decoder: Decoder) throws {
@@ -104,14 +103,14 @@ struct JourneyState: Equatable, Codable {
         stopIndex = try container.decode(Int.self, forKey: .stopIndex)
         legIndex = try container.decode(Int.self, forKey: .legIndex)
         movementStatus = try container.decode(MovementStatus.self, forKey: .movementStatus)
-        predictionState = try container.decodeIfPresent(PredictionState.self, forKey: .predictionState)
+        activeLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .activeLegPrediction)
+        transferLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .transferLegPrediction)
         monitoringMode = try container.decode(MonitoringMode.self, forKey: .monitoringMode)
         pendingDepartureConfirmation = try container.decodeIfPresent(Bool.self, forKey: .pendingDepartureConfirmation) ?? false
         trackedVehicleId = try container.decodeIfPresent(String.self, forKey: .trackedVehicleId)
         trackedTripId = try container.decodeIfPresent(String.self, forKey: .trackedTripId)
         trackedBoardingStopId = try container.decodeIfPresent(String.self, forKey: .trackedBoardingStopId)
         timeSaved = try container.decodeIfPresent(Date.self, forKey: .timeSaved) ?? Date()
-        arrivedTrains = try container.decodeIfPresent([ArrivedTrain].self, forKey: .arrivedTrains) ?? []
     }
     
     //determine monitoring mode here? or in journey actions?
@@ -156,6 +155,26 @@ struct PredictionState: Equatable, Codable {
     let predictedStop:ResolvedStop
     let predictedStopType: PredictionTargetType
     var loadingState:PredictionLoadingState
+    var arrivedTrains: [ArrivedTrain] = []
+    var lastObservedPredictions: [TransitPrediction] = []
+    
+    mutating func cleanArrivedTrains(newPredictions: [TransitPrediction]) {
+        let newTripIds = Set(newPredictions.compactMap { $0.tripId })
+        for oldPrediction in lastObservedPredictions {
+            guard let tripId = oldPrediction.tripId else { continue }
+            if !newTripIds.contains(tripId) {
+                let text = oldPrediction.display.lowercased()
+                if ["1 min", "1m", "arriving", "arr", "brd", "boarding", "0 min", "stopped"].contains(text) {
+                    if let vehicleId = oldPrediction.vehicleId {
+                        print("JourneyEngine: Train \(vehicleId) arrived and dropped off predictions.")
+                        arrivedTrains.append(ArrivedTrain(vehicleId: vehicleId, tripId: tripId, arrivedAt: Date()))
+                    }
+                }
+            }
+        }
+        arrivedTrains.removeAll { Date().timeIntervalSince($0.arrivedAt) > 180 }
+        lastObservedPredictions = newPredictions
+    }
 }
 
 enum PredictionTargetType: String, Codable, Equatable {

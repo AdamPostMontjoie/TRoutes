@@ -36,9 +36,11 @@ struct DebugDashboardView: View {
                             ("Movement", value(journey.movementStatus)),
                             ("Monitoring", value(journey.monitoringMode)),
                             ("Pending departure", journey.pendingDepartureConfirmation ? "true" : "false"),
-                            ("Prediction", predictionText(journey.predictionState)),
+                            ("Prediction (Active)", predictionText(journey.activeLegPrediction)),
+                            ("Prediction (Transfer)", predictionText(journey.transferLegPrediction)),
                             ("Tracked vehicle", journey.trackedVehicleId ?? "nil"),
-                            ("Arrived trains", journey.arrivedTrains.isEmpty ? "none" : journey.arrivedTrains.map { $0.vehicleId }.joined(separator: ", "))
+                            ("Arrived trains (A)", journey.activeLegPrediction?.arrivedTrains.isEmpty != false ? "none" : journey.activeLegPrediction!.arrivedTrains.map { $0.vehicleId }.joined(separator: ", ")),
+                            ("Arrived trains (T)", journey.transferLegPrediction?.arrivedTrains.isEmpty != false ? "none" : journey.transferLegPrediction!.arrivedTrains.map { $0.vehicleId }.joined(separator: ", "))
                         ]
                     )
 

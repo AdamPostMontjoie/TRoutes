@@ -419,7 +419,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         let currentStatus = currentVehiclePosition?.vehicleStatus ?? "nil"
         let currentSequence = currentVehiclePosition?.apiStopSequence.map(String.init) ?? "nil"
         let watchedStop = currentStopToMonitorId ?? "nil"
-        print("UGM position watch: \(watchedStop) previous: \(previousStop) \(previousStatus) current: \(currentStop) \(currentStatus) seq: \(currentSequence)")
+        print("UGM User at: \(watchedStop) Vehicle was at: \(previousStop) \(previousStatus) Vehicle is at: \(currentStop) \(currentStatus) seq: \(currentSequence)")
     }
 
 

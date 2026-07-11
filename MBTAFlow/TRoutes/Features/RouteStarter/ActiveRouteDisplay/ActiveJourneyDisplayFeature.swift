@@ -31,11 +31,11 @@ struct ActiveJourneyDisplayFeature {
         }
         
         var currentDisplayPredictionLoadingState: PredictionLoadingState? {
-            return journey?.predictionState?.loadingState
+            return journey?.transferLegPrediction?.loadingState ?? journey?.activeLegPrediction?.loadingState
         }
         
         var currentPredictionType: PredictionTargetType? {
-            return journey?.predictionState?.predictedStopType
+            return journey?.transferLegPrediction?.predictedStopType ?? journey?.activeLegPrediction?.predictedStopType
         }
         
         var shouldShowRefreshButton: Bool {
