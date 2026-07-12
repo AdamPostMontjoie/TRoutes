@@ -22,10 +22,10 @@ struct ActiveJourneyDisplayFeature {
         }
         
         var shouldShowStopActionButton: Bool {
+            if journey?.pendingDepartureConfirmation == true {
+                return false
+            }
             if isDebugActive { return true }
-          //  if journey?.pendingDepartureConfirmation == true {
-          //      return false
-          //  }
             guard let journey = journey else { return false }
             if journey.movementStatus == .enRoute && journey.currentStop?.stopType == .boardingStop && journey.monitoringMode == .underground  {return true}
             

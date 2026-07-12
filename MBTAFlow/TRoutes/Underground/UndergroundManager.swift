@@ -90,7 +90,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var evaluatingDepartureStartTime: Date?
     private var highConfidenceMissedCount: Int = 0
 
-    private static let departureEvaluationTimeout: TimeInterval = 4
+    private static let departureEvaluationTimeout: TimeInterval = 25
     private static let boardedProximityThreshold: CLLocationDistance = 75
     private static let boardedStationDistanceThreshold: CLLocationDistance = 100
     private static let missedDistanceThreshold: CLLocationDistance = 200
