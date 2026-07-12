@@ -43,6 +43,8 @@ struct RouteStarterFeature {
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
         @Shared(.hasOnboarded) var hasOnboarded = false
+        @Shared(.isTransitDataImported) var isTransitDataImported = false
+        var isTransitDataLoading: Bool { !isTransitDataImported }
         // Holds route while user tries to setup location permissions.
         var pendingRoute: ResolvedUserRoute?
         

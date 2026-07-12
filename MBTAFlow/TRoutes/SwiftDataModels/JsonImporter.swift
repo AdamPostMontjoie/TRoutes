@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import ComposableArchitecture
 
 
 actor JsonImporter {
@@ -55,10 +56,17 @@ actor JsonImporter {
                 .dateTime.hour().minute().second().secondFraction(.fractional(3))
             )
             print(preciseTime)
+            markTransitDataImported()
             
         } catch DatabaseImportError.alreadyImported {
+            markTransitDataImported()
             return
         }
+    }
+
+    private func markTransitDataImported() {
+        @Shared(.isTransitDataImported) var isTransitDataImported = false
+        $isTransitDataImported.withLock { $0 = true }
     }
 
     private func decodeJsonBuilderFile<T: Decodable>(named fileName: String) throws -> [T] {
