@@ -60,6 +60,7 @@ struct RouteStarterView: View {
                     } label : {
                         Image(systemName: "gear")
                     }
+                    .disabled(store.isTransitDataLoading)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     
@@ -68,11 +69,30 @@ struct RouteStarterView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .disabled(store.isTransitDataLoading)
                 }
             }
             // Applying the animation to the VStack ensures the list is smoothly pushed down
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isActiveJourneyPresented)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: store.isDebugActive)
+            .overlay {
+                if store.isTransitDataLoading {
+                    ZStack {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .ignoresSafeArea()
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Configuring Transit Data")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: store.isTransitDataLoading)
             
             // CONSOLIDATE ALL PRESENTATIONS HERE TO FIX DOUBLE TAP BUGS
             .sheet(

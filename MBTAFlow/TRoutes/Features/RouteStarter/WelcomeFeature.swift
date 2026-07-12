@@ -46,8 +46,3 @@ struct WelcomeFeature {
     }
 }
 
-extension SharedReaderKey where Self == AppStorageKey<Bool> {
-    static var hasOnboarded: Self {
-        appStorage("hasOnboarded")
-    }
-}
