@@ -52,6 +52,7 @@ struct DebugDashboardView: View {
                                 ("Direction", "\(currentLeg.mbtaDirectionId)"),
                                 ("Transit", currentLeg.transitType.rawValue),
                                 ("Pattern", currentLeg.selectedPatternId),
+                                ("Acceptable", currentLeg.acceptableRouteIds.joined(separator: ", ")),
                                 ("Stops", "\(currentLeg.stops.count)"),
                                 ("Origin index", "\(currentLeg.originPatternStopIndex)"),
                                 ("Destination index", "\(currentLeg.destinationPatternStopIndex)")

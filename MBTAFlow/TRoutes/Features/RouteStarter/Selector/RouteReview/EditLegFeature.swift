@@ -21,6 +21,7 @@ struct EditLegFeature {
             || originalLeg.transitType != editedLeg.transitType
             || originalLeg.transitBranch?.id != editedLeg.transitBranch?.id
             || originalLeg.transitDirection?.directionId != editedLeg.transitDirection?.directionId
+            || originalLeg.selectedRouteIds != editedLeg.selectedRouteIds
     }
 
     @ObservableState
@@ -28,6 +29,7 @@ struct EditLegFeature {
         var legForm: LegFormFeature.State
         var pendingEditedLeg: Leg?
         var originalLeg:Leg
+        var isSaving = false
         @Presents var destination: Destination.State?
 
         init(leg: Leg) {
@@ -90,6 +92,7 @@ struct EditLegFeature {
                     return .none
                 }
 
+                state.isSaving = true
                 state.pendingEditedLeg = nil
                 
                 return .run { send in

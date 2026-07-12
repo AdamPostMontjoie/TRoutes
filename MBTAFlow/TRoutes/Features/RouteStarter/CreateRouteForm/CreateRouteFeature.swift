@@ -17,6 +17,8 @@ struct CreateRouteFeature {
         // The active form the user is currently filling out
         var legForm = LegFormFeature.State(mode: .create)
         
+        var isSaving = false
+        
         // Presentation state for our confirmation alerts
         @Presents var destination: Destination.State?
     }
@@ -75,6 +77,7 @@ struct CreateRouteFeature {
                 }
 
             case .resetForm:
+                state.isSaving = false
                 state.completedLegs = []
                 state.legForm = LegFormFeature.State(mode: .create)
                 return .none
@@ -86,6 +89,7 @@ struct CreateRouteFeature {
                 }
                 
             case .destination(.presented(.alert(.confirmSave))):
+                state.isSaving = true
                 let saveRoute = databaseClient.saveRoute
                 return .run { [legs = state.completedLegs] send in
                     do {
@@ -105,6 +109,7 @@ struct CreateRouteFeature {
                 return .none
 
             case .saveFailed:
+                state.isSaving = false
                 state.destination = .alert(.saveFailed())
                 return .none
 

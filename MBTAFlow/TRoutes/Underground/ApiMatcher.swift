@@ -9,6 +9,7 @@ import Foundation
 struct MatchedLegPath {
     let sourceLegId: UUID
     let selectedPatternId: String
+    let acceptablePatternIds: Set<String>
     let tripId: String
     let legStopByStopId: [String: ResolvedStop]
     let patternStopByStopId: [String: ResolvedPatternStop]
@@ -18,6 +19,7 @@ struct MatchedLegPath {
     init(leg: ResolvedLeg, tripPath: LiveTripPath) {
         sourceLegId = leg.sourceLegId
         selectedPatternId = leg.selectedPatternId
+        acceptablePatternIds = Set(leg.acceptablePatternIds)
         tripId = tripPath.tripId
 
         var legStopByStopId: [String: ResolvedStop] = [:]
@@ -49,8 +51,12 @@ struct MatchedLegPath {
 
     func matches(leg: ResolvedLeg, tripId: String) -> Bool {
         sourceLegId == leg.sourceLegId &&
-        selectedPatternId == leg.selectedPatternId &&
         self.tripId == tripId
+    }
+
+    /// Whether a given pattern ID is acceptable for this leg
+    func acceptsPattern(_ patternId: String) -> Bool {
+        acceptablePatternIds.contains(patternId) || patternId == selectedPatternId
     }
 
     func legStop(forVehicleStopId stopId: String?) -> ResolvedStop? {

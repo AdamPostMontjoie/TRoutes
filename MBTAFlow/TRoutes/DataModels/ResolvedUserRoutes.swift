@@ -100,6 +100,8 @@ struct ResolvedLeg: Equatable, Codable, Identifiable {
     var transitBranch: TransitBranch?
     var transitDirection: TransitDirection?
     var selectedPatternId: String
+    var acceptablePatternIds: [String]
+    var acceptableRouteIds: [String]
     var stops: [ResolvedStop]
     var patternStops: [ResolvedPatternStop]
 
@@ -134,6 +136,8 @@ struct ResolvedLeg: Equatable, Codable, Identifiable {
         mbtaDirectionId: Int,
         transitType: TransitType,
         selectedPatternId: String,
+        acceptablePatternIds: [String] = [],
+        acceptableRouteIds: [String] = [],
         transitBranch: TransitBranch? = nil,
         transitDirection: TransitDirection? = nil,
         stops: [ResolvedStop],
@@ -150,6 +154,8 @@ struct ResolvedLeg: Equatable, Codable, Identifiable {
         self.startStop = startStop
         self.endStop = endStop
         self.selectedPatternId = selectedPatternId
+        self.acceptablePatternIds = acceptablePatternIds
+        self.acceptableRouteIds = acceptableRouteIds
         self.stops = stops
         self.patternStops = patternStops
     }
@@ -166,7 +172,6 @@ enum ResolvedRouteError: Error, Equatable {
     case missingDirection(legId: UUID)
     case noSequenceEdges(legId: UUID, routeId: String, directionId: Int)
     case noValidPattern(legId: UUID, originStopId: String, destinationStopId: String)
-    case ambiguousPattern(legId: UUID, patternIds: [String])
     case missingPlatform(platformId: String)
     case missingStation(stationId: String)
 }

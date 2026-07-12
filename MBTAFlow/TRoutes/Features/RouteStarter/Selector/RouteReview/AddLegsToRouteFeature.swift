@@ -15,6 +15,7 @@ struct AddLegsToRouteFeature {
         var addedLegs: [Leg] = []
         var pendingAddedLegs: [Leg] = []
         var legForm = LegFormFeature.State(mode: .addToExisting)
+        var isSaving = false
         @Presents var destination: Destination.State?
     }
 
@@ -72,6 +73,7 @@ struct AddLegsToRouteFeature {
                     return .none
                 }
 
+                state.isSaving = true
                 let legs = state.pendingAddedLegs
                 state.pendingAddedLegs = []
                 state.destination = nil

@@ -67,19 +67,44 @@ struct LegFormView: View {
 
     @ViewBuilder
     private var branchSection: some View {
-        if store.currentFormStep == .selectBranch || store.selectedBranch != nil {
+        if store.currentFormStep == .selectBranch || store.selectedBranch != nil || !store.selectedBranches.isEmpty {
             Section(header: resetHeader(
-                title: "Branch",
-                isResetVisible: store.selectedBranch != nil,
+                title: store.isMultiBranchMode ? "Branches" : "Branch",
+                isResetVisible: store.selectedBranch != nil || !store.selectedBranches.isEmpty,
                 action: .resetBranchSelection
             )) {
-                Picker("Branch", selection: branchSelection) {
-                    Text("Select a branch").tag(TransitBranch?.none)
+                if store.isMultiBranchMode {
                     ForEach(store.branchOptions ?? [], id: \.self) { branch in
-                        Text(branch.displayName).tag(TransitBranch?.some(branch))
+                        let isSelected = store.selectedBranches.contains(where: { $0.id == branch.id })
+                        Button {
+                            store.send(.branchToggled(branch))
+                        } label: {
+                            HStack {
+                                Text(branch.displayName)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(isSelected ? .blue : .secondary)
+                            }
+                        }
+                        .disabled(!store.selectedBranches.isEmpty && store.currentFormStep != .selectBranch)
                     }
+                    if store.currentFormStep == .selectBranch && !store.selectedBranches.isEmpty {
+                        Button("Continue") {
+                            store.send(.multiBranchConfirmed)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .tint(.blue)
+                    }
+                } else {
+                    Picker("Branch", selection: branchSelection) {
+                        Text("Select a branch").tag(TransitBranch?.none)
+                        ForEach(store.branchOptions ?? [], id: \.self) { branch in
+                            Text(branch.displayName).tag(TransitBranch?.some(branch))
+                        }
+                    }
+                    .disabled(store.selectedBranch != nil)
                 }
-                .disabled(store.selectedBranch != nil)
             }
         }
     }
@@ -133,7 +158,6 @@ struct LegFormView: View {
             )) {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination stop").tag(UUID?.none)
-                    //prevents going backwards on a route
                     let validEndStops = Array(
                         store.stopOptions
                             .drop(while: { $0.mbtaStopId != store.selectedStartStop?.mbtaStopId })

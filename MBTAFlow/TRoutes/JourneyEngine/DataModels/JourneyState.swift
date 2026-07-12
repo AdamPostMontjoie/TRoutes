@@ -33,6 +33,13 @@ struct JourneyState: Equatable, Codable {
         }
         return legOrder[legIndex]
     }
+
+    func acceptableRouteIds(for stop: ResolvedStop) -> [String] {
+        guard legOrder.indices.contains(stop.legIndex) else {
+            return []
+        }
+        return legOrder[stop.legIndex].acceptableRouteIds
+    }
     var currentStop: ResolvedStop? {
         guard stopOrder.indices.contains(stopIndex) else {
             return nil
@@ -66,10 +73,11 @@ struct JourneyState: Equatable, Codable {
         self.stopOrder = stops
         self.legOrder = route.legs
         self.monitoringMode = stops.first?.monitoringMode ?? .underground
-        if let firstStop = stops.first {
+        if let firstStop = stops.first, let firstLeg = route.legs.first {
             self.activeLegPrediction = PredictionState(
                 predictedStop: firstStop,
                 predictedStopType: .boarding,
+                acceptableRouteIds: firstLeg.acceptableRouteIds,
                 loadingState: .loading(stopId: firstStop.mbtaStopId)
             )
         } else {
@@ -153,6 +161,7 @@ struct JourneyState: Equatable, Codable {
 struct PredictionState: Equatable, Codable {
     let predictedStop:ResolvedStop
     let predictedStopType: PredictionTargetType
+    var acceptableRouteIds: [String] = []
     var loadingState:PredictionLoadingState
     var arrivedTrains: [ArrivedTrain] = []
     var lastObservedPredictions: [TransitPrediction] = []

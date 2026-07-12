@@ -24,14 +24,15 @@ private func makeLegForEditing(from resolvedLeg: ResolvedLeg) -> Leg {
         mbtaRouteId: resolvedLeg.mbtaRouteId,
         transitType: resolvedLeg.transitType,
         transitBranch: resolvedLeg.transitBranch,
-        transitDirection: resolvedLeg.transitDirection
+        transitDirection: resolvedLeg.transitDirection,
+        selectedRouteIds: resolvedLeg.acceptableRouteIds.isEmpty ? nil : resolvedLeg.acceptableRouteIds
     )
 }
 
 private func makeStopForEditing(from resolvedStop: ResolvedStop) -> Stop {
     Stop(
         id: resolvedStop.id,
-        mbtaStopId: resolvedStop.mbtaStopId,
+        mbtaStopId: resolvedStop.stationId,
         mbtaRouteId: resolvedStop.mbtaRouteId,
         mbtaDirectionId: resolvedStop.mbtaDirectionId,
         stopName: resolvedStop.stopName,
