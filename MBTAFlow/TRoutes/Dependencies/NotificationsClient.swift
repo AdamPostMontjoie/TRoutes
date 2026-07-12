@@ -1,6 +1,6 @@
 //
 //  NotificationsClient.swift
-//  MBTAFlow
+//  TRoutes
 //
 //  Created by Adam Post on 6/16/26.
 //
@@ -31,7 +31,7 @@ extension NotificationsClient: DependencyKey {
             }
 
             let content = UNMutableNotificationContent()
-            content.title = "MBTAFlow Debug"
+            content.title = "TRoutes Debug"
             content.body = log
             content.sound = .default
 
@@ -58,7 +58,7 @@ extension NotificationsClient: DependencyKey {
             
             // Construct and present the user-facing alert notification
             let content = UNMutableNotificationContent()
-            content.title = "MBTAFlow Alert"
+            content.title = "TRoutes Alert"
             content.body = message
             content.sound = .default
             

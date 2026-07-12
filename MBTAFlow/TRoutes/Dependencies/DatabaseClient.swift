@@ -1,6 +1,6 @@
 //
 //  DatabaseClient.swift
-//  MBTAFlow
+//  TRoutes
 //
 //  Created by Adam Post on 5/30/26.
 //
@@ -67,7 +67,7 @@ extension DatabaseClient: DependencyKey {
                     create: true
                 )
                 //change this to the app group folder later
-                let storeURL = appSupport.appending(path: "MBTAFlow.store")
+                let storeURL = appSupport.appending(path: "TRoutes.store")
                 let configuration = ModelConfiguration(url: storeURL)
                 
                 sharedContainer = try ModelContainer(

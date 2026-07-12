@@ -1,6 +1,6 @@
 //
 //  UserDefaultsClient.swift
-//  MBTAFlow
+//  TRoutes
 //
 //  Created by Adam Post on 6/17/26.
 //
@@ -16,7 +16,7 @@ struct UserDefaultsClient {
 
 extension UserDefaultsClient: DependencyKey {
     static let liveValue: Self = {
-        let suiteName = "group.com.adampost.MBTAFlow"
+        let suiteName = "group.com.adampost.TRoutes"
         let activeJourneyStateKey = "activeJourneyState"
         let debugNotificationsKey = "enableDebugNotifications"
 

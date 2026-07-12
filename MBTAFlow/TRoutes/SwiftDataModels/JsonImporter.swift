@@ -111,7 +111,7 @@ actor JsonImporter {
             .deletingLastPathComponent()
         let workspaceURL = repositoryURL.deletingLastPathComponent()
         let developmentURL = workspaceURL
-            .appending(path: "MBTAFlow")
+            .appending(path: "TRoutes")
             .appending(path: "TRoutes")
             .appending(path: "Resources")
             .appending(path: "JsonBuilder")
