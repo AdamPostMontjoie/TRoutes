@@ -11,11 +11,12 @@ import Foundation
 //this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
     //predictions
-    var fetchTransitTimes: @Sendable (ResolvedStop, MBTARequestType) async throws -> [TransitPrediction]
+    var fetchTransitTimes: @Sendable (ResolvedStop, [String], MBTARequestType) async throws -> [TransitPrediction]
+    //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String, MBTARequestType) async throws -> [Stop]
-    //position
+    //position and matching
     var fetchVehicleData: @Sendable (String, MBTARequestType) async throws -> VehicleData
     var fetchTripTrackingData: @Sendable (String, MBTARequestType) async throws -> LiveTripPath
 }
@@ -62,15 +63,16 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
 
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
-        fetchTransitTimes: { stop, requestType in
+        fetchTransitTimes: { stop, routeIds, requestType in
             do {
                 try await RateLimitQueue.shared.acquireToken(for: requestType)
             } catch {
                 print("dropped request")
                 throw MBTAError.rateLimitDropped
             }
-            //filter out any that are in past and then return next 3.
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
+            // Use comma-separated route IDs for multi-branch filtering
+            let routeFilter = routeIds.isEmpty ? stop.mbtaRouteId : routeIds.joined(separator: ",")
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(routeFilter)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
                 throw MBTAError.networkError
             }
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")
@@ -150,49 +152,39 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.decodingError
             }
         },
-       
         fetchDirections: { routeId, requestType in
             do {
                 try await RateLimitQueue.shared.acquireToken(for: requestType)
             } catch {
                 throw MBTAError.rateLimitDropped
             }
-                    guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
-                        throw MBTAError.networkError
+            guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
+                throw MBTAError.networkError
+            }
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            do {
+                let routeResponse = try decoder.decode(RouteListResponse.self, from: data)
+                guard let route = routeResponse.data.first,
+                      let names = route.attributes.directionNames,
+                      let destinations = route.attributes.directionDestinations else {
+                    return []
+                }
+                var mappedDirections: [TransitDirection] = []
+                for index in 0..<names.count {
+                    if index < destinations.count {
+                        mappedDirections.append(
+                            TransitDirection(directionId: index, directionName: names[index], destination: destinations[index])
+                        )
                     }
-          //          print("MBTAClient fetchDirections URL: \(url.absoluteString)")
-                    
-                    let (data, response) = try await URLSession.shared.data(from: url)
-                    try reviewHttpResponse(response,data)
-                    
-                    let decoder = JSONDecoder()
-                    decoder.keyDecodingStrategy = .convertFromSnakeCase
-                    
-                    do {
-                        let routeResponse = try decoder.decode(RouteListResponse.self, from: data)
-                        
-                        guard let route = routeResponse.data.first,
-                              let names = route.attributes.directionNames,
-                              let destinations = route.attributes.directionDestinations else {
-                            return [] // Return empty if no directions found
-                        }
-                        
-                        var mappedDirections: [TransitDirection] = []
-                        for index in 0..<names.count {
-                            if index < destinations.count {
-                                mappedDirections.append(
-                                    TransitDirection(directionId: index, directionName: names[index], destination: destinations[index])
-                                )
-                            }
-                        }
-                        // Return an array of TransitDirection directly to the Reducer
-                        return mappedDirections
-                    } catch {
-                        throw MBTAError.decodingError
-                    }
-                },
-    
-        //for use on lines that don't have a single direction
+                }
+                return mappedDirections
+            } catch {
+                throw MBTAError.decodingError
+            }
+        },
         fetchBranches: { filterKey, filterValue, requestType in
             do {
                 try await RateLimitQueue.shared.acquireToken(for: requestType)
@@ -202,47 +194,27 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
-       //     print("MBTAClient fetchBranches URL: \(url.absoluteString)")
-            
             let (data, response) = try await URLSession.shared.data(from: url)
-            try reviewHttpResponse(response,  data)
-                
+            try reviewHttpResponse(response, data)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            
             do {
                 let routeResponse = try decoder.decode(RouteListResponse.self, from: data)
-                
-                // Map the raw JSON data into the clean struct for the UI
-                let branches = routeResponse.data.compactMap{ route -> TransitBranch? in
+                let branches = routeResponse.data.compactMap { route -> TransitBranch? in
                     let short = route.attributes.shortName ?? ""
                     let display = short.isEmpty ? (route.attributes.longName ?? "Route") : short
-                    if display == "Mattapan Line" {
-                        return nil
-                    }
-                    
-                    // Safely extract the directions. MBTA always returns 0 first, then 1.
+                    if display == "Mattapan Line" { return nil }
                     var mappedDirections: [TransitDirection] = []
-                    
                     if let names = route.attributes.directionNames,
                        let destinations = route.attributes.directionDestinations {
-                        // Iterate through the arrays (index 0 is direction_id 0, index 1 is direction_id 1)
-                        for index in 0..<names.count {
-                            // Some bus routes only go one way, so we safely check bounds
-                            if index < destinations.count {
-                                let direction = TransitDirection(
-                                    directionId: index,
-                                    directionName: names[index],
-                                    destination: destinations[index]
-                                )
-                                mappedDirections.append(direction)
-                            }
+                        for index in 0..<names.count where index < destinations.count {
+                            mappedDirections.append(
+                                TransitDirection(directionId: index, directionName: names[index], destination: destinations[index])
+                            )
                         }
                     }
-                    
                     return TransitBranch(id: route.id, displayName: display, directions: mappedDirections)
                 }
-                
                 return branches
             } catch {
                 throw MBTAError.decodingError
@@ -255,41 +227,29 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.rateLimitDropped
             }
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
-                            throw MBTAError.networkError
-                        }
-       //                 print("MBTAClient fetchStops URL: \(url.absoluteString)")
-                        
-                        let (data, response) = try await URLSession.shared.data(from: url)
-                        try reviewHttpResponse(response, data)
-                        
-                        let decoder = JSONDecoder()
-                        decoder.keyDecodingStrategy = .convertFromSnakeCase
-                        
-                        do {
-                            let stopResponse = try decoder.decode(StopListResponse.self, from: data)
-                            
-                            var stops: [Stop] = []
-                            let totalStops = stopResponse.data.count
-                            
-                            for (index, stopData) in stopResponse.data.enumerated() {
-                                let stop = Stop(
-                                    id: UUID(),
-                                    mbtaStopId: stopData.id,
-                                    mbtaRouteId: routeId,
-                                    mbtaDirectionId: directionId,
-                                    stopName: stopData.attributes.name ?? "stop",
-                                    longitude: stopData.attributes.longitude ?? 0.0,
-                                    latitude: stopData.attributes.latitude ?? 0.0,
-                                    address: stopData.attributes.address ?? "Boston, MA",
-                                    journeyRole: .boarding
-                                )
-                                stops.append(stop)
-                            }
-                            
-                            return stops
-                        } catch {
-                            throw MBTAError.decodingError
-                        }
+                throw MBTAError.networkError
+            }
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            do {
+                let stopResponse = try decoder.decode(StopListResponse.self, from: data)
+                return stopResponse.data.map { stopData in
+                    Stop(
+                        id: UUID(),
+                        mbtaStopId: stopData.id,
+                        mbtaRouteId: routeId,
+                        mbtaDirectionId: directionId,
+                        stopName: stopData.attributes.name ?? "stop",
+                        longitude: stopData.attributes.longitude ?? 0.0,
+                        latitude: stopData.attributes.latitude ?? 0.0,
+                        address: stopData.attributes.address ?? "Boston, MA"
+                    )
+                }
+            } catch {
+                throw MBTAError.decodingError
+            }
         },
         fetchVehicleData: { vehicleId, requestType in
             do {

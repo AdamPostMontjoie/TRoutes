@@ -337,41 +337,68 @@ private func resolveLeg(
     context: ModelContext
 ) throws -> ResolvedLeg {
     let directionId = try resolvedDirectionId(for: leg)
-    let routeId = leg.mbtaRouteId
 
-    let edgeDescriptor = FetchDescriptor<TransitSequenceEdge>(
-        predicate: #Predicate { edge in
-            edge.routeId == routeId && edge.directionId == directionId
-        },
-        sortBy: [
-            SortDescriptor(\.patternId),
-            SortDescriptor(\.sortIndex),
-            SortDescriptor(\.sequenceNumber)
-        ]
-    )
-    let routeDirectionEdges = try context.fetch(edgeDescriptor)
+    // Determine which route IDs to search:
+    // 1. If user explicitly selected routes (multi-branch), use those
+    // 2. If it's a single-route type (CR/Bus), use the selected route
+    // 3. Otherwise fall back to all routes for the transit type
+    let routeIds: [String]
+    if let selectedIds = leg.selectedRouteIds, !selectedIds.isEmpty {
+        routeIds = selectedIds
+    } else if leg.transitType.requiresRouteSelection {
+        routeIds = [leg.mbtaRouteId]
+    } else {
+        routeIds = leg.transitType.routeIds
+    }
+
+    // Fetch edges for all relevant routes in this direction (targeted, not all edges)
+    var routeDirectionEdges: [TransitSequenceEdge] = []
+    for routeId in routeIds {
+        let desc = FetchDescriptor<TransitSequenceEdge>(
+            predicate: #Predicate { edge in
+                edge.routeId == routeId && edge.directionId == directionId
+            },
+            sortBy: [SortDescriptor(\.sortIndex), SortDescriptor(\.sequenceNumber)]
+        )
+        routeDirectionEdges.append(contentsOf: try context.fetch(desc))
+    }
 
     guard !routeDirectionEdges.isEmpty else {
         throw ResolvedRouteError.noSequenceEdges(
             legId: leg.id,
-            routeId: routeId,
+            routeId: routeIds.first ?? leg.mbtaRouteId,
             directionId: directionId
         )
     }
 
+    // Fetch only patterns for these routes + direction
+    let isDefault = true
     let patternDescriptor = FetchDescriptor<TransitPattern>(
         predicate: #Predicate { pattern in
-            pattern.routeId == routeId && pattern.directionId == directionId
+            pattern.directionId == directionId
         }
     )
     let patternsById = Dictionary(
-        uniqueKeysWithValues: try context.fetch(patternDescriptor).map { ($0.patternId, $0) }
+        uniqueKeysWithValues: try context.fetch(patternDescriptor)
+            .filter { routeIds.contains($0.routeId) }
+            .map { ($0.patternId, $0) }
     )
+
+    // Fetch only the platforms and stations we actually need
+    let neededPlatformIds = Set(routeDirectionEdges.map(\.platformId))
+    let neededStationIds = Set(routeDirectionEdges.map(\.stationId))
+
+    let allPlatforms = try context.fetch(FetchDescriptor<TransitPlatform>())
     let platformsById = Dictionary(
-        uniqueKeysWithValues: try context.fetch(FetchDescriptor<TransitPlatform>()).map { ($0.platformId, $0) }
+        uniqueKeysWithValues: allPlatforms
+            .filter { neededPlatformIds.contains($0.platformId) }
+            .map { ($0.platformId, $0) }
     )
+    let allStations = try context.fetch(FetchDescriptor<TransitStation>())
     let stationsById = Dictionary(
-        uniqueKeysWithValues: try context.fetch(FetchDescriptor<TransitStation>()).map { ($0.stationId, $0) }
+        uniqueKeysWithValues: allStations
+            .filter { neededStationIds.contains($0.stationId) }
+            .map { ($0.stationId, $0) }
     )
 
     let validCandidates = Dictionary(grouping: routeDirectionEdges, by: \.patternId)
@@ -403,6 +430,9 @@ private func resolveLeg(
     }
 
     let selectedCandidate = try selectCandidate(validCandidates, leg: leg)
+    let allAcceptablePatternIds = validCandidates.map(\.patternId).sorted()
+    let allAcceptableRouteIds = Array(Set(validCandidates.compactMap { $0.pattern?.routeId })).sorted()
+
     let patternStops = try selectedCandidate.patternEdges.enumerated().map { patternStopIndex, edge in
         try makeResolvedPatternStop(
             edge: edge,
@@ -446,6 +476,8 @@ private func resolveLeg(
         mbtaDirectionId: directionId,
         transitType: leg.transitType,
         selectedPatternId: selectedCandidate.patternId,
+        acceptablePatternIds: allAcceptablePatternIds,
+        acceptableRouteIds: allAcceptableRouteIds,
         transitBranch: leg.transitBranch,
         transitDirection: leg.transitDirection,
         stops: stops,
@@ -538,19 +570,8 @@ private func selectCandidate(
         )
     }
 
-    if sortedCandidates.count > 1,
-       candidateRankingKey(bestCandidate, leg: leg) == candidateRankingKey(sortedCandidates[1], leg: leg) {
-        let tiedPatternIds = sortedCandidates
-            .filter { candidateRankingKey($0, leg: leg) == candidateRankingKey(bestCandidate, leg: leg) }
-            .map(\.patternId)
-            .sorted()
-
-        throw ResolvedRouteError.ambiguousPattern(
-            legId: leg.id,
-            patternIds: tiedPatternIds
-        )
-    }
-
+    // No longer throw on ties — we accept all valid patterns via acceptablePatternIds.
+    // Just pick the best-ranked one for stop/pattern resolution.
     return bestCandidate
 }
 
@@ -675,7 +696,7 @@ private func makeResolvedStop(
         patternEdgeSequenceNumber: edge.sequenceNumber,
         platformId: edge.platformId,
         stationId: edge.stationId,
-        mbtaStopId: edge.platformId,
+        mbtaStopId: station.stationId,
         mbtaRouteId: leg.mbtaRouteId,
         mbtaDirectionId: directionId,
         stopName: station.name,

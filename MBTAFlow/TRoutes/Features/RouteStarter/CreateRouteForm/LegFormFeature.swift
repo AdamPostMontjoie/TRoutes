@@ -42,6 +42,7 @@ struct LegFormFeature {
         case .type:
             state.selectedType = nil
             state.selectedBranch = nil
+            state.selectedBranches = []
             state.branchOptions = nil
             state.selectedDirection = nil
             state.directionOptions = nil
@@ -57,6 +58,7 @@ struct LegFormFeature {
 
         case .branch:
             state.selectedBranch = nil
+            state.selectedBranches = []
             state.selectedDirection = nil
             state.directionOptions = nil
             state.stopOptions = []
@@ -98,6 +100,7 @@ struct LegFormFeature {
         var selectedType: TransitType?
         var branchOptions: [TransitBranch]?
         var selectedBranch: TransitBranch?
+        var selectedBranches: [TransitBranch] = []
         var directionOptions: [TransitDirection]?
         var selectedDirection: TransitDirection?
         var stopOptions: [Stop] = []
@@ -107,6 +110,10 @@ struct LegFormFeature {
         var currentFormStep: FormStep = .selectType
         var currentLeg: Leg?
         var editingLegId: UUID?
+
+        var isMultiBranchMode: Bool {
+            selectedType == .greenLine
+        }
         
         var hasHydratedEditBranchOptions = false
         var hasHydratedEditDirectionOptions = false
@@ -116,8 +123,6 @@ struct LegFormFeature {
 
         init(mode: LegFormMode = .create, leg: Leg? = nil) {
             self.mode = mode
-            
-            //populates form if edit mode
             guard let leg else { return }
 
             self.selectedType = leg.transitType
@@ -130,6 +135,17 @@ struct LegFormFeature {
 
             self.selectedBranch = leg.transitBranch
             self.branchOptions = leg.transitBranch.map { [$0] }
+
+            // Restore multi-branch state for Green Line
+            if leg.transitType == .greenLine,
+               let selectedIds = leg.selectedRouteIds, !selectedIds.isEmpty,
+               let branch = leg.transitBranch {
+                // Reconstruct selectedBranches from the saved route IDs + API branch data
+                self.selectedBranches = selectedIds.map { id in
+                    TransitBranch(id: id, displayName: id.replacingOccurrences(of: "Green-", with: "") + " Branch", directions: branch.directions)
+                }
+            }
+
             self.selectedDirection = leg.transitDirection
             self.directionOptions = leg.transitDirection.map { [$0] }
             self.stopOptions = [leg.startStop, leg.endStop]
@@ -140,6 +156,8 @@ struct LegFormFeature {
         case transitTypeSelected(TransitType)
         case branchesLoaded([TransitBranch])
         case branchSelected(TransitBranch)
+        case branchToggled(TransitBranch)
+        case multiBranchConfirmed
         case directionsLoaded([TransitDirection])
         case directionSelected(TransitDirection, String)
         case stopsLoaded([Stop])
@@ -190,10 +208,7 @@ struct LegFormFeature {
                 return .send(.delegate(.requestDismissal))
 
             case .onAppear:
-                guard state.mode == .edit else {
-                    return .none
-                }
-
+                guard state.mode == .edit else { return .none }
                 var effects: [Effect<Action>] = []
 
                 if !state.hasHydratedEditBranchOptions,
@@ -201,32 +216,24 @@ struct LegFormFeature {
                    case let .fetchRoutes(filterKey, filterValue) = selectedType.apiStrategy {
                     state.hasHydratedEditBranchOptions = true
                     let fetchBranches = mbtaClient.fetchBranches
-                    effects.append(
-                        .run { send in
-                            do {
-                                let branches = try await fetchBranches(filterKey, filterValue, .formRequest)
-                                await send(.editBranchOptionsHydrated(branches))
-                            } catch {
-                                await send(.apiFailure)
-                            }
-                        }
-                    )
+                    effects.append(.run { send in
+                        do {
+                            let branches = try await fetchBranches(filterKey, filterValue, .formRequest)
+                            await send(.editBranchOptionsHydrated(branches))
+                        } catch { await send(.apiFailure) }
+                    })
                 }
 
                 if !state.hasHydratedEditDirectionOptions,
                    let routeId = state.mbtaRouteId {
                     state.hasHydratedEditDirectionOptions = true
                     let fetchDirections = mbtaClient.fetchDirections
-                    effects.append(
-                        .run { send in
-                            do {
-                                let directions = try await fetchDirections(routeId, .formRequest)
-                                await send(.editDirectionOptionsHydrated(directions))
-                            } catch {
-                                await send(.apiFailure)
-                            }
-                        }
-                    )
+                    effects.append(.run { send in
+                        do {
+                            let directions = try await fetchDirections(routeId, .formRequest)
+                            await send(.editDirectionOptionsHydrated(directions))
+                        } catch { await send(.apiFailure) }
+                    })
                 }
 
                 if !state.hasHydratedEditStopOptions,
@@ -234,16 +241,12 @@ struct LegFormFeature {
                    let routeId = state.mbtaRouteId {
                     state.hasHydratedEditStopOptions = true
                     let fetchStops = mbtaClient.fetchStops
-                    effects.append(
-                        .run { send in
-                            do {
-                                let stops = try await fetchStops(direction.directionId, routeId, .formRequest)
-                                await send(.editStopOptionsHydrated(stops))
-                            } catch {
-                                await send(.apiFailure)
-                            }
-                        }
-                    )
+                    effects.append(.run { send in
+                        do {
+                            let stops = try await fetchStops(direction.directionId, routeId, .formRequest)
+                            await send(.editStopOptionsHydrated(stops))
+                        } catch { await send(.apiFailure) }
+                    })
                 }
 
                 return .merge(effects)
@@ -259,11 +262,8 @@ struct LegFormFeature {
                         do {
                             let directions = try await fetchDirections(mbtaRouteId, .formRequest)
                             await send(.directionsLoaded(directions))
-                        } catch {
-                            await send(.apiFailure)
-                        }
-                    }
-                    .cancellable(id: CancelID.directions, cancelInFlight: true)
+                        } catch { await send(.apiFailure) }
+                    }.cancellable(id: CancelID.directions, cancelInFlight: true)
 
                 case let .fetchRoutes(filterKey, filterValue):
                     let fetchBranches = mbtaClient.fetchBranches
@@ -271,18 +271,12 @@ struct LegFormFeature {
                         do {
                             let branches = try await fetchBranches(filterKey, filterValue, .formRequest)
                             await send(.branchesLoaded(branches))
-                        } catch {
-                            await send(.apiFailure)
-                        }
-                    }
-                    .cancellable(id: CancelID.branches, cancelInFlight: true)
+                        } catch { await send(.apiFailure) }
+                    }.cancellable(id: CancelID.branches, cancelInFlight: true)
                 }
 
             case let .branchesLoaded(options):
-                guard state.selectedType != nil else {
-                    return .none
-                }
-
+                guard state.selectedType != nil else { return .none }
                 state.currentFormStep = .selectBranch
                 state.branchOptions = options
                 return .none
@@ -290,27 +284,40 @@ struct LegFormFeature {
             case let .branchSelected(branch):
                 state.selectedBranch = branch
                 state.mbtaRouteId = branch.id
-
                 if branch.directions.isEmpty {
                     let fetchDirections = mbtaClient.fetchDirections
                     return .run { send in
                         do {
                             let directions = try await fetchDirections(branch.id, .formRequest)
                             await send(.directionsLoaded(directions))
-                        } catch {
-                            await send(.apiFailure)
-                        }
-                    }
-                    .cancellable(id: CancelID.directions, cancelInFlight: true)
+                        } catch { await send(.apiFailure) }
+                    }.cancellable(id: CancelID.directions, cancelInFlight: true)
                 } else {
                     return .send(.directionsLoaded(branch.directions))
                 }
 
-            case let .directionsLoaded(options):
-                guard state.mbtaRouteId != nil else {
-                    return .none
+            case let .branchToggled(branch):
+                if let index = state.selectedBranches.firstIndex(where: { $0.id == branch.id }) {
+                    state.selectedBranches.remove(at: index)
+                } else {
+                    state.selectedBranches.append(branch)
                 }
+                return .none
 
+            case .multiBranchConfirmed:
+                guard let firstBranch = state.selectedBranches.first else { return .none }
+                state.selectedBranch = firstBranch
+                state.mbtaRouteId = firstBranch.id
+                // Generic directions for multi-branch — not tied to one branch
+                state.currentFormStep = .selectDirection
+                state.directionOptions = [
+                    TransitDirection(directionId: 0, directionName: "Westbound", destination: "All Branches"),
+                    TransitDirection(directionId: 1, directionName: "Eastbound", destination: "All Branches")
+                ]
+                return .none
+
+            case let .directionsLoaded(options):
+                guard state.mbtaRouteId != nil else { return .none }
                 state.currentFormStep = .selectDirection
                 state.directionOptions = options
                 return .none
@@ -318,22 +325,40 @@ struct LegFormFeature {
             case let .directionSelected(direction, mbtaRouteId):
                 state.selectedDirection = direction
                 let fetchStops = mbtaClient.fetchStops
+
+                // Multi-branch: fetch stops for ALL selected branches, intersect
+                if state.isMultiBranchMode && state.selectedBranches.count > 1 {
+                    let branches = state.selectedBranches
+                    return .run { send in
+                        do {
+                            var stopSets: [[Stop]] = []
+                            for branch in branches {
+                                let stops = try await fetchStops(direction.directionId, branch.id, .formRequest)
+                                stopSets.append(stops)
+                            }
+                            // Intersect by mbtaStopId — only stops shared by ALL branches
+                            guard let firstSet = stopSets.first else {
+                                await send(.stopsLoaded([]))
+                                return
+                            }
+                            let sharedIds = stopSets.dropFirst().reduce(Set(firstSet.map(\.mbtaStopId))) { result, stops in
+                                result.intersection(Set(stops.map(\.mbtaStopId)))
+                            }
+                            let intersected = firstSet.filter { sharedIds.contains($0.mbtaStopId) }
+                            await send(.stopsLoaded(intersected))
+                        } catch { await send(.apiFailure) }
+                    }.cancellable(id: CancelID.stops, cancelInFlight: true)
+                }
+
                 return .run { send in
                     do {
                         let stops = try await fetchStops(direction.directionId, mbtaRouteId, .formRequest)
                         await send(.stopsLoaded(stops))
-                    } catch {
-                        await send(.apiFailure)
-                    }
-                }
-                .cancellable(id: CancelID.stops, cancelInFlight: true)
+                    } catch { await send(.apiFailure) }
+                }.cancellable(id: CancelID.stops, cancelInFlight: true)
 
             case let .stopsLoaded(options):
-                guard state.selectedDirection != nil,
-                      state.mbtaRouteId != nil else {
-                    return .none
-                }
-
+                guard state.selectedDirection != nil, state.mbtaRouteId != nil else { return .none }
                 state.currentFormStep = .selectStartStop
                 state.stopOptions = options
                 state.hasHydratedEditStopOptions = true
@@ -349,7 +374,6 @@ struct LegFormFeature {
                         hydratedBranches.append(savedBranch)
                     }
                 }
-
                 state.branchOptions = hydratedBranches
                 state.hasHydratedEditBranchOptions = true
                 return .send(.buildLeg)
@@ -363,7 +387,6 @@ struct LegFormFeature {
                         hydratedDirections.append(savedDirection)
                     }
                 }
-
                 state.directionOptions = hydratedDirections
                 state.hasHydratedEditDirectionOptions = true
                 return .send(.buildLeg)
@@ -377,7 +400,6 @@ struct LegFormFeature {
                         hydratedStops.append(savedStart)
                     }
                 }
-
                 if let savedEnd = state.selectedEndStop {
                     if let freshEnd = hydratedStops.first(where: { $0.mbtaStopId == savedEnd.mbtaStopId }) {
                         state.selectedEndStop = freshEnd
@@ -385,7 +407,6 @@ struct LegFormFeature {
                         hydratedStops.append(savedEnd)
                     }
                 }
-
                 state.stopOptions = hydratedStops
                 state.hasHydratedEditStopOptions = true
                 return .send(.buildLeg)
@@ -407,7 +428,6 @@ struct LegFormFeature {
                       let transitDirection = state.selectedDirection else {
                     return .none
                 }
-
                 state.currentLeg = Leg(
                     id: state.editingLegId ?? state.currentLeg?.id ?? UUID(),
                     startStop: startStop,
@@ -415,24 +435,18 @@ struct LegFormFeature {
                     mbtaRouteId: mbtaRouteId,
                     transitType: transitType,
                     transitBranch: state.selectedBranch,
-                    transitDirection: transitDirection
+                    transitDirection: transitDirection,
+                    selectedRouteIds: state.selectedBranches.count > 1 ? state.selectedBranches.map(\.id) : nil
                 )
                 return .none
 
             case .resetTypeSelection:
                 reset(.type, state: &state)
-                return .merge(
-                    .cancel(id: CancelID.branches),
-                    .cancel(id: CancelID.directions),
-                    .cancel(id: CancelID.stops)
-                )
+                return .merge(.cancel(id: CancelID.branches), .cancel(id: CancelID.directions), .cancel(id: CancelID.stops))
 
             case .resetBranchSelection:
                 reset(.branch, state: &state)
-                return .merge(
-                    .cancel(id: CancelID.directions),
-                    .cancel(id: CancelID.stops)
-                )
+                return .merge(.cancel(id: CancelID.directions), .cancel(id: CancelID.stops))
 
             case .resetDirectionSelection:
                 reset(.direction, state: &state)

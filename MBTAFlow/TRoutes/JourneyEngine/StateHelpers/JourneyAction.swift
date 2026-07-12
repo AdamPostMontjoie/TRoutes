@@ -38,6 +38,7 @@ enum JourneyAction: Equatable {
             state.activeLegPrediction = PredictionState(
                 predictedStop: stop,
                 predictedStopType: .boarding,
+                acceptableRouteIds: state.acceptableRouteIds(for: stop),
                 loadingState: .loading(stopId: stop.mbtaStopId)
             )
             var effects: [JourneyEffect] = [.fetchPredictions]
@@ -69,6 +70,7 @@ enum JourneyAction: Equatable {
             state.activeLegPrediction = PredictionState(
                 predictedStop: nextStop,
                 predictedStopType: .boarding,
+                acceptableRouteIds: state.acceptableRouteIds(for: nextStop),
                 loadingState: .loading(stopId: nextStop.mbtaStopId)
             )
             state.transferLegPrediction = nil
@@ -171,6 +173,7 @@ enum JourneyAction: Equatable {
         state.transferLegPrediction = PredictionState(
             predictedStop: transferPredictionStop,
             predictedStopType: .transfer,
+            acceptableRouteIds: state.acceptableRouteIds(for: transferPredictionStop),
             loadingState: .loading(stopId: transferPredictionStop.mbtaStopId)
         )
     }
@@ -194,6 +197,7 @@ enum JourneyAction: Equatable {
         state.activeLegPrediction = PredictionState(
             predictedStop: prevStop,
             predictedStopType: .boarding,
+            acceptableRouteIds: state.acceptableRouteIds(for: prevStop),
             loadingState: .loading(stopId: prevStop.mbtaStopId)
         )
         state.transferLegPrediction = nil

@@ -375,7 +375,7 @@ actor JourneyEngine {
         async let activeResult: Result<[TransitPrediction], Error>? = {
             if let active = currentJourney.activeLegPrediction {
                 do {
-                    let response = try await mbtaClient.fetchTransitTimes(active.predictedStop, .currentStopPrediction)
+                    let response = try await mbtaClient.fetchTransitTimes(active.predictedStop, active.acceptableRouteIds, .currentStopPrediction)
                     return .success(response)
                 } catch {
                     return .failure(error)
@@ -387,7 +387,7 @@ actor JourneyEngine {
         async let transferResult: Result<[TransitPrediction], Error>? = {
             if let transfer = currentJourney.transferLegPrediction {
                 do {
-                    let response = try await mbtaClient.fetchTransitTimes(transfer.predictedStop, .transferPrediction)
+                    let response = try await mbtaClient.fetchTransitTimes(transfer.predictedStop, transfer.acceptableRouteIds, .transferPrediction)
                     return .success(response)
                 } catch {
                     return .failure(error)

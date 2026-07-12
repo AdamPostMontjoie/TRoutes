@@ -58,6 +58,7 @@ struct JourneyCommandValidator {
                 state.activeLegPrediction = PredictionState(
                     predictedStop: currentStop,
                     predictedStopType: .boarding,
+                    acceptableRouteIds: state.acceptableRouteIds(for: currentStop),
                     loadingState: .loading(stopId: currentStop.mbtaStopId)
                 )
                 
@@ -116,6 +117,7 @@ struct JourneyCommandValidator {
             state.activeLegPrediction = PredictionState(
                 predictedStop: currentStop,
                 predictedStopType: .boarding,
+                acceptableRouteIds: state.acceptableRouteIds(for: currentStop),
                 loadingState: .loading(stopId: currentStop.mbtaStopId)
             )
             effects.append(.monitorStop(currentStop))

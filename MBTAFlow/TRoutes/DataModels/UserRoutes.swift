@@ -130,6 +130,7 @@ struct Leg: Equatable, Codable, Identifiable {
     var transitType: TransitType
     var transitBranch: TransitBranch?
     var transitDirection: TransitDirection?
+    var selectedRouteIds: [String]?
 
     init(
         id: UUID = UUID(),
@@ -138,13 +139,15 @@ struct Leg: Equatable, Codable, Identifiable {
         mbtaRouteId: String,
         transitType: TransitType,
         transitBranch: TransitBranch? = nil,
-        transitDirection: TransitDirection? = nil
+        transitDirection: TransitDirection? = nil,
+        selectedRouteIds: [String]? = nil
     ) {
         self.id = id
         self.mbtaRouteId = mbtaRouteId
         self.transitType = transitType
         self.transitBranch = transitBranch
         self.transitDirection = transitDirection
+        self.selectedRouteIds = selectedRouteIds
         self.startStop = startStop
         self.endStop = endStop
         applyDirectionToStopsIfNeeded()
@@ -158,6 +161,7 @@ struct Leg: Equatable, Codable, Identifiable {
         case transitType
         case transitBranch
         case transitDirection
+        case selectedRouteIds
     }
 
     init(from decoder: Decoder) throws {
@@ -170,6 +174,7 @@ struct Leg: Equatable, Codable, Identifiable {
         transitType = try container.decode(TransitType.self, forKey: .transitType)
         transitBranch = try container.decodeIfPresent(TransitBranch.self, forKey: .transitBranch)
         transitDirection = try container.decodeIfPresent(TransitDirection.self, forKey: .transitDirection)
+        selectedRouteIds = try container.decodeIfPresent([String].self, forKey: .selectedRouteIds)
         applyDirectionToStopsIfNeeded()
     }
 

@@ -29,6 +29,24 @@ struct CreateRouteView: View {
                         action: \.legForm
                     )
                 )
+                .disabled(store.isSaving)
+            }
+            .overlay {
+                if store.isSaving {
+                    ZStack {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                            Text("Saving route...")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                        }
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
 //            .toolbar {

@@ -5,22 +5,10 @@
 //  Created by Adam Post on 5/30/26.
 //
 
-struct TransitRoute {
-    let transitType: TransitType
-    let name: String
-    let direction: String
-}
-
-
-// Defines the instruction for the Reducer when a user taps a transit type
 enum RouteFetchStrategy {
-    // For single lines. Skips Step 2, provides the exact ID needed for Step 3.
     case skipToDirection(routeId: String)
-    // For groups. Tells the API what to fetch to populate Step 2.
     case fetchRoutes(filterKey: String, filterValue: String)
 }
-
-
 
 enum TransitType: String, Codable, CaseIterable {
     case redLine = "Red Line"
@@ -35,7 +23,6 @@ enum TransitType: String, Codable, CaseIterable {
     
     var apiStrategy: RouteFetchStrategy {
         switch self {
-        // Routes that do not require branch definition (change route ids)
         case .redLine:
             return .skipToDirection(routeId: "Red")
         case .orangeLine:
@@ -44,8 +31,6 @@ enum TransitType: String, Codable, CaseIterable {
             return .skipToDirection(routeId: "Blue")
         case .mattapan:
             return .skipToDirection(routeId: "Mattapan")
-            
-        // Routes that require branches to be defined
         case .greenLine:
             return .fetchRoutes(filterKey: "filter[type]", filterValue: "0")
         case .commuterRail:
@@ -54,6 +39,25 @@ enum TransitType: String, Codable, CaseIterable {
             return .fetchRoutes(filterKey: "filter[type]", filterValue: "3")
         case .ferry:
             return .fetchRoutes(filterKey: "filter[type]", filterValue: "4")
+        }
+    }
+
+    /// All MBTA route IDs for this transit type (used by resolution for multi-pattern matching)
+    var routeIds: [String] {
+        switch self {
+        case .redLine: return ["Red"]
+        case .orangeLine: return ["Orange"]
+        case .blueLine: return ["Blue"]
+        case .mattapan: return ["Mattapan"]
+        case .greenLine: return ["Green-B", "Green-C", "Green-D", "Green-E"]
+        case .commuterRail, .bus, .ferry: return []
+        }
+    }
+
+    var requiresRouteSelection: Bool {
+        switch self {
+        case .commuterRail, .bus, .ferry, .greenLine: return true
+        default: return false
         }
     }
 }
