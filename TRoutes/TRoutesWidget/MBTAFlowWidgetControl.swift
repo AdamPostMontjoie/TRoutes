@@ -1,6 +1,6 @@
 //
-//  MBTAFlowWidgetControl.swift
-//  MBTAFlowWidget
+//  TRoutesWidgetControl.swift
+//  TRoutesWidget
 //
 //  Created by Adam Post on 5/25/26.
 //
@@ -9,8 +9,8 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-struct MBTAFlowWidgetControl: ControlWidget {
-    static let kind: String = "com.adampost.MBTAFlow.MBTAFlowWidget"
+struct TRoutesWidgetControl: ControlWidget {
+    static let kind: String = "com.adampost.TRoutes.TRoutesWidget"
 
     var body: some ControlWidgetConfiguration {
         AppIntentControlConfiguration(
@@ -30,7 +30,7 @@ struct MBTAFlowWidgetControl: ControlWidget {
     }
 }
 
-extension MBTAFlowWidgetControl {
+extension TRoutesWidgetControl {
     struct Value {
         var isRunning: Bool
         var name: String
@@ -38,12 +38,12 @@ extension MBTAFlowWidgetControl {
 
     struct Provider: AppIntentControlValueProvider {
         func previewValue(configuration: TimerConfiguration) -> Value {
-            MBTAFlowWidgetControl.Value(isRunning: false, name: configuration.timerName)
+            TRoutesWidgetControl.Value(isRunning: false, name: configuration.timerName)
         }
 
         func currentValue(configuration: TimerConfiguration) async throws -> Value {
             let isRunning = true // Check if the timer is running
-            return MBTAFlowWidgetControl.Value(isRunning: isRunning, name: configuration.timerName)
+            return TRoutesWidgetControl.Value(isRunning: isRunning, name: configuration.timerName)
         }
     }
 }

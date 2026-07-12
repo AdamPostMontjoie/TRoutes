@@ -1,6 +1,6 @@
 //
-//  MBTAFlowWidgetLiveActivity.swift
-//  MBTAFlowWidget
+//  TRoutesWidgetLiveActivity.swift
+//  TRoutesWidget
 //
 //  Created by Adam Post on 5/25/26.
 //
@@ -9,7 +9,7 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
-struct MBTAFlowWidgetAttributes: ActivityAttributes {
+struct TRoutesWidgetAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         // Dynamic stateful properties about your activity go here!
         var emoji: String
@@ -19,9 +19,9 @@ struct MBTAFlowWidgetAttributes: ActivityAttributes {
     var name: String
 }
 
-struct MBTAFlowWidgetLiveActivity: Widget {
+struct TRoutesWidgetLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: MBTAFlowWidgetAttributes.self) { context in
+        ActivityConfiguration(for: TRoutesWidgetAttributes.self) { context in
             // Lock screen/banner UI goes here
             VStack {
                 Text("Hello \(context.state.emoji)")
@@ -56,25 +56,25 @@ struct MBTAFlowWidgetLiveActivity: Widget {
     }
 }
 
-extension MBTAFlowWidgetAttributes {
-    fileprivate static var preview: MBTAFlowWidgetAttributes {
-        MBTAFlowWidgetAttributes(name: "World")
+extension TRoutesWidgetAttributes {
+    fileprivate static var preview: TRoutesWidgetAttributes {
+        TRoutesWidgetAttributes(name: "World")
     }
 }
 
-extension MBTAFlowWidgetAttributes.ContentState {
-    fileprivate static var smiley: MBTAFlowWidgetAttributes.ContentState {
-        MBTAFlowWidgetAttributes.ContentState(emoji: "😀")
+extension TRoutesWidgetAttributes.ContentState {
+    fileprivate static var smiley: TRoutesWidgetAttributes.ContentState {
+        TRoutesWidgetAttributes.ContentState(emoji: "😀")
      }
      
-     fileprivate static var starEyes: MBTAFlowWidgetAttributes.ContentState {
-         MBTAFlowWidgetAttributes.ContentState(emoji: "🤩")
+     fileprivate static var starEyes: TRoutesWidgetAttributes.ContentState {
+         TRoutesWidgetAttributes.ContentState(emoji: "🤩")
      }
 }
 
-#Preview("Notification", as: .content, using: MBTAFlowWidgetAttributes.preview) {
-   MBTAFlowWidgetLiveActivity()
+#Preview("Notification", as: .content, using: TRoutesWidgetAttributes.preview) {
+   TRoutesWidgetLiveActivity()
 } contentStates: {
-    MBTAFlowWidgetAttributes.ContentState.smiley
-    MBTAFlowWidgetAttributes.ContentState.starEyes
+    TRoutesWidgetAttributes.ContentState.smiley
+    TRoutesWidgetAttributes.ContentState.starEyes
 }

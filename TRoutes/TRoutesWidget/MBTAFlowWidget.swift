@@ -1,6 +1,6 @@
 //
-//  MBTAFlowWidget.swift
-//  MBTAFlowWidget
+//  TRoutesWidget.swift
+//  TRoutesWidget
 //
 //  Created by Adam Post on 5/25/26.
 //
@@ -41,7 +41,7 @@ struct SimpleEntry: TimelineEntry {
     let configuration: ConfigurationAppIntent
 }
 
-struct MBTAFlowWidgetEntryView : View {
+struct TRoutesWidgetEntryView : View {
     var entry: Provider.Entry
 
     var body: some View {
@@ -55,12 +55,12 @@ struct MBTAFlowWidgetEntryView : View {
     }
 }
 
-struct MBTAFlowWidget: Widget {
-    let kind: String = "MBTAFlowWidget"
+struct TRoutesWidget: Widget {
+    let kind: String = "TRoutesWidget"
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
-            MBTAFlowWidgetEntryView(entry: entry)
+            TRoutesWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
     }
@@ -81,7 +81,7 @@ extension ConfigurationAppIntent {
 }
 
 #Preview(as: .systemSmall) {
-    MBTAFlowWidget()
+    TRoutesWidget()
 } timeline: {
     SimpleEntry(date: .now, configuration: .smiley)
     SimpleEntry(date: .now, configuration: .starEyes)
