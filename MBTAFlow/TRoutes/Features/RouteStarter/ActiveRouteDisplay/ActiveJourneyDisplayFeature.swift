@@ -23,16 +23,13 @@ struct ActiveJourneyDisplayFeature {
         
         var shouldShowStopActionButton: Bool {
             if isDebugActive { return true }
-            if journey?.pendingDepartureConfirmation == true {
-                return false
-            }
+          //  if journey?.pendingDepartureConfirmation == true {
+          //      return false
+          //  }
             guard let journey = journey else { return false }
-            if journey.movementStatus == .enRoute { return false }
+            if journey.movementStatus == .enRoute && journey.currentStop?.stopType == .boardingStop && journey.monitoringMode == .underground  {return true}
             
-            let isBoarding = journey.stopIndex == 0
-            let isTransfer = journey.currentStop?.stopType == .transferStop || journey.currentStop?.stopType == .boardingStop && journey.stopIndex > 0
-            
-            return isBoarding || isTransfer
+            return false
         }
         
         var movementIconName: String {

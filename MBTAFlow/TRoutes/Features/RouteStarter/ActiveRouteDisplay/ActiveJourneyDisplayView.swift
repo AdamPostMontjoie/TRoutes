@@ -64,7 +64,6 @@ struct ActiveJourneyDisplayView: View {
                     }
                 }
                 .padding(.top, 4)
-                .padding(.leading, 10) // Push the whole stack slightly right to account for the background badge bleeding left
                 
                 // Bottom Level: Focus Data (ETAs + Train Logo)
                 if let activePrediction = store.journey?.activeLegPrediction {
@@ -350,7 +349,8 @@ struct ActiveJourneyDisplayView: View {
                 case let .unavailable(_, message):
                     Text(message)
                         .font(.headline)
-                        .foregroundStyle(foregroundColor)
+                        .foregroundStyle(.white)
+                        .blendMode(.difference) 
                         .lineLimit(1)
                 }
             }
