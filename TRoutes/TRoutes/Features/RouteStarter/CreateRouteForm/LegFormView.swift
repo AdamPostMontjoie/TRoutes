@@ -116,7 +116,7 @@ struct LegFormView: View {
                             }
                         }
                     }
-                    .disabled(store.selectedBranch != nil)
+                   // .disabled(store.selectedBranch != nil)
                 }
             }
         }
@@ -151,7 +151,7 @@ struct LegFormView: View {
                 action: .resetStartStopSelection
             )) {
                 Picker("Stop", selection: startStopSelection) {
-                    Text("Select a starting stop").tag(UUID?.none)
+                    Text("Select an origin").tag(UUID?.none)
                     ForEach(store.stopOptions.dropLast(), id: \.id) { stop in
                         Text(stop.stopName).tag(UUID?.some(stop.id))
                     }
@@ -170,7 +170,7 @@ struct LegFormView: View {
                 action: .resetEndStopSelection
             )) {
                 Picker("Stop", selection: endStopSelection) {
-                    Text("Select a destination stop").tag(UUID?.none)
+                    Text("Select a destination").tag(UUID?.none)
                     let validEndStops = Array(
                         store.stopOptions
                             .drop(while: { $0.mbtaStopId != store.selectedStartStop?.mbtaStopId })

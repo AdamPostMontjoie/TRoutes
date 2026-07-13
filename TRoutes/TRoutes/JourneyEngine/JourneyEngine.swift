@@ -71,11 +71,11 @@ actor JourneyEngine {
         self.trackedBoardingStopId = journey.trackedBoardingStopId
         
         // Start location updates briefly to get a location anchor if needed
-        var location = await RegionManager.shared.currentDeviceLocation
+        var location = await SurfaceManager.shared.currentDeviceLocation
         if location == nil {
             print("JourneyEngine: Location is nil on boot. Waiting 1.5 seconds for GPS warm up...")
             try? await Task.sleep(for: .seconds(1.5))
-            location = await RegionManager.shared.currentDeviceLocation
+            location = await SurfaceManager.shared.currentDeviceLocation
         }
         
         guard let location = location else {
@@ -126,7 +126,7 @@ actor JourneyEngine {
     
     func startListeningToLocationEvents() async {
         guard locationListeningTask == nil else { return }
-        let stream = await RegionManager.shared.makeEventStream()
+        let stream = await SurfaceManager.shared.makeEventStream()
         
         locationListeningTask = Task {
             for await event in stream {
@@ -159,7 +159,7 @@ actor JourneyEngine {
     }
     
     func requestAuthorization() async {
-        await RegionManager.shared.requestLocationAuthorization()
+        await SurfaceManager.shared.requestLocationAuthorization()
     }
     
     private func removeJourneyUpdateContinuation(id: UUID) {
@@ -293,7 +293,7 @@ actor JourneyEngine {
             await startListeningToLocationEvents()
         case .underground:
             //end RGM
-            await RegionManager.shared.stopFunction()
+            await SurfaceManager.shared.stopFunction()
             //start UGM
             print("underground monitoring")
             await startListeningToUndergroundEvents()
@@ -308,7 +308,7 @@ actor JourneyEngine {
         switch mode {
         case .surface:
             print("surface monitoring")
-            await RegionManager.shared.registerRegion(
+            await SurfaceManager.shared.registerRegion(
                 for: stop,
                 previousMonitoringMode: currentJourney.previousStop?.monitoringMode
             )
@@ -543,7 +543,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
-        await RegionManager.shared.killManager()
+        await SurfaceManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }
     
