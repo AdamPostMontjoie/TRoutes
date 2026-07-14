@@ -424,7 +424,7 @@ actor JourneyEngine {
                 targetPrediction.cleanArrivedTrains(newPredictions: predictionResults)
                 
                 // Track top vehicle for underground handoff
-                if !isTransfer, targetPrediction.predictedStopType == .boarding, freshJourney.movementStatus == .atStop {
+                if !isTransfer, targetPrediction.predictedStopType == .boarding {
                     
                     let isTrackedInPredictions = predictionResults.contains(where: { $0.vehicleId == trackedVehicleId })
                     let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
