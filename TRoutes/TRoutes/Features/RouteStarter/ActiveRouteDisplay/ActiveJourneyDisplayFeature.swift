@@ -66,6 +66,7 @@ struct ActiveJourneyDisplayFeature {
         var destinationContext: String? {
             guard let journey = journey,
                   let currentLeg = journey.currentLeg,
+                  journey.stopIndex != 0,
                   let legFinalStop = currentLeg.stops.last else { return nil }
             
             let legTotalStops = currentLeg.stops.count

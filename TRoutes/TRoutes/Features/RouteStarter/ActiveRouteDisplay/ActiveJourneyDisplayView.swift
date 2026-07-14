@@ -56,7 +56,7 @@ struct ActiveJourneyDisplayView: View {
                     // Doesn't fit, fallback to stack
                     VStack(alignment: .leading, spacing: 8) {
                         currentLocationBadge
-                        if let destination = store.destinationContext {
+                        if let destination = store.destinationContext  {
                             Text(destination)
                                 .font(.footnote)
                                 .opacity(0.7)
