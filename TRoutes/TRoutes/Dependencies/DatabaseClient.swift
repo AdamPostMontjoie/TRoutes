@@ -693,7 +693,7 @@ private func makeResolvedStop(
         patternEdgeSequenceNumber: edge.sequenceNumber,
         platformId: edge.platformId,
         stationId: edge.stationId,
-        mbtaStopId: station.stationId,
+        mbtaStopId: edge.platformId,
         mbtaRouteId: leg.mbtaRouteId,
         mbtaDirectionId: directionId,
         stopName: station.name,

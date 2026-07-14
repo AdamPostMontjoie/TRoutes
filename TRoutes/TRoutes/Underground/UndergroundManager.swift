@@ -90,7 +90,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var evaluatingDepartureStartTime: Date?
     private var highConfidenceMissedCount: Int = 0
 
-    private static let departureEvaluationTimeout: TimeInterval = 25
+    private static let departureEvaluationTimeout: TimeInterval = 20
     private static let boardedProximityThreshold: CLLocationDistance = 75
     private static let boardedStationDistanceThreshold: CLLocationDistance = 100
     private static let missedDistanceThreshold: CLLocationDistance = 200
@@ -123,12 +123,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         locationManager.distanceFilter = 50 // Low polling initially
         locationManager.startUpdatingLocation()
-
-        guard currentVehicle.currentVehicleId != nil else {
-            print("UGM startSession no vehicle")
-            return
-        }
-        Task { await fetchVehicleData() }
     }
     
     //journey engine hands us a vehicle to start tracking
@@ -229,11 +223,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         }
 
         if phase != .idle {
-            // Refresh predictions on each poll tick
-           // if let stopId = currentStopToMonitorId {
-          //      continuation?.yield(.refreshTimes(stopId: stopId))
-          //  }
-            // Poll faster during departure evaluation for quicker resolution
             let pollInterval: TimeInterval = phase == .evaluatingDeparture ? 9 : 15
             setTimer(time: pollInterval)
         }        
@@ -276,7 +265,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
         // At tunnel-entry stops, GPS will be unreliable as the train enters the tunnel.
         // Skip departure evaluation and assume boarded.
-        // Will be improved with CoreMotion jolt later
+        // Will be improved with CoreMotion jolt later, which will bypass any conditions if it determines we are accelerating in a vehicle
         if isTunnelEntry {
             print("UGM tunnel-entry: assuming boarded")
             phase = .trackingVehicle
@@ -375,7 +364,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         // Timer expiration: The "Unsure" fallback
         if let startTime = evaluatingDepartureStartTime,
            Date().timeIntervalSince(startTime) > Self.departureEvaluationTimeout {
-            print("UGM departure eval: 30s timeout, requesting user confirmation")
+            print("UGM departure eval: 20s timeout, requesting user confirmation")
             phase = .idle
             locationManager.distanceFilter = 50 // Return to low battery polling
             evaluatingDepartureStartTime = nil

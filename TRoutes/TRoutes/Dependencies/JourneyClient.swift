@@ -68,10 +68,10 @@ extension JourneyClient: DependencyKey {
             await JourneyEngine.shared.handleDepartureConfirmation(boarded: false)
         },
         getCurrentAuthorization: {
-            return await RegionManager.shared.authorizationStatus
+            return await SurfaceManager.shared.authorizationStatus
         },
         requestLocationAuthorization: {
-            return await RegionManager.shared.requestLocationAuthorization()
+            return await SurfaceManager.shared.requestLocationAuthorization()
         },
         endRoute: {
             await JourneyEngine.shared.endRoute()

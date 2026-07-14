@@ -55,12 +55,14 @@ struct RouteStarterView: View {
             .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        store.send(.onSettingsButtonTapped)
-                    } label : {
-                        Image(systemName: "gear")
+                    if store.isDebugAvailable {
+                        Button {
+                            store.send(.onSettingsButtonTapped)
+                        } label : {
+                            Image(systemName: "gear")
+                        }
+                        .disabled(store.isTransitDataLoading)
                     }
-                    .disabled(store.isTransitDataLoading)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     

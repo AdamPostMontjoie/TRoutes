@@ -70,8 +70,10 @@ struct ActiveJourneyDisplayView: View {
                     predictionTimesBlock(
                         state: activePrediction.loadingState,
                         predictions: activePrediction.lastObservedPredictions,
+                        arrivedTrains: activePrediction.arrivedTrains,
                         color: transitColor,
                         iconName: store.currentTransitType?.iconName,
+                        iconColor: transitColor,
                         foregroundColor: transitForegroundColor
                     )
                     .padding(.top, 4)
@@ -125,8 +127,10 @@ struct ActiveJourneyDisplayView: View {
                         predictionTimesBlock(
                             state: transferPrediction.loadingState,
                             predictions: transferPrediction.lastObservedPredictions,
+                            arrivedTrains: transferPrediction.arrivedTrains,
                             color: .white.opacity(0.2), // Frosted/muted background for the boxes so they don't clash with the solid colored banner
                             iconName: nextLegIconName,
+                            iconColor: transferForeground,
                             foregroundColor: transferForeground
                         )
                         .padding(.top, 4)
@@ -281,7 +285,7 @@ struct ActiveJourneyDisplayView: View {
 
     
     @ViewBuilder
-    private func timesRow(times: [String], predictions: [TransitPrediction] = [], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+    private func timesRow(times: [String], predictions: [TransitPrediction?] = [], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(times.enumerated()), id: \.offset) { index, time in
                 let prediction = predictions.indices.contains(index) ? predictions[index] : nil
@@ -321,20 +325,26 @@ struct ActiveJourneyDisplayView: View {
     }
 
     @ViewBuilder
-    private func predictionTimesBlock(state: PredictionLoadingState?, predictions: [TransitPrediction], color: Color, iconName: String?, foregroundColor: Color) -> some View {
+    private func predictionTimesBlock(state: PredictionLoadingState?, predictions: [TransitPrediction], arrivedTrains: [ArrivedTrain], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
         if let state = state {
             HStack(spacing: 8) {
                 if let iconName = iconName {
                     Image(systemName: iconName)
                         .font(.title2)
-                        .foregroundStyle(transitColor)
+                        .foregroundStyle(iconColor)
                 }
                 
                 switch state {
                 case let .loaded(_, times):
-                    timesRow(times: times, predictions: predictions, color: color, foregroundColor: foregroundColor)
+                    let arrivedStrings = Array(repeating: "Boarding", count: arrivedTrains.count)
+                    let combinedTimes = Array((arrivedStrings + times).prefix(3))
+                    
+                    let nilPadding: [TransitPrediction?] = Array(repeating: nil, count: arrivedTrains.count)
+                    let combinedPredictions: [TransitPrediction?] = Array((nilPadding + predictions.map { $0 as TransitPrediction? }).prefix(3))
+                    
+                    timesRow(times: combinedTimes, predictions: combinedPredictions, color: color, foregroundColor: foregroundColor)
                 case .loading:
-                    if predictions.isEmpty {
+                    if predictions.isEmpty && arrivedTrains.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
@@ -350,7 +360,12 @@ struct ActiveJourneyDisplayView: View {
                                 .controlSize(.small)
                                 .tint(color == .white.opacity(0.2) ? foregroundColor : color)
                             
-                            timesRow(times: predictions.map(\.display), predictions: predictions, color: color, foregroundColor: foregroundColor, opacity: 0.5)
+                            let arrivedStrings = Array(repeating: "BRD", count: arrivedTrains.count)
+                            let combinedTimes = Array((arrivedStrings + predictions.map(\.display)).prefix(3))
+                            let nilPadding: [TransitPrediction?] = Array(repeating: nil, count: arrivedTrains.count)
+                            let combinedPredictions: [TransitPrediction?] = Array((nilPadding + predictions.map { $0 as TransitPrediction? }).prefix(3))
+                            
+                            timesRow(times: combinedTimes, predictions: combinedPredictions, color: color, foregroundColor: foregroundColor, opacity: 0.5)
                         }
                     }
                 case let .unavailable(_, message):

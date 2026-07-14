@@ -71,11 +71,11 @@ actor JourneyEngine {
         self.trackedBoardingStopId = journey.trackedBoardingStopId
         
         // Start location updates briefly to get a location anchor if needed
-        var location = await RegionManager.shared.currentDeviceLocation
+        var location = await SurfaceManager.shared.currentDeviceLocation
         if location == nil {
             print("JourneyEngine: Location is nil on boot. Waiting 1.5 seconds for GPS warm up...")
             try? await Task.sleep(for: .seconds(1.5))
-            location = await RegionManager.shared.currentDeviceLocation
+            location = await SurfaceManager.shared.currentDeviceLocation
         }
         
         guard let location = location else {
@@ -126,7 +126,7 @@ actor JourneyEngine {
     
     func startListeningToLocationEvents() async {
         guard locationListeningTask == nil else { return }
-        let stream = await RegionManager.shared.makeEventStream()
+        let stream = await SurfaceManager.shared.makeEventStream()
         
         locationListeningTask = Task {
             for await event in stream {
@@ -159,7 +159,7 @@ actor JourneyEngine {
     }
     
     func requestAuthorization() async {
-        await RegionManager.shared.requestLocationAuthorization()
+        await SurfaceManager.shared.requestLocationAuthorization()
     }
     
     private func removeJourneyUpdateContinuation(id: UUID) {
@@ -272,8 +272,9 @@ actor JourneyEngine {
                 self.matchedPath = nil
                 
             case let .refreshTripPath(tripId):
-                print("JourneyEngine effect: refreshTripTrackingData for \(tripId)")
-                await self.refreshTripPath(tripId: tripId)
+                if tripId != self.matchedPath?.tripId {
+                    await self.updateLivePath(tripId: tripId)
+                }
             }
         }
     }
@@ -293,7 +294,7 @@ actor JourneyEngine {
             await startListeningToLocationEvents()
         case .underground:
             //end RGM
-            await RegionManager.shared.stopFunction()
+            await SurfaceManager.shared.stopFunction()
             //start UGM
             print("underground monitoring")
             await startListeningToUndergroundEvents()
@@ -308,7 +309,7 @@ actor JourneyEngine {
         switch mode {
         case .surface:
             print("surface monitoring")
-            await RegionManager.shared.registerRegion(
+            await SurfaceManager.shared.registerRegion(
                 for: stop,
                 previousMonitoringMode: currentJourney.previousStop?.monitoringMode
             )
@@ -430,23 +431,36 @@ actor JourneyEngine {
                     let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
                     let currentTrackedStillValid = trackedVehicleId != nil && (isTrackedInPredictions || isTrackedInArrived)
                     
-                    if !currentTrackedStillValid, let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
-                        trackedVehicleId = firstValid.vehicleId
-                        trackedTripId = firstValid.tripId
+                    if !currentTrackedStillValid {
+                        var vehicleIdToTrack: String?
+                        var tripIdToTrack: String?
                         
-                        if freshJourney.monitoringMode == .underground {
-                            let isTunnelEntry = targetPrediction.predictedStop.monitoringMode == .surface && freshJourney.monitoringMode == .underground
-                            print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(targetPrediction.predictedStop.mbtaStopId)")
-                            await UndergroundManager.shared.setTrackedVehicle(
-                                vehicleId: firstValid.vehicleId!,
-                                tripId: firstValid.tripId!,
-                                boardingStopId: targetPrediction.predictedStop.mbtaStopId,
-                                waitToBoard: true,
-                                stopLatitude: targetPrediction.predictedStop.latitude,
-                                stopLongitude: targetPrediction.predictedStop.longitude,
-                                isFirstStop: freshJourney.stopIndex == 0,
-                                isTunnelEntry: isTunnelEntry
-                            )
+                        if let justArrived = targetPrediction.arrivedTrains.last {
+                            vehicleIdToTrack = justArrived.vehicleId
+                            tripIdToTrack = justArrived.tripId
+                        } else if let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
+                            vehicleIdToTrack = firstValid.vehicleId
+                            tripIdToTrack = firstValid.tripId
+                        }
+                        
+                        if let vehicleIdToTrack, let tripIdToTrack {
+                            trackedVehicleId = vehicleIdToTrack
+                            trackedTripId = tripIdToTrack
+                            
+                            if freshJourney.monitoringMode == .underground {
+                                let isTunnelEntry = targetPrediction.predictedStop.monitoringMode == .surface && freshJourney.monitoringMode == .underground
+                                print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(targetPrediction.predictedStop.mbtaStopId)")
+                                await UndergroundManager.shared.setTrackedVehicle(
+                                    vehicleId: vehicleIdToTrack,
+                                    tripId: tripIdToTrack,
+                                    boardingStopId: targetPrediction.predictedStop.mbtaStopId,
+                                    waitToBoard: true,
+                                    stopLatitude: targetPrediction.predictedStop.latitude,
+                                    stopLongitude: targetPrediction.predictedStop.longitude,
+                                    isFirstStop: freshJourney.stopIndex == 0,
+                                    isTunnelEntry: isTunnelEntry
+                                )
+                            }
                         }
                     }
                 }
@@ -471,27 +485,20 @@ actor JourneyEngine {
         saveActiveJourneyAndPublish(freshJourney)
     }
     
-
-    private func refreshTripPath(tripId:String) async  {
-        do {
-            let tripTrackingData = try await mbtaClient.fetchTripTrackingData(tripId, .patternMatching)
-            // we need a new path once we get new trip data
-            updateLivePath(liveTripPath: tripTrackingData)
-            
-        } catch {
-            handleVehicleFetchError(error: error)
-        }
-    }
-    
     private func handleVehicleFetchError(error: Error){
         print("this is where we could deal with internet issues, like timeout errors or api issues")
     }
     
-    private func updateLivePath(liveTripPath:LiveTripPath) {
-        guard let currentLeg = userDefaultsClient.loadActiveJourney()?.currentLeg else { return }
-        guard matchedPath?.matches(leg: currentLeg, tripId: liveTripPath.tripId) != true else { return }
+    private func updateLivePath(tripId:String) async {
+        do {
+            let liveTripPath = try await mbtaClient.fetchTripTrackingData(tripId, .patternMatching)
+            guard let currentLeg = userDefaultsClient.loadActiveJourney()?.currentLeg else { return }
+            
+            matchedPath = MatchedLegPath( leg: currentLeg,tripPath: liveTripPath)
+        } catch {
+            handleVehicleFetchError(error: error)
+        }
         
-        matchedPath = MatchedLegPath( leg: currentLeg,tripPath: liveTripPath)
     }
     
     // MARK: - State Publishing Helpers
@@ -543,7 +550,7 @@ actor JourneyEngine {
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
-        await RegionManager.shared.killManager()
+        await SurfaceManager.shared.killManager()
         await UndergroundManager.shared.killManager()
     }
     

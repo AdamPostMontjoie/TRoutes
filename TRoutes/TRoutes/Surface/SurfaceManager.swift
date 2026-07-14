@@ -1,5 +1,5 @@
 //
-//  LocationManager.swift
+//  SurfaceManager.swift
 //  TRoutes
 //
 //  Created by Adam Post on 6/7/26.
@@ -9,7 +9,7 @@ import CoreLocation
 import ComposableArchitecture
 
 @MainActor
-class RegionManager: NSObject, CLLocationManagerDelegate {
+class SurfaceManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: - Types & Properties
     
@@ -104,7 +104,7 @@ class RegionManager: NSObject, CLLocationManagerDelegate {
     // Guards against double state events.
     private var lastKnownState: CLRegionState?
     
-    static let shared = RegionManager()
+    static let shared = SurfaceManager()
     
     var currentDeviceLocation: CLLocation? {
         return locationManager.location

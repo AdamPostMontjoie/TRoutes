@@ -15,10 +15,10 @@ struct RouteReviewView: View {
     @FocusState private var isNameFocused: Bool
 
     var body: some View {
-        List {
-            Section {
+        VStack(spacing: 0) {
+            HStack {
                 TextField("Route Name", text: $store.route.name)
-                    .font(.headline)
+                    .font(.system(.title2, design: .rounded).weight(.bold))
                     .focused($isNameFocused)
                     .onChange(of: isNameFocused) { oldValue, newValue in
                         if newValue == false {
@@ -28,9 +28,30 @@ struct RouteReviewView: View {
                     .onSubmit {
                         isNameFocused = false
                     }
+                    .submitLabel(.done)
+                
+                Spacer()
+                
+                if isNameFocused {
+                    Button {
+                        store.route.name = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                } 
             }
-
-            Section(header: Text("Legs")) {
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(isNameFocused ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .padding(.horizontal)
+            .padding(.top, 16)
+            
+            List {
+                Section(header: Text("Legs")) {
                 ForEach(
                     store.scope(state: \.legRows, action: \.legRows)
                 ) { childStore in
@@ -52,6 +73,7 @@ struct RouteReviewView: View {
                 .tint(.blue)
                 .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
             }
+        }
         }
         .navigationTitle("Review Route")
         .sheet(
