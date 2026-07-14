@@ -38,10 +38,7 @@ enum DebugAvailability {
         #if DEBUG
         return true
         #else
-        guard let receiptURL = Bundle.main.appStoreReceiptURL else {
-            return true
-        }
-        return receiptURL.lastPathComponent == "sandboxReceipt"
+        return false
         #endif
     }
 
