@@ -56,7 +56,7 @@ struct ActiveJourneyDisplayView: View {
                     // Doesn't fit, fallback to stack
                     VStack(alignment: .leading, spacing: 8) {
                         currentLocationBadge
-                        if let destination = store.destinationContext {
+                        if let destination = store.destinationContext  {
                             Text(destination)
                                 .font(.footnote)
                                 .opacity(0.7)
@@ -336,15 +336,11 @@ struct ActiveJourneyDisplayView: View {
                 
                 switch state {
                 case let .loaded(_, times):
-                    let arrivedStrings = Array(repeating: "Boarding", count: arrivedTrains.count)
-                    let combinedTimes = Array((arrivedStrings + times).prefix(3))
+           
                     
-                    let nilPadding: [TransitPrediction?] = Array(repeating: nil, count: arrivedTrains.count)
-                    let combinedPredictions: [TransitPrediction?] = Array((nilPadding + predictions.map { $0 as TransitPrediction? }).prefix(3))
-                    
-                    timesRow(times: combinedTimes, predictions: combinedPredictions, color: color, foregroundColor: foregroundColor)
+                    timesRow(times: times, predictions: predictions, color: color, foregroundColor: foregroundColor)
                 case .loading:
-                    if predictions.isEmpty && arrivedTrains.isEmpty {
+                    if predictions.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
@@ -360,12 +356,7 @@ struct ActiveJourneyDisplayView: View {
                                 .controlSize(.small)
                                 .tint(color == .white.opacity(0.2) ? foregroundColor : color)
                             
-                            let arrivedStrings = Array(repeating: "BRD", count: arrivedTrains.count)
-                            let combinedTimes = Array((arrivedStrings + predictions.map(\.display)).prefix(3))
-                            let nilPadding: [TransitPrediction?] = Array(repeating: nil, count: arrivedTrains.count)
-                            let combinedPredictions: [TransitPrediction?] = Array((nilPadding + predictions.map { $0 as TransitPrediction? }).prefix(3))
-                            
-                            timesRow(times: combinedTimes, predictions: combinedPredictions, color: color, foregroundColor: foregroundColor, opacity: 0.5)
+                            timesRow(times: predictions.map(\.display), predictions: predictions, color: color, foregroundColor: foregroundColor, opacity: 0.5)
                         }
                     }
                 case let .unavailable(_, message):
