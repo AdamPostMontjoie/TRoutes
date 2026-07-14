@@ -26,11 +26,11 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         
         var entryDistance: CLLocationDistance {
             switch self {
-            case .arrivingOnFoot(.bus): return 20
-            case .arrivingOnFoot(.lightRail): return 30
-            case .arrivingOnFoot(.heavyRail): return 60
-            case .arrivingOnFoot(.commuterRail): return 60
-            case .arrivingOnFoot(.ferry): return 80
+            case .arrivingOnFoot(.bus): return 30
+            case .arrivingOnFoot(.lightRail): return 100
+            case .arrivingOnFoot(.heavyRail): return 110
+            case .arrivingOnFoot(.commuterRail): return 120
+            case .arrivingOnFoot(.ferry): return 150
             case .emergingFromUnderground(.bus): return 80
             case .emergingFromUnderground(.lightRail): return 100
             case .emergingFromUnderground(.heavyRail): return 140
@@ -57,7 +57,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
             case .emergingFromUnderground(.commuterRail): return 200
             case .emergingFromUnderground(.ferry): return 220
             case .ridingAlongSurface(.bus): return 40
-            case .ridingAlongSurface(.lightRail): return 60
+            case .ridingAlongSurface(.lightRail): return 80
             case .ridingAlongSurface(.heavyRail): return 100
             case .ridingAlongSurface(.commuterRail): return 120
             case .ridingAlongSurface(.ferry): return 140

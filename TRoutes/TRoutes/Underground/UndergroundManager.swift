@@ -91,9 +91,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var highConfidenceMissedCount: Int = 0
 
     private static let departureEvaluationTimeout: TimeInterval = 20
-    private static let boardedProximityThreshold: CLLocationDistance = 75
-    private static let boardedStationDistanceThreshold: CLLocationDistance = 100
-    private static let missedDistanceThreshold: CLLocationDistance = 200
+    private static let boardedProximityThreshold: CLLocationDistance = 150
+    private static let boardedStationDistanceThreshold: CLLocationDistance = 200
+    private static let missedDistanceThreshold: CLLocationDistance = 200 //TODO: update
     
     private var preparedCommand: JourneyCommand?
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
@@ -488,7 +488,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         let distance = userLocation.distance(from: stopLocation)
         print("UGM proximity check: \(distance)m from boarding stop")
         
-        if distance < 150 {
+        if distance < 250 {
             hasYieldedInitialEntry = true
             if let stopId = currentStopToMonitorId {
                 print("UGM proximity entry for first stop \(stopId)")
