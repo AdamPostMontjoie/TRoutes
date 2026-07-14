@@ -82,9 +82,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var isFirstStop = false
     private var hasYieldedInitialEntry = false
     
-    // Tunnel-entry: surface stop monitored as underground because next stop is underground.
-    // GPS is guaranteed to degrade when the vehicle departs, so skip departure evaluation.
-    private var isTunnelEntry = false
     
     // Evaluating departure state
     private var evaluatingDepartureStartTime: Date?
@@ -93,7 +90,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private static let departureEvaluationTimeout: TimeInterval = 20
     private static let boardedProximityThreshold: CLLocationDistance = 150
     private static let boardedStationDistanceThreshold: CLLocationDistance = 200
-    private static let missedDistanceThreshold: CLLocationDistance = 200 //TODO: update
+    private static let missedDistanceThreshold: CLLocationDistance = 300
     
     private var preparedCommand: JourneyCommand?
     private var continuation: AsyncStream<JourneyCommand>.Continuation?
@@ -127,14 +124,13 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     //journey engine hands us a vehicle to start tracking
     func setTrackedVehicle(
-        vehicleId: String,
-        tripId: String,
+        vehicleId: String?,
+        tripId: String?,
         boardingStopId: String,
         waitToBoard: Bool,
         stopLatitude: Double,
         stopLongitude: Double,
-        isFirstStop: Bool,
-        isTunnelEntry: Bool = false
+        isFirstStop: Bool
     ) async {
         currentVehicle = TrackedVehicleState()
         currentVehicle.updateVehicleInfo(
@@ -153,10 +149,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             latitude: stopLatitude, longitude: stopLongitude
         )
         self.isFirstStop = isFirstStop
-        self.isTunnelEntry = isTunnelEntry
         hasYieldedInitialEntry = false
         
-        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard) isFirstStop: \(isFirstStop) tunnelEntry: \(isTunnelEntry)")
+        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard) isFirstStop: \(isFirstStop) ")
 
         await fetchVehicleData()
     }
@@ -262,19 +257,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         guard hasDepartedStop else {
             return
         }
-
-        // At tunnel-entry stops, GPS will be unreliable as the train enters the tunnel.
-        // Skip departure evaluation and assume boarded.
-        // Will be improved with CoreMotion jolt later, which will bypass any conditions if it determines we are accelerating in a vehicle
-        if isTunnelEntry {
-            print("UGM tunnel-entry: assuming boarded")
-            phase = .trackingVehicle
-            if let currentStopToMonitorId {
-                continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
-            }
-            return
-        }
-
         phase = .evaluatingDeparture
         locationManager.distanceFilter = kCLDistanceFilterNone // High frequency for the 30s evaluation window
         evaluatingDepartureStartTime = Date()
@@ -464,7 +446,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         phase = .idle
         boardingStopCoordinate = nil
         isFirstStop = false
-        isTunnelEntry = false
         hasYieldedInitialEntry = false
         evaluatingDepartureStartTime = nil
         highConfidenceMissedCount = 0

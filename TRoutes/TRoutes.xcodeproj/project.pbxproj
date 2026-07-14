@@ -54,10 +54,10 @@
 			);
 			target = 96318B972FC4BC4600534049 /* TRoutesWidgetExtension */;
 		};
-		963E8B063006CDD700884FC7 /* Exceptions for "TRoutes" folder in "TRoutesWidgetExtension" target */ = {
+		963E8C7F3006F72300884FC7 /* Exceptions for "TRoutes" folder in "TRoutesWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"logo v1.icon",
+				"AppIcon.icon",
 			);
 			target = 96318B972FC4BC4600534049 /* TRoutesWidgetExtension */;
 		};
@@ -75,7 +75,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				96EC3F422FD841D300C1C143 /* Exceptions for "TRoutes" folder in "TRoutes" target */,
-				963E8B063006CDD700884FC7 /* Exceptions for "TRoutes" folder in "TRoutesWidgetExtension" target */,
+				963E8C7F3006F72300884FC7 /* Exceptions for "TRoutes" folder in "TRoutesWidgetExtension" target */,
 			);
 			path = TRoutes;
 			sourceTree = "<group>";

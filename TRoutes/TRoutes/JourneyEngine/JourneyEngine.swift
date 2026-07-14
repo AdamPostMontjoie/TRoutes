@@ -318,26 +318,19 @@ actor JourneyEngine {
             await UndergroundManager.shared.startSession()
             
             let isWaitingToBoard = stop.journeyRole == .boarding
-            // Tunnel-entry: stop is inherently surface but monitored as underground
-            // because the look-ahead switched modes (next stop is underground).
-            let isTunnelEntry = stop.monitoringMode == .surface && currentJourney.monitoringMode == .underground
             
-            if let trackedVehicleId = currentJourney.trackedVehicleId,
-               let trackedTripId = currentJourney.trackedTripId {
-                print("JourneyEngine set UGM vehicle: \(trackedVehicleId) trip: \(trackedTripId) stop: \(stop.mbtaStopId) tunnelEntry: \(isTunnelEntry)")
-                await UndergroundManager.shared.setTrackedVehicle(
-                    vehicleId: trackedVehicleId,
-                    tripId: trackedTripId,
-                    boardingStopId: stop.mbtaStopId,
-                    waitToBoard: isWaitingToBoard,
-                    stopLatitude: stop.latitude,
-                    stopLongitude: stop.longitude,
-                    isFirstStop: currentJourney.stopIndex == 0,
-                    isTunnelEntry: isTunnelEntry
-                )
-            } else {
-                print("JourneyEngine underground tracking not ready for \(stop.mbtaStopId) - no tracked vehicle")
-            }
+            let trackedVehicleId = currentJourney.trackedVehicleId
+            let trackedTripId = currentJourney.trackedTripId
+            print("JourneyEngine set UGM vehicle: \(trackedVehicleId ?? "nil") trip: \(trackedTripId ?? "nil") stop: \(stop.mbtaStopId)")
+            await UndergroundManager.shared.setTrackedVehicle(
+                vehicleId: trackedVehicleId,
+                tripId: trackedTripId,
+                boardingStopId: stop.mbtaStopId,
+                waitToBoard: isWaitingToBoard,
+                stopLatitude: stop.latitude,
+                stopLongitude: stop.longitude,
+                isFirstStop: currentJourney.stopIndex == 0
+            )
         }
     }
     
@@ -425,7 +418,7 @@ actor JourneyEngine {
                 targetPrediction.cleanArrivedTrains(newPredictions: predictionResults)
                 
                 // Track top vehicle for underground handoff
-                if !isTransfer, targetPrediction.predictedStopType == .boarding, freshJourney.movementStatus == .atStop {
+                if !isTransfer, targetPrediction.predictedStopType == .boarding {
                     
                     let isTrackedInPredictions = predictionResults.contains(where: { $0.vehicleId == trackedVehicleId })
                     let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
@@ -448,7 +441,6 @@ actor JourneyEngine {
                             trackedTripId = tripIdToTrack
                             
                             if freshJourney.monitoringMode == .underground {
-                                let isTunnelEntry = targetPrediction.predictedStop.monitoringMode == .surface && freshJourney.monitoringMode == .underground
                                 print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(targetPrediction.predictedStop.mbtaStopId)")
                                 await UndergroundManager.shared.setTrackedVehicle(
                                     vehicleId: vehicleIdToTrack,
@@ -457,8 +449,7 @@ actor JourneyEngine {
                                     waitToBoard: true,
                                     stopLatitude: targetPrediction.predictedStop.latitude,
                                     stopLongitude: targetPrediction.predictedStop.longitude,
-                                    isFirstStop: freshJourney.stopIndex == 0,
-                                    isTunnelEntry: isTunnelEntry
+                                    isFirstStop: freshJourney.stopIndex == 0
                                 )
                             }
                         }
