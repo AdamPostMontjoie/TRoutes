@@ -90,7 +90,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     private var evaluatingDepartureStartTime: Date?
     private var highConfidenceMissedCount: Int = 0
 
-    private static let departureEvaluationTimeout: TimeInterval = 25
+    private static let departureEvaluationTimeout: TimeInterval = 20
     private static let boardedProximityThreshold: CLLocationDistance = 75
     private static let boardedStationDistanceThreshold: CLLocationDistance = 100
     private static let missedDistanceThreshold: CLLocationDistance = 200
@@ -364,7 +364,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         // Timer expiration: The "Unsure" fallback
         if let startTime = evaluatingDepartureStartTime,
            Date().timeIntervalSince(startTime) > Self.departureEvaluationTimeout {
-            print("UGM departure eval: 30s timeout, requesting user confirmation")
+            print("UGM departure eval: 20s timeout, requesting user confirmation")
             phase = .idle
             locationManager.distanceFilter = 50 // Return to low battery polling
             evaluatingDepartureStartTime = nil

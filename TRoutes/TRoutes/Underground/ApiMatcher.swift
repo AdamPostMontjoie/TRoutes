@@ -49,11 +49,6 @@ struct MatchedLegPath {
         self.parentStationIdByTripStopId = parentStationIdByTripStopId
     }
 
-    func matches(leg: ResolvedLeg, tripId: String) -> Bool {
-        sourceLegId == leg.sourceLegId &&
-        self.tripId == tripId
-    }
-
     /// Whether a given pattern ID is acceptable for this leg
     func acceptsPattern(_ patternId: String) -> Bool {
         acceptablePatternIds.contains(patternId) || patternId == selectedPatternId
