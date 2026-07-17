@@ -43,11 +43,10 @@
 		96318B982FC4BC4600534049 /* TRoutesWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TRoutesWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		96318B9A2FC4BC4600534049 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		96318B9C2FC4BC4600534049 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		96EC410F2FDD902E00C1C143 /* TRoutesWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TRoutesWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		96318BAF2FC4BC4700534049 /* Exceptions for "TRoutesWidget" folder in "TRoutesWidgetExtension" target */ = {
+		96318BAF2FC4BC4700534049 /* Exceptions for "TRoutesWidgetExtension" folder in "TRoutesWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -57,9 +56,16 @@
 		963E8C7F3006F72300884FC7 /* Exceptions for "TRoutes" folder in "TRoutesWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				"AppIcon.icon",
+				AppIcon.icon,
 			);
 			target = 96318B972FC4BC4600534049 /* TRoutesWidgetExtension */;
+		};
+		96938D75300A68C9009EA128 /* Exceptions for "TRoutesWidgetExtension" folder in "TRoutes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				LiveActivities/Journey/JourneyAttributes.swift,
+			);
+			target = 96318B412FC1F7FA00534049 /* TRoutes */;
 		};
 		96EC3F422FD841D300C1C143 /* Exceptions for "TRoutes" folder in "TRoutes" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -80,12 +86,13 @@
 			path = TRoutes;
 			sourceTree = "<group>";
 		};
-		96318B9E2FC4BC4600534049 /* TRoutesWidget */ = {
+		96318B9E2FC4BC4600534049 /* TRoutesWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				96318BAF2FC4BC4700534049 /* Exceptions for "TRoutesWidget" folder in "TRoutesWidgetExtension" target */,
+				96938D75300A68C9009EA128 /* Exceptions for "TRoutesWidgetExtension" folder in "TRoutes" target */,
+				96318BAF2FC4BC4700534049 /* Exceptions for "TRoutesWidgetExtension" folder in "TRoutesWidgetExtension" target */,
 			);
-			path = TRoutesWidget;
+			path = TRoutesWidgetExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -115,9 +122,8 @@
 		96318B392FC1F7FA00534049 = {
 			isa = PBXGroup;
 			children = (
-				96EC410F2FDD902E00C1C143 /* TRoutesWidgetExtension.entitlements */,
 				96318B442FC1F7FA00534049 /* TRoutes */,
-				96318B9E2FC4BC4600534049 /* TRoutesWidget */,
+				96318B9E2FC4BC4600534049 /* TRoutesWidgetExtension */,
 				96318B992FC4BC4600534049 /* Frameworks */,
 				96318B432FC1F7FA00534049 /* Products */,
 			);
@@ -183,7 +189,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				96318B9E2FC4BC4600534049 /* TRoutesWidget */,
+				96318B9E2FC4BC4600534049 /* TRoutesWidgetExtension */,
 			);
 			name = TRoutesWidgetExtension;
 			packageProductDependencies = (
@@ -415,6 +421,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -452,6 +459,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -484,7 +492,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3H2TK6P8A9;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = TRoutesWidget/info.plist;
+				INFOPLIST_FILE = TRoutesWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutesWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -515,7 +523,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3H2TK6P8A9;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = TRoutesWidget/info.plist;
+				INFOPLIST_FILE = TRoutesWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutesWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

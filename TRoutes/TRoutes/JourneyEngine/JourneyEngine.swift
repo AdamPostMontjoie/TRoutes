@@ -21,7 +21,7 @@ enum JourneyCommand: Equatable {
     case confirmDeparture(stopId: String)//w
     case refreshTimes(stopId: String)
     case locationAuthorizationDenied
-    case monitoringFailed(stopId: String, error: locationError)
+    case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
 }
 
 
@@ -105,6 +105,8 @@ actor JourneyEngine {
             if let freshStop = reconciledJourney.currentStop {
                 await monitorNextStop(stop: freshStop)
             }
+            
+            await LiveActivityManager.shared.startListening()
             
         } catch PositionReconciler.ReconcileError.timeout {
             print("JourneyEngine: Journey state expired (30min timeout). Dumping silently.")
@@ -201,6 +203,8 @@ actor JourneyEngine {
             await monitorNextStop(stop: firstStop)
             await self.fetchPredictions()
         }
+        
+        await LiveActivityManager.shared.startListening()
     }
     
     // MARK: - Action Validation (Inputs)
@@ -422,7 +426,12 @@ actor JourneyEngine {
                     
                     let isTrackedInPredictions = predictionResults.contains(where: { $0.vehicleId == trackedVehicleId })
                     let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
-                    let currentTrackedStillValid = trackedVehicleId != nil && (isTrackedInPredictions || isTrackedInArrived)
+                    var currentTrackedStillValid = trackedVehicleId != nil && (isTrackedInPredictions || isTrackedInArrived)
+                    
+                    // Force swap if a DIFFERENT valid train physically arrived and dropped off the board before our tracked train
+                    if let justArrived = targetPrediction.arrivedTrains.last, justArrived.vehicleId != trackedVehicleId {
+                        currentTrackedStillValid = false
+                    }
                     
                     if !currentTrackedStillValid {
                         var vehicleIdToTrack: String?

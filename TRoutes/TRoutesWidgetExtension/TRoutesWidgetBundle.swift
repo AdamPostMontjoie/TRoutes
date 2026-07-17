@@ -11,8 +11,6 @@ import SwiftUI
 @main
 struct TRoutesWidgetBundle: WidgetBundle {
     var body: some Widget {
-        TRoutesWidget()
-        TRoutesWidgetControl()
-        TRoutesWidgetLiveActivity()
+        JourneyLiveActivity()
     }
 }

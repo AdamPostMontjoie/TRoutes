@@ -89,11 +89,16 @@ struct JourneyCommandValidator {
         case .locationAuthorizationDenied:
             return [.endRoute]
             
-        case let .monitoringFailed(stopId: stopId, error: error):
-            print("monitoring failed for \(stopId): \(error)")
+        case let .monitoringFailed(stopId: stopId, error: error, message: message):
+            print("monitoring failed for \(stopId): \(error)\(message.map { " - \($0)" } ?? "")")
             let isSurface = state.monitoringMode == .surface
             let userMessage = (isSurface && error == .locationUnknown) ? "GPS signal lost or inaccurate. Tracking may be degraded." : nil
-            return [.sendNotification("monitoring failed for \(stopId): \(error)", user: userMessage)]
+            let notificationMessage = if let message, !message.isEmpty {
+                "monitoring failed for \(stopId): \(error) (\(message))"
+            } else {
+                "monitoring failed for \(stopId): \(error)"
+            }
+            return [.sendNotification(notificationMessage, user: userMessage)]
         }
     }
     

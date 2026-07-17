@@ -17,8 +17,8 @@ struct ActiveJourneyDisplayView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Top Level: Route & Destination
                 HStack(alignment: .center, spacing: 8) {
-                    if !store.shortRouteName.isEmpty {
-                        Text(store.shortRouteName)
+                    if !store.presentation.shortRouteName.isEmpty {
+                        Text(store.presentation.shortRouteName)
                             .font(.caption.bold())
                             .foregroundStyle(transitForegroundColor)
                             .padding(.horizontal, 6)
@@ -26,11 +26,11 @@ struct ActiveJourneyDisplayView: View {
                             .background(transitColor)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     }
-                    if !store.routeDestination.isEmpty {
+                    if !store.presentation.routeDestination.isEmpty {
                         Image(systemName: "arrow.right")
                             .font(.subheadline.bold())
                             .opacity(0.8)
-                        Text(store.routeDestination)
+                        Text(store.presentation.routeDestination)
                             .font(.headline)
                             .fontWeight(.semibold)
                             .lineLimit(1)
@@ -45,7 +45,7 @@ struct ActiveJourneyDisplayView: View {
                     // Fits horizontally
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         currentLocationBadge
-                        if let destination = store.destinationContext {
+                        if let destination = store.presentation.destinationContext {
                             Text(destination)
                                 .font(.footnote)
                                 .opacity(0.7)
@@ -56,7 +56,7 @@ struct ActiveJourneyDisplayView: View {
                     // Doesn't fit, fallback to stack
                     VStack(alignment: .leading, spacing: 8) {
                         currentLocationBadge
-                        if let destination = store.destinationContext  {
+                        if let destination = store.presentation.destinationContext  {
                             Text(destination)
                                 .font(.footnote)
                                 .opacity(0.7)
@@ -66,13 +66,12 @@ struct ActiveJourneyDisplayView: View {
                 .padding(.top, 4)
                 
                 // Bottom Level: Focus Data (ETAs + Train Logo)
-                if let activePrediction = store.journey?.activeLegPrediction {
+                if let state = store.presentation.activePredictionLoadingState {
                     predictionTimesBlock(
-                        state: activePrediction.loadingState,
-                        predictions: activePrediction.lastObservedPredictions,
-                        arrivedTrains: activePrediction.arrivedTrains,
+                        state: state,
+                        times: store.presentation.activePredictions,
                         color: transitColor,
-                        iconName: store.currentTransitType?.iconName,
+                        iconName: store.presentation.currentTransitType?.iconName,
                         iconColor: transitColor,
                         foregroundColor: transitForegroundColor
                     )
@@ -99,11 +98,11 @@ struct ActiveJourneyDisplayView: View {
             .padding(16)
             
             // Transfer Banner (Bottom Bleed)
-            let hasTransferContext = store.transferContext != nil
-            let hasTransferPrediction = store.journey?.transferLegPrediction?.loadingState != nil
+            let hasTransferContext = store.presentation.transferContext != nil
+            let hasTransferPrediction = store.presentation.transferPredictionLoadingState != nil
             
             if hasTransferContext || hasTransferPrediction {
-                let transferColor = nextLegColor ?? transitColor
+                let transferColor = store.presentation.nextLegTransitType?.color ?? transitColor
                 let transferForeground = transferColor.isLightBackground ? Color.black : Color.white
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -111,25 +110,23 @@ struct ActiveJourneyDisplayView: View {
                         Image(systemName: "arrow.triangle.swap")
                             .font(.headline)
                         
-                        if let transferText = store.transferContext {
+                        if let transferText = store.presentation.transferContext {
                             Text(transferText)
                                 .font(.subheadline.bold())
-                        } else if let journey = store.journey,
-                                  let nextLeg = journey.legOrder.dropFirst(journey.legIndex + 1).first {
-                            Text("Upcoming Transfer: \(nextLeg.transitType.rawValue)")
+                        } else if let nextLegType = store.presentation.nextLegTransitType {
+                            Text("Upcoming Transfer: \(nextLegType.rawValue)")
                                 .font(.subheadline.bold())
                         }
                         
                         Spacer()
                     }
                     
-                    if let transferPrediction = store.journey?.transferLegPrediction {
+                    if let state = store.presentation.transferPredictionLoadingState {
                         predictionTimesBlock(
-                            state: transferPrediction.loadingState,
-                            predictions: transferPrediction.lastObservedPredictions,
-                            arrivedTrains: transferPrediction.arrivedTrains,
+                            state: state,
+                            times: store.presentation.transferPredictions ?? [],
                             color: .white.opacity(0.2), // Frosted/muted background for the boxes so they don't clash with the solid colored banner
-                            iconName: nextLegIconName,
+                            iconName: store.presentation.nextLegTransitType?.iconName,
                             iconColor: transferForeground,
                             foregroundColor: transferForeground
                         )
@@ -154,29 +151,15 @@ struct ActiveJourneyDisplayView: View {
     }
     
     private var transitColor: Color {
-        store.currentTransitType?.color ?? Color.accentColor
+        store.presentation.currentTransitType?.color ?? Color.accentColor
     }
     
     private var transitForegroundColor: Color {
         transitColor.isLightBackground ? .black : .white
     }
     
-    private var nextLegColor: Color? {
-        guard let journey = store.journey else { return nil }
-        let nextIndex = journey.legIndex + 1
-        guard nextIndex < journey.legOrder.count else { return nil }
-        return journey.legOrder[nextIndex].transitType.color
-    }
-    
-    private var nextLegIconName: String? {
-        guard let journey = store.journey else { return nil }
-        let nextIndex = journey.legIndex + 1
-        guard nextIndex < journey.legOrder.count else { return nil }
-        return journey.legOrder[nextIndex].transitType.iconName
-    }
-    
     private var currentLocationBadge: some View {
-        Text(store.currentLocationContext)
+        Text(store.presentation.currentLocationContext)
             .font(.subheadline)
             .fontWeight(.bold)
             .background {
@@ -240,7 +223,6 @@ struct ActiveJourneyDisplayView: View {
         .accessibilityLabel("Cancel Journey")
     }
     
-
     private var departureConfirmationPrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Did you catch the train?")
@@ -282,26 +264,13 @@ struct ActiveJourneyDisplayView: View {
         }
     }
     
-
-    
     @ViewBuilder
-    private func timesRow(times: [String], predictions: [TransitPrediction?] = [], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+    private func timesRow(times: [String], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
         HStack(spacing: 8) {
             ForEach(Array(times.enumerated()), id: \.offset) { index, time in
-                let prediction = predictions.indices.contains(index) ? predictions[index] : nil
                 let bgStyle: AnyShapeStyle = (color == .white.opacity(0.2)) ? AnyShapeStyle(color) : AnyShapeStyle(color.gradient)
-                let branchLabel = prediction?.branchLabel
                 
                 HStack(spacing: 4) {
-                    if let branchLabel {
-                        Text(branchLabel)
-                            .font(.footnote.weight(.black))
-                            .foregroundStyle(.black)
-                            .frame(width: 20, height: 20)
-                            .background(.white)
-                            .clipShape(Circle())
-                    }
-                    
                     if time.lowercased().contains("stopped") {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.yellow)
@@ -325,7 +294,7 @@ struct ActiveJourneyDisplayView: View {
     }
 
     @ViewBuilder
-    private func predictionTimesBlock(state: PredictionLoadingState?, predictions: [TransitPrediction], arrivedTrains: [ArrivedTrain], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
+    private func predictionTimesBlock(state: PredictionLoadingState?, times: [String], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
         if let state = state {
             HStack(spacing: 8) {
                 if let iconName = iconName {
@@ -335,12 +304,10 @@ struct ActiveJourneyDisplayView: View {
                 }
                 
                 switch state {
-                case let .loaded(_, times):
-           
-                    
-                    timesRow(times: times, predictions: predictions, color: color, foregroundColor: foregroundColor)
+                case .loaded:
+                    timesRow(times: times, color: color, foregroundColor: foregroundColor)
                 case .loading:
-                    if predictions.isEmpty {
+                    if times.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
@@ -356,7 +323,7 @@ struct ActiveJourneyDisplayView: View {
                                 .controlSize(.small)
                                 .tint(color == .white.opacity(0.2) ? foregroundColor : color)
                             
-                            timesRow(times: predictions.map(\.display), predictions: predictions, color: color, foregroundColor: foregroundColor, opacity: 0.5)
+                            timesRow(times: times, color: color, foregroundColor: foregroundColor, opacity: 0.5)
                         }
                     }
                 case let .unavailable(_, message):

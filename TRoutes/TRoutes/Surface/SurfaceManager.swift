@@ -298,7 +298,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
                 } else {
                     mappedError = .unknown
                 }
-            continuation?.yield(.monitoringFailed(stopId: id, error: mappedError ))
+            continuation?.yield(.monitoringFailed(stopId: id, error: mappedError, message: error.localizedDescription))
         }
     }
 
