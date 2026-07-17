@@ -51,6 +51,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				LiveActivities/Journey/JourneyAttributes.swift,
 			);
 			target = 96318B972FC4BC4600534049 /* TRoutesWidgetExtension */;
 		};
@@ -60,6 +61,13 @@
 				AppIcon.icon,
 			);
 			target = 96318B972FC4BC4600534049 /* TRoutesWidgetExtension */;
+		};
+		96938D75300A68C9009EA128 /* Exceptions for "TRoutesWidget" folder in "TRoutes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				LiveActivities/Journey/JourneyAttributes.swift,
+			);
+			target = 96318B412FC1F7FA00534049 /* TRoutes */;
 		};
 		96EC3F422FD841D300C1C143 /* Exceptions for "TRoutes" folder in "TRoutes" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -83,6 +91,7 @@
 		96318B9E2FC4BC4600534049 /* TRoutesWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				96938D75300A68C9009EA128 /* Exceptions for "TRoutesWidget" folder in "TRoutes" target */,
 				96318BAF2FC4BC4700534049 /* Exceptions for "TRoutesWidget" folder in "TRoutesWidgetExtension" target */,
 			);
 			path = TRoutesWidget;
