@@ -12,9 +12,9 @@ import SwiftUI
 private func formatIslandTime(_ time: String) -> String {
     let lower = time.lowercased()
     if lower == "arriving" {
-        return "Arr"
+        return "ARR"
     } else if lower == "boarding" {
-        return "Brd"
+        return "BRD"
     }
     return time.replacingOccurrences(of: " min", with: "m")
 }
