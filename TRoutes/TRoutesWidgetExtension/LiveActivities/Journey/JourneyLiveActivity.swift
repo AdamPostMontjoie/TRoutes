@@ -310,11 +310,11 @@ struct JourneyLockScreenView: View {
         Text(state.currentLocationContext)
             .font(.subheadline)
             .fontWeight(.bold)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.thinMaterial)
-                    .padding(.horizontal, -10)
-                    .padding(.vertical, -6)
             }
     }
     

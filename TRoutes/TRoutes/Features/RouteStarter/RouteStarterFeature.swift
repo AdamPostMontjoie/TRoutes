@@ -83,7 +83,6 @@ struct RouteStarterFeature {
     @Dependency(\.userDefaultsClient) var userDefaultsClient
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.notificationsClient) var notificationsClient
-    @Dependency(\.liveActivityClient) var liveActivityClient
     
     var body: some ReducerOf<Self> {
         Scope(state: \.activeJourneyDisplay, action: \.activeJourneyDisplay) {

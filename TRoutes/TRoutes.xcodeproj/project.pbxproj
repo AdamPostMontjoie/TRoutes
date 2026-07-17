@@ -419,6 +419,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutes/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -457,6 +458,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutes/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;

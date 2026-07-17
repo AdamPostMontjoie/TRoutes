@@ -667,13 +667,7 @@ private func makeResolvedStop(
         throw ResolvedRouteError.missingStation(stationId: edge.stationId)
     }
 
-    let overlapsWithNext = isLastStopOnLeg && nextLeg.map {
-        resolvedStopMatchesUserStop(
-            platformId: edge.platformId,
-            stationId: station.stationId,
-            userStopId: $0.startStop.mbtaStopId
-        )
-    } == true
+    let overlapsWithNext = true
     let journeyRole: JourneyStopRole
     if isLastStopOnLeg && isLastLeg {
         journeyRole = .final

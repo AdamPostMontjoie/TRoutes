@@ -162,11 +162,11 @@ struct ActiveJourneyDisplayView: View {
         Text(store.presentation.currentLocationContext)
             .font(.subheadline)
             .fontWeight(.bold)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.thinMaterial)
-                    .padding(.horizontal, -10)
-                    .padding(.vertical, -6)
             }
     }
     
@@ -200,12 +200,17 @@ struct ActiveJourneyDisplayView: View {
                 break
             }
         } label: {
-            Image(systemName: store.movementIconName)
-                .font(.title2)
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(transitColor.gradient)
-                .clipShape(Circle())
+            HStack(spacing: 6) {
+                Image(systemName: store.movementIconName)
+                    .font(.title3)
+                Text(stopActionText)
+                    .font(.subheadline.bold())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(height: 40)
+            .background(transitColor.gradient)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(stopActionAccessibilityLabel)
@@ -261,6 +266,15 @@ struct ActiveJourneyDisplayView: View {
             return "Mark as at stop"
         case .atStop:
             return "Go to next stop"
+        }
+    }
+    
+    private var stopActionText: String {
+        switch store.journey?.movementStatus {
+        case .enRoute, .none:
+            return "I'm Here"
+        case .atStop:
+            return "Next Stop"
         }
     }
     
