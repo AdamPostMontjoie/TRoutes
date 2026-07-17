@@ -231,7 +231,16 @@ enum JourneyAction: Equatable {
         if fetchPredictions {
             effects.append(.fetchPredictions)
         }
-        effects.append(.sendNotification(message, user: userMessage))
+        var nextStopUserMessage = userMessage
+        if userMessage == nil {
+            if nextStop.journeyRole == .final {
+                nextStopUserMessage = "Your destination \(nextStop.stopName) is the next stop!"
+            } else if case .transfer = nextStop.journeyRole {
+                nextStopUserMessage = "Get ready to transfer! \(nextStop.stopName) is next."
+            }
+        }
+    
+        effects.append(.sendNotification(message, user: nextStopUserMessage))
         return effects
     }
 

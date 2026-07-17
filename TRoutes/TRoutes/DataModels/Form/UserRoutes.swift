@@ -35,7 +35,11 @@ struct Stop: Codable, Equatable, Identifiable {
             case .boardingStop:
                 journeyRole = .boarding
             case .transferStop:
-                journeyRole = .transfer(overlapsNext: overlapsWithNext)
+                if case let .transfer(overlaps) = journeyRole {
+                    journeyRole = .transfer(overlapsNext: overlaps)
+                } else {
+                    journeyRole = .transfer(overlapsNext: true)
+                }
             case .intermediateStop:
                 journeyRole = .intermediate
             case .finalStop:

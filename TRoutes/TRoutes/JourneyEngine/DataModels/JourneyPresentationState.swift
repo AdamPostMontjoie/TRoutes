@@ -109,12 +109,18 @@ struct JourneyPresentationState: Equatable, Codable {
             if isTransferLeg {
                 if stopsRemainingInLeg == 1 && journey.movementStatus == .atStop {
                     self.destinationContext = "Last stop before \(legFinalStop.stopName)"
+                } else if stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
+                    self.destinationContext = "Transfer at next stop"
+                } else if stopsRemainingInLeg == 0 {
+                    self.destinationContext = nil
                 } else {
                     self.destinationContext = "\(stopsText) to \(legFinalStop.stopName)"
                 }
             } else {
                 if stopsRemainingInLeg == 1 && journey.movementStatus == .enRoute {
                     self.destinationContext = "Get off at next stop"
+                } else if stopsRemainingInLeg == 0 {
+                    self.destinationContext = nil
                 } else {
                     self.destinationContext = "\(stopsText) to \(legFinalStop.stopName)"
                 }

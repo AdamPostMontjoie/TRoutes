@@ -18,12 +18,8 @@ struct WelcomeView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
-            
-            if store.isDebugActive {
-                debugContentView
-            } else {
-                userContentView
-            }
+
+            contentView
             
             Spacer()
             
@@ -43,26 +39,7 @@ struct WelcomeView: View {
     }
     
     @ViewBuilder
-    private var userContentView: some View {
-        VStack(spacing: 24) {
-            featureRow(
-                icon: "map.fill",
-                title: "Plan Your Commute",
-                description: "Create and save custom routes along the T to easily track your daily journey."
-            )
-            
-            featureRow(
-                icon: "bell.badge.fill",
-                title: "Stay Informed",
-                description: "Please enable notifications on the next screen to get real-time updates and alerts for your saved routes."
-            )
-        }
-        .padding(.horizontal)
-        .padding(.top, 16)
-    }
-    
-    @ViewBuilder
-    private var debugContentView: some View {
+    private var contentView: some View {
         VStack(spacing: 24) {
             featureRow(
                 icon: "map.fill",
@@ -76,13 +53,15 @@ struct WelcomeView: View {
                 description: "Please enable notifications on the next screen to get real-time updates and alerts for your saved routes."
             )
             
-            featureRow(
-                icon: "ladybug.fill",
-                title: "Tester Mode Active",
-                description: "As a tester, you have a debug dashboard and debug notifications, which you can disable in settings for a standard user experience.",
-                iconColor: .purple
-            )
-        }
+            if store.isDebugActive {
+                featureRow(
+                    icon: "ladybug.fill",
+                    title: "Developer Mode Active",
+                    description: "As a developer, you have a debug dashboard and debug notifications, which you can disable in settings for a standard user experience.",
+                    iconColor: .purple
+                )
+            }
+                    }
         .padding(.horizontal)
         .padding(.top, 16)
     }

@@ -31,7 +31,7 @@ extension NotificationsClient: DependencyKey {
             }
 
             let content = UNMutableNotificationContent()
-            content.title = "TRoutes Debug"
+            content.title = "T Routes Debug"
             content.body = log
             content.sound = .default
 
@@ -58,7 +58,7 @@ extension NotificationsClient: DependencyKey {
             
             // Construct and present the user-facing alert notification
             let content = UNMutableNotificationContent()
-            content.title = "TRoutes Alert"
+            content.title = "T Routes"
             content.body = message
             content.sound = .default
             
