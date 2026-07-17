@@ -22,8 +22,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             await JourneyEngine.shared.restoreActiveJourneyIfNeeded()
         }
         
-        //may need to ensure stream is being listened to
-        
         return true
     }
     func applicationDidReceiveMemoryWarning(_ application: UIApplication) {

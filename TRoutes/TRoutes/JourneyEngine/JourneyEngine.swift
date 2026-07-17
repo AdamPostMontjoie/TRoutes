@@ -106,6 +106,8 @@ actor JourneyEngine {
                 await monitorNextStop(stop: freshStop)
             }
             
+            await LiveActivityManager.shared.startListening()
+            
         } catch PositionReconciler.ReconcileError.timeout {
             print("JourneyEngine: Journey state expired (30min timeout). Dumping silently.")
             await endRoute()
@@ -201,6 +203,8 @@ actor JourneyEngine {
             await monitorNextStop(stop: firstStop)
             await self.fetchPredictions()
         }
+        
+        await LiveActivityManager.shared.startListening()
     }
     
     // MARK: - Action Validation (Inputs)
