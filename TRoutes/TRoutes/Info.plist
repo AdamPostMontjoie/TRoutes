@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSSupportsLiveActivities</key>
--   <true/>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

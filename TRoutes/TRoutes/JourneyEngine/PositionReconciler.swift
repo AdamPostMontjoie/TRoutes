@@ -135,6 +135,7 @@ actor PositionReconciler {
         } else {
             reconciledJourney.movementStatus = .enRoute
         }
+        //fail if distance is less than 1000?
         
         print("PositionReconciler: Reconciled via surface GPS to stop \(closestStop.stopName) (distance: \(minDistance)m)")
         return reconciledJourney

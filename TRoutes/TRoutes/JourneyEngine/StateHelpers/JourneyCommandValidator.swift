@@ -36,14 +36,6 @@ struct JourneyCommandValidator {
                 return []
             }
             
-        case let .approachingStop(stopId: id):
-            if state.movementStatus == .enRoute,
-               state.currentStop?.mbtaStopId == id {
-                let userMessage = "Approaching \(state.currentStop?.stopName ?? id)"
-                return [.sendNotification("Approaching \(id)", user: userMessage)]
-            }
-            return []
-            
         case let .missedVehicle(stopId: id):
             print("JourneyEngine missedVehicle for \(id)")
             var effects: [JourneyEffect] = []

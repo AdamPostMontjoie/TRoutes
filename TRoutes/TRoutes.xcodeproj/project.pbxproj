@@ -418,9 +418,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutes/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
+				INFOPLIST_KEY_CFBundleDisplayName = "T Routes";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -457,9 +457,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutes/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TRoutes;
+				INFOPLIST_KEY_CFBundleDisplayName = "T Routes";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to track when you arrive at the station.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -489,13 +489,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = TRoutes/TRoutes.entitlements;
+				CODE_SIGN_ENTITLEMENTS = TRoutesWidgetExtension/TRoutesWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3H2TK6P8A9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutesWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TRoutesWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = "T Routes";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -520,13 +520,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_ENTITLEMENTS = TRoutes/TRoutes.entitlements;
+				CODE_SIGN_ENTITLEMENTS = TRoutesWidgetExtension/TRoutesWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3H2TK6P8A9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TRoutesWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TRoutesWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = "T Routes";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
