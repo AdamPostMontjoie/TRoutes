@@ -36,6 +36,25 @@ public actor LiveActivityManager {
         }
     }
     
+    public func endActivity() async {
+        let activeActivities = Activity<JourneyAttributes>.activities
+        for activity in activeActivities {
+            let finalContent = ActivityContent(state: activity.content.state, staleDate: nil)
+            await activity.end(finalContent, dismissalPolicy: .immediate)
+        }
+    }
+    
+    nonisolated public func stopSessionTimeoutAsync() {
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            for activity in Activity<JourneyAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 1.5)
+    }
+    
     private func updateActivity(with journey: JourneyState) async {
         let presentation = JourneyPresentationState(journey: journey)
         let activeLoadingState = mapLoadingState(presentation.activePredictionLoadingState)
@@ -78,14 +97,6 @@ public actor LiveActivityManager {
             } catch {
                 print("Failed to start Live Activity: \(error.localizedDescription)")
             }
-        }
-    }
-    
-    private func endActivity() async {
-        let activeActivities = Activity<JourneyAttributes>.activities
-        for activity in activeActivities {
-            let finalContent = ActivityContent(state: activity.content.state, staleDate: nil)
-            await activity.end(finalContent, dismissalPolicy: .immediate)
         }
     }
     

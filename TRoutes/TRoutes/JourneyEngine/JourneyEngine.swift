@@ -16,7 +16,6 @@ enum ManualEvent: Equatable {
 enum JourneyCommand: Equatable {
     case executeEntry(stopId:String)//user has entered the stop
     case executeExit(stopId:String)//user has left the stop
-    case approachingStop(stopId: String)//user is nearing the stop
     case missedVehicle(stopId: String)//we missed the train
     case confirmDeparture(stopId: String)//w
     case refreshTimes(stopId: String)
@@ -552,6 +551,7 @@ actor JourneyEngine {
         trackedBoardingStopId = nil
         await SurfaceManager.shared.killManager()
         await UndergroundManager.shared.killManager()
+        await LiveActivityManager.shared.endActivity()
     }
     
     // MARK: - Timers

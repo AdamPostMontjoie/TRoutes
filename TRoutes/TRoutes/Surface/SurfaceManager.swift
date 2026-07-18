@@ -328,7 +328,6 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
 
         surfaceTrackingMode = .approaching
         startApproachingLocationUpdates()
-        continuation?.yield(.approachingStop(stopId: regionId))
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

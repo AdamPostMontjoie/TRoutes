@@ -10,6 +10,7 @@ import ComposableArchitecture
 import SwiftData
 import UIKit
 import UserNotifications
+import ActivityKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -30,12 +31,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
     func applicationWillTerminate(_ application: UIApplication) {
-        Task {
-            await notificationsClient.debugNotification("App will terminate")
-        }
+        LiveActivityManager.shared.stopSessionTimeoutAsync()
     }
 }
-
+func endAllActivities() async {
+    for activity in Activity<JourneyAttributes>.activities {
+        let finalContent = ActivityContent(
+            state: activity.content.state,
+            staleDate: nil
+        )
+        await activity.end(
+            finalContent,
+            dismissalPolicy: .immediate
+        )
+    }
+}
 //application wide state
 @Observable class AppState {
     
