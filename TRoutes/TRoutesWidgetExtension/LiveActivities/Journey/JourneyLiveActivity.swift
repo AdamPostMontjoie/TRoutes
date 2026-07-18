@@ -23,7 +23,7 @@ struct JourneyLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JourneyAttributes.self) { context in
             // Lock screen/banner UI goes here
-            JourneyLockScreenView(state: context.state)
+            JourneyLockScreenOrWatchView(state: context.state)
                 .activityBackgroundTint(Color.clear)
         } dynamicIsland: { context in
             DynamicIsland {
@@ -49,6 +49,95 @@ struct JourneyLiveActivity: Widget {
                         .foregroundStyle(Color(hex: context.state.currentTransitColor))
                         .bold()
                 }
+            }
+        }
+        .supplementalActivityFamilies([.small])
+    }
+}
+
+struct JourneyLockScreenOrWatchView: View {
+    @Environment(\.activityFamily) var activityFamily
+    let state: JourneyAttributes.ContentState
+    
+    var body: some View {
+        if activityFamily == .small {
+            JourneyWatchOSView(state: state)
+        } else {
+            JourneyLockScreenView(state: state)
+        }
+    }
+}
+
+struct JourneyWatchOSView: View {
+    let state: JourneyAttributes.ContentState
+    
+    private var watchDestinationText: String? {
+        guard let dest = state.destinationContext else { return nil }
+        let lower = dest.lowercased()
+        if lower.contains("next stop") || lower.contains("last stop") {
+            return "Next Stop"
+        }
+        if let firstWord = dest.components(separatedBy: " ").first, let count = Int(firstWord) {
+            return count == 1 ? "Next Stop" : "\(count) Stops Left"
+        }
+        return dest
+    }
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            // Badge
+            Text(state.shortRouteName)
+                .font(.headline.weight(.heavy))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color(hex: state.currentTransitForegroundColor))
+                .frame(minWidth: 36, minHeight: 32)
+                .padding(.horizontal, 6)
+                .background(Color(hex: state.currentTransitColor).gradient.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            
+            Spacer(minLength: 0)
+            
+            // Content
+            if let transferTimes = state.transferPredictions, !transferTimes.isEmpty {
+                timesView(times: transferTimes, colorHex: state.nextLegColor ?? state.currentTransitColor, foregroundHex: state.nextLegForegroundColor ?? state.currentTransitForegroundColor)
+            } else if !state.activePredictions.isEmpty {
+                timesView(times: state.activePredictions, colorHex: state.currentTransitColor, foregroundHex: state.currentTransitForegroundColor)
+            } else if let dest = watchDestinationText {
+                Text(dest)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                Text(state.currentLocationContext)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding()
+    }
+    
+    @ViewBuilder
+    private func timesView(times: [String], colorHex: String, foregroundHex: String) -> some View {
+        HStack(spacing: 4) {
+            ForEach(Array(times.prefix(2).enumerated()), id: \.offset) { index, time in
+                Text(formatIslandTime(time))
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(Color(hex: foregroundHex))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color(hex: colorHex).gradient.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .layoutPriority(1)
             }
         }
     }
