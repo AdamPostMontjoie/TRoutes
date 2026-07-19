@@ -47,14 +47,11 @@ actor JourneyEngine {
     private var undergroundListeningTask: Task<Void, Never>?
     private var predictionRefreshTask: Task<Void, Never>?
     private var loadingTask: Task<Void, Never>?
-    private var lastManualRefresh: Date?
-    private var lastPredictionFetchTime: Date?
-    
     //underground fields
-    private var matchedPath:MatchedLegPath?
-    private var trackedVehicleId: String?
-    private var trackedTripId: String?
-    private var trackedBoardingStopId: String?
+    public var matchedPath:MatchedLegPath?
+    internal var trackedVehicleId: String?
+    internal var trackedTripId: String?
+    public var trackedBoardingStopId: String?
     
     // MARK: - Lifecycle & State Reconciliation
     
@@ -344,10 +341,10 @@ actor JourneyEngine {
 
         // Debounce: prevent spamming refresh
         let now = Date()
-        if let last = lastManualRefresh, now.timeIntervalSince(last) < 2.0 {
+        if let last = await PredictionManager.shared.lastManualRefresh, now.timeIntervalSince(last) < 2.0 {
             return
         }
-        lastManualRefresh = now
+        await PredictionManager.shared.setLastManualRefresh(now)
         
         if var activePrediction = currentJourney.activeLegPrediction {
             activePrediction.loadingState = .loading(stopId: activePrediction.predictedStop.mbtaStopId)
@@ -365,127 +362,12 @@ actor JourneyEngine {
     
     
     private func fetchPredictions() async {
-        guard let currentJourney = userDefaultsClient.loadActiveJourney() else { return }
-        
-        lastPredictionFetchTime = Date()
-        
-        async let activeResult: Result<[TransitPrediction], Error>? = {
-            if let active = currentJourney.activeLegPrediction {
-                do {
-                    let response = try await mbtaClient.fetchTransitTimes(active.predictedStop, active.acceptableRouteIds, .currentStopPrediction)
-                    return .success(response)
-                } catch {
-                    return .failure(error)
-                }
-            }
-            return nil
-        }()
-        
-        async let transferResult: Result<[TransitPrediction], Error>? = {
-            if let transfer = currentJourney.transferLegPrediction {
-                do {
-                    let response = try await mbtaClient.fetchTransitTimes(transfer.predictedStop, transfer.acceptableRouteIds, .transferPrediction)
-                    return .success(response)
-                } catch {
-                    return .failure(error)
-                }
-            }
-            return nil
-        }()
-        
-        let (active, transfer) = await (activeResult, transferResult)
-        
-        if let active = active {
-            await handlePredictionResult(result: active, isTransfer: false)
-        }
-        if let transfer = transfer {
-            await handlePredictionResult(result: transfer, isTransfer: true)
-        }
-    }
-    
-    
-    private func handlePredictionResult(result: Result<[TransitPrediction], Error>, isTransfer: Bool) async {
-        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-        
-        guard var targetPrediction = isTransfer ? freshJourney.transferLegPrediction : freshJourney.activeLegPrediction else { return }
-        
-        switch result {
-        case let .success(predictionResults):
-            let times = predictionResults.map(\.display)
-            if times.isEmpty {
-                targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "No predictions available")
-            } else {
-                targetPrediction.loadingState = .loaded(stopId: targetPrediction.predictedStop.mbtaStopId, times: times)
-                
-                // Diff predictions to populate arrivedTrains queue
-                targetPrediction.cleanArrivedTrains(newPredictions: predictionResults)
-                
-                // Track top vehicle for underground handoff
-                if !isTransfer, targetPrediction.predictedStopType == .boarding {
-                    
-                    let isTrackedInPredictions = predictionResults.contains(where: { $0.vehicleId == trackedVehicleId })
-                    let isTrackedInArrived = targetPrediction.arrivedTrains.contains(where: { $0.vehicleId == trackedVehicleId })
-                    var currentTrackedStillValid = trackedVehicleId != nil && (isTrackedInPredictions || isTrackedInArrived)
-                    
-                    // Force swap if a DIFFERENT valid train physically arrived and dropped off the board before our tracked train
-                    if let justArrived = targetPrediction.arrivedTrains.last, justArrived.vehicleId != trackedVehicleId {
-                        currentTrackedStillValid = false
-                    }
-                    
-                    if !currentTrackedStillValid {
-                        var vehicleIdToTrack: String?
-                        var tripIdToTrack: String?
-                        
-                        if let justArrived = targetPrediction.arrivedTrains.last {
-                            vehicleIdToTrack = justArrived.vehicleId
-                            tripIdToTrack = justArrived.tripId
-                        } else if let firstValid = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil }) {
-                            vehicleIdToTrack = firstValid.vehicleId
-                            tripIdToTrack = firstValid.tripId
-                        }
-                        
-                        if let vehicleIdToTrack, let tripIdToTrack {
-                            trackedVehicleId = vehicleIdToTrack
-                            trackedTripId = tripIdToTrack
-                            
-                            if freshJourney.monitoringMode == .underground {
-                                print("JourneyEngine: Updating UGM with new tracked vehicle while at stop \(targetPrediction.predictedStop.mbtaStopId)")
-                                await UndergroundManager.shared.setTrackedVehicle(
-                                    vehicleId: vehicleIdToTrack,
-                                    tripId: tripIdToTrack,
-                                    boardingStopId: targetPrediction.predictedStop.mbtaStopId,
-                                    waitToBoard: true,
-                                    stopLatitude: targetPrediction.predictedStop.latitude,
-                                    stopLongitude: targetPrediction.predictedStop.longitude,
-                                    isFirstStop: freshJourney.stopIndex == 0
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        case .failure(let error):
-            if let mbtaError = error as? MBTAError, (mbtaError == .rateLimitDropped || mbtaError == .rateLimited) {
-                if case .loading = targetPrediction.loadingState {
-                    targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "Rate limit reached. Try again.")
-                } else {
-                    return
-                }
-            } else {
-                targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "Cannot reach predictions")
-            }
-        }
-        
-        if isTransfer {
-            freshJourney.transferLegPrediction = targetPrediction
-        } else {
-            freshJourney.activeLegPrediction = targetPrediction
-        }
-        saveActiveJourneyAndPublish(freshJourney)
+        await PredictionManager.shared.fetchPredictions()
     }
     
     private func handleVehicleFetchError(error: Error){
-        print("this is where we could deal with internet issues, like timeout errors or api issues")
+        //TODO: do we need a loading state on the Journey itself? Right now the UI listens to active prediction's state. But what if tracking drops? Need to signify it's disconnected. Or is tracking being nil enough?
+        print("JourneyEngine error fetching vehicle \(error.localizedDescription)")
     }
     
     private func updateLivePath(tripId:String) async {
@@ -512,7 +394,12 @@ actor JourneyEngine {
         }
     }
     
-    private func saveActiveJourneyAndPublish(_ journey: JourneyState) {
+    internal func updateTrackedVehicleIds(vehicleId: String?, tripId: String?) {
+        self.trackedVehicleId = vehicleId
+        self.trackedTripId = tripId
+    }
+    
+    internal func saveActiveJourneyAndPublish(_ journey: JourneyState) {
         var journeyToSave = journey
         journeyToSave.trackedVehicleId = self.trackedVehicleId
         journeyToSave.trackedTripId = self.trackedTripId
@@ -561,7 +448,8 @@ actor JourneyEngine {
         predictionRefreshTask = Task {
             while !Task.isCancelled {
                 let now = Date()
-                let timeSinceLastFetch = now.timeIntervalSince(lastPredictionFetchTime ?? .distantPast)
+                let lastFetch = await PredictionManager.shared.lastPredictionFetchTime ?? .distantPast
+                let timeSinceLastFetch = now.timeIntervalSince(lastFetch)
                 let timeToWait = max(1.0, 15.0 - timeSinceLastFetch)
                 
                 try? await Task.sleep(for: .seconds(timeToWait))
