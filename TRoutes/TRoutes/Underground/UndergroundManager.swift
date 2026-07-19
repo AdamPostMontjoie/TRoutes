@@ -79,7 +79,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     // GPS proximity detection for first underground boarding stop
     private var boardingStopCoordinate: CLLocationCoordinate2D?
-    private var isFirstStop = false
     private var hasYieldedInitialEntry = false
     
     
@@ -129,8 +128,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         boardingStopId: String,
         waitToBoard: Bool,
         stopLatitude: Double,
-        stopLongitude: Double,
-        isFirstStop: Bool
+        stopLongitude: Double
     ) async {
         currentVehicle = TrackedVehicleState()
         currentVehicle.updateVehicleInfo(
@@ -148,11 +146,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         boardingStopCoordinate = CLLocationCoordinate2D(
             latitude: stopLatitude, longitude: stopLongitude
         )
-        self.isFirstStop = isFirstStop
         hasYieldedInitialEntry = false
         
-        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard) isFirstStop: \(isFirstStop) ")
-
+        print("UGM setTrackedVehicle vehicle: \(vehicleId ?? "nil") trip: \(tripId ?? "nil") stop: \(boardingStopId) waitToBoard: \(waitToBoard)")
         await fetchVehicleData()
     }
 
@@ -445,7 +441,6 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         preparedCommand = nil
         phase = .idle
         boardingStopCoordinate = nil
-        isFirstStop = false
         hasYieldedInitialEntry = false
         evaluatingDepartureStartTime = nil
         highConfidenceMissedCount = 0

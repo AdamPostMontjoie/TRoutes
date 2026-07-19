@@ -21,20 +21,19 @@ struct TransitSchedule: Codable, Equatable, Hashable {
     let headsign: String?
     let directionId: Int?
     let stopSequence: Int?
-
-    /// Short branch label for display (e.g., "Ashmont", "B", "Braintree")
-    var branchLabel: String? {
-        // Green Line
-        if let routeId, routeId.hasPrefix("Green-") {
-            return routeId.replacingOccurrences(of: "Green-", with: "")
-        }
-        //Red Line
-        if let headsign, !headsign.isEmpty {
-            if let routeId, routeId == "Red" {
-                return headsign
-            }
-        }
-        return nil
+    
+    var asPrediction: TransitPrediction {
+        TransitPrediction(
+            display: self.display,
+            vehicleId: self.vehicleId,
+            predictionId: self.ScheduleId,
+            tripId: self.tripId,
+            stopId: self.stopId,
+            routeId: self.routeId,
+            headsign: self.headsign,
+            directionId: self.directionId,
+            stopSequence: self.stopSequence
+        )
     }
 }
 
