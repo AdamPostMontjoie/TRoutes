@@ -6,44 +6,63 @@ from pathlib import Path
 
 
 DEFAULT_GTFS_DIR = Path("/Users/adampost/Downloads/MBTA_GTFS")
-OUTPUT_DIR = Path(__file__).resolve().parents[1] / "MBTAFlow" / "TRoutes" / "Resources" / "JsonBuilder"
-
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "TRoutes" / "TRoutes" / "Resources" / "JsonBuilder"
 
 UNDERGROUND_STATIONS_BY_ID = {
+    # --- MULTI-LINE & INTERMODAL TRANSFER STATIONS ---
+    "place-pktrm": "Park Street",             # Red Line / Green Line
+    "place-dwnxg": "Downtown Crossing",       # Red Line / Orange Line
+    "place-sstat": "South Station",           # Red Line / Silver Line / Commuter Rail
+    "place-state": "State",                   # Orange Line / Blue Line
+    "place-gover": "Government Center",       # Blue Line / Green Line
+    "place-north": "North Station",           # Orange Line / Green Line / Commuter Rail
+    "place-haecl": "Haymarket",               # Orange Line / Green Line / Bus Terminal
+    "place-bbsta": "Back Bay",                # Orange Line / Commuter Rail
+    "place-portr": "Porter",                  # Red Line / Commuter Rail
+    "place-harsq": "Harvard",                 # Red Line / Bus
+    "place-andrw": "Andrew",                  # Red Line / Bus Concourse
+    "place-qnctr": "Quincy Center",           # Red Line / Commuter Rail / Bus Terminal
+    "place-rugg": "Ruggles",                  # Orange Line / Commuter Rail / Bus Terminal
+    "place-forhl": "Forest Hills",            # Orange Line / Commuter Rail / Bus Terminal
+    "place-sull": "Sullivan Square",          # Orange Line / Bus Terminal
+    "place-kencl": "Kenmore",                 # Green Line / Bus Terminal
+
+    # --- RED LINE (SINGLE-LINE STATIONS) ---
     "place-alfcl": "Alewife",
-    "place-aport": "Airport",
-    "place-aqucl": "Aquarium",
-    "place-armnl": "Arlington",
-    "place-bbsta": "Back Bay",
-    "place-bomnl": "Bowdoin",
-    "place-boyls": "Boylston",
-    "place-brdwy": "Broadway",
-    "place-ccmnl": "Community College",
-    "place-chmnl": "Charles/MGH",
-    "place-chncl": "Chinatown",
-    "place-cntsq": "Central",
-    "place-coecl": "Copley",
-    "place-crtst": "Courthouse",
     "place-davis": "Davis",
-    "place-dwnxg": "Downtown Crossing",
-    "place-gover": "Government Center",
-    "place-haecl": "Haymarket",
-    "place-hymnl": "Hynes Convention Center",
-    "place-kencl": "Kenmore",
+    "place-cntsq": "Central",
     "place-knncl": "Kendall/MIT",
-    "place-mvbcl": "Maverick",
-    "place-north": "North Station",
-    "place-pktrm": "Park Street",
-    "place-portr": "Porter",
-    "place-prmnl": "Prudential",
-    "place-sstat": "South Station",
-    "place-state": "State",
-    "place-sull": "Sullivan Square",
-    "place-symcl": "Symphony",
+    "place-chmnl": "Charles/MGH",
+    "place-brdwy": "Broadway",
+    "place-smmnl": "Shawmut",
+
+    # --- ORANGE LINE (SINGLE-LINE STATIONS) ---
+    "place-ccmnl": "Community College",    # Double-decked I-93 & Route 1 highway overpasses
+    "place-chncl": "Chinatown",
     "place-tumnl": "Tufts Medical Center",
+    "place-rcmnl": "Roxbury Crossing",
+    "place-jaksn": "Jackson Square",
+    "place-sbmnl": "Stony Brook",
+    "place-grnst": "Green Street",
+
+    # --- BLUE LINE (SINGLE-LINE STATIONS) ---
+    "place-bomnl": "Bowdoin",
+    "place-aqucl": "Aquarium",
+    "place-mvbcl": "Maverick",
+    "place-aport": "Airport",
+
+    # --- GREEN LINE (SINGLE-LINE STATIONS) ---
+    "place-boyls": "Boylston",
+    "place-armnl": "Arlington",
+    "place-coecl": "Copley",
+    "place-hymnl": "Hynes Convention Center",
+    "place-prmnl": "Prudential",
+    "place-symcl": "Symphony",
+
+    # --- SILVER LINE (BUSWAY TUNNEL STATIONS) ---
+    "place-crtst": "Courthouse",
     "place-wtcst": "World Trade Center",
 }
-
 
 def monitoring_mode(station_id, station_name):
     expected_name = UNDERGROUND_STATIONS_BY_ID.get(station_id)

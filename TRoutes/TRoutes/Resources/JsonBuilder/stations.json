@@ -77348,7 +77348,7 @@
     "latitude": 42.330154,
     "longitude": -71.057655,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "13",
       "70083",
@@ -78034,7 +78034,7 @@
     "latitude": 42.300713,
     "longitude": -71.113943,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "10642",
       "70001",
@@ -78087,7 +78087,7 @@
     "latitude": 42.310525,
     "longitude": -71.107414,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "70002",
       "70003"
@@ -78113,7 +78113,7 @@
     "latitude": 42.373362,
     "longitude": -71.118956,
     "municipality": "Cambridge",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "70067",
       "70068",
@@ -78179,7 +78179,7 @@
     "latitude": 42.323132,
     "longitude": -71.099592,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "11531",
       "70006",
@@ -78579,7 +78579,7 @@
     "latitude": 42.251809,
     "longitude": -71.005409,
     "municipality": "Quincy",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "32001",
       "32002",
@@ -78609,7 +78609,7 @@
     "latitude": 42.331397,
     "longitude": -71.095451,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "70008",
       "70009"
@@ -78648,7 +78648,7 @@
     "latitude": 42.336377,
     "longitude": -71.088961,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "17861",
       "17862",
@@ -78686,7 +78686,7 @@
     "latitude": 42.317062,
     "longitude": -71.104248,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "70004",
       "70005"
@@ -78734,7 +78734,7 @@
     "latitude": 42.2931258,
     "longitude": -71.065738,
     "municipality": "Boston",
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "platforms": [
       "70091",
       "70092"

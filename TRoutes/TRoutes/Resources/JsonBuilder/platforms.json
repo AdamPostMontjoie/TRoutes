@@ -1045,7 +1045,7 @@
     "name": "Forest Hills - Upper Busway",
     "latitude": 42.29985,
     "longitude": -71.114261,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "21-B-1",
@@ -3811,7 +3811,7 @@
     "name": "Jackson Square - Busway",
     "latitude": 42.323074,
     "longitude": -71.099546,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "14-_-0",
@@ -6765,7 +6765,7 @@
     "name": "Andrew - Busway",
     "latitude": 42.329962,
     "longitude": -71.057625,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "10-2-1",
@@ -15926,7 +15926,7 @@
     "name": "Ruggles - Upper Busway",
     "latitude": 42.336855,
     "longitude": -71.089449,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "15-1-1",
@@ -15968,7 +15968,7 @@
     "name": "Ruggles - Lower Busway Berth A1",
     "latitude": 42.33623,
     "longitude": -71.089359,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "22-_-0"
@@ -15980,7 +15980,7 @@
     "name": "Ruggles - Lower Busway Berth A2",
     "latitude": 42.336359,
     "longitude": -71.08922,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "19-3-0",
@@ -15996,7 +15996,7 @@
     "name": "Ruggles - Lower Busway Berth A3",
     "latitude": 42.336496,
     "longitude": -71.089015,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "28-9-0",
@@ -16009,7 +16009,7 @@
     "name": "Ruggles - Lower Busway Berth A4",
     "latitude": 42.336638,
     "longitude": -71.088853,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "47-8-1",
@@ -16025,7 +16025,7 @@
     "name": "Ruggles - Lower Busway Berth B1",
     "latitude": 42.336109,
     "longitude": -71.089188,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "15-1-0",
@@ -16039,7 +16039,7 @@
     "name": "Ruggles - Lower Busway Berth B2",
     "latitude": 42.336257,
     "longitude": -71.089009,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "44-1-0"
@@ -16051,7 +16051,7 @@
     "name": "Ruggles - Lower Busway Berth B3",
     "latitude": 42.3364,
     "longitude": -71.088835,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "43-_-0",
@@ -16080,7 +16080,7 @@
     "name": "Ruggles - Lower Busway Berth B4",
     "latitude": 42.336479,
     "longitude": -71.08874,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "19-3-1",
@@ -16096,7 +16096,7 @@
     "name": "Ruggles - Lower Busway Berth B5",
     "latitude": 42.336539,
     "longitude": -71.088668,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "708-1-0",
@@ -31505,7 +31505,7 @@
     "name": "Quincy Center - Berth 1",
     "latitude": 42.251696,
     "longitude": -71.004973,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "217-1-0",
@@ -31529,7 +31529,7 @@
     "name": "Quincy Center - Berth 2",
     "latitude": 42.251772,
     "longitude": -71.005099,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "216-2-0",
@@ -31544,7 +31544,7 @@
     "name": "Quincy Center - Berth 3",
     "latitude": 42.251847,
     "longitude": -71.005168,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "215-1-0",
@@ -31570,7 +31570,7 @@
     "name": "Quincy Center - Berth 4",
     "latitude": 42.251908,
     "longitude": -71.0052,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "220-5-0",
@@ -31588,7 +31588,7 @@
     "name": "Quincy Center - Berth 5",
     "latitude": 42.251975,
     "longitude": -71.005231,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "210-1-0",
@@ -71206,7 +71206,7 @@
     "name": "Forest Hills - Orange Line",
     "latitude": 42.300926,
     "longitude": -71.114129,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0",
@@ -71219,7 +71219,7 @@
     "name": "Green Street - Forest Hills",
     "latitude": 42.309832,
     "longitude": -71.108059,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0"
@@ -71231,7 +71231,7 @@
     "name": "Green Street - Oak Grove",
     "latitude": 42.309796,
     "longitude": -71.107988,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-1"
@@ -71243,7 +71243,7 @@
     "name": "Stony Brook - Forest Hills",
     "latitude": 42.317062,
     "longitude": -71.104248,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0"
@@ -71255,7 +71255,7 @@
     "name": "Stony Brook - Oak Grove",
     "latitude": 42.317062,
     "longitude": -71.104248,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-1"
@@ -71267,7 +71267,7 @@
     "name": "Jackson Square - Forest Hills",
     "latitude": 42.323132,
     "longitude": -71.099592,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0"
@@ -71279,7 +71279,7 @@
     "name": "Jackson Square - Oak Grove",
     "latitude": 42.323132,
     "longitude": -71.099592,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-1"
@@ -71291,7 +71291,7 @@
     "name": "Roxbury Crossing - Forest Hills",
     "latitude": 42.330671,
     "longitude": -71.096121,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0"
@@ -71303,7 +71303,7 @@
     "name": "Roxbury Crossing - Oak Grove",
     "latitude": 42.33064,
     "longitude": -71.09604,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-1"
@@ -71315,7 +71315,7 @@
     "name": "Ruggles - Forest Hills",
     "latitude": 42.33649,
     "longitude": -71.089684,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-0"
@@ -71327,7 +71327,7 @@
     "name": "Ruggles - Oak Grove",
     "latitude": 42.336451,
     "longitude": -71.089635,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Orange-3-1"
@@ -71998,7 +71998,7 @@
     "name": "Harvard - Ashmont/Braintree",
     "latitude": 42.374663,
     "longitude": -71.118814,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-0",
@@ -72011,7 +72011,7 @@
     "name": "Harvard - Alewife",
     "latitude": 42.374663,
     "longitude": -71.118814,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-1",
@@ -72206,7 +72206,7 @@
     "name": "Andrew - Ashmont/Braintree",
     "latitude": 42.330154,
     "longitude": -71.057655,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-0",
@@ -72219,7 +72219,7 @@
     "name": "Andrew - Alewife",
     "latitude": 42.330154,
     "longitude": -71.057655,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-1",
@@ -72304,7 +72304,7 @@
     "name": "Shawmut - Ashmont",
     "latitude": 42.2931258,
     "longitude": -71.065738,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-0"
@@ -72316,7 +72316,7 @@
     "name": "Shawmut - Alewife",
     "latitude": 42.2931258,
     "longitude": -71.065738,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-1-1"
@@ -72424,7 +72424,7 @@
     "name": "Quincy Center - Braintree",
     "latitude": 42.251809,
     "longitude": -71.005409,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-3-0"
@@ -72436,7 +72436,7 @@
     "name": "Quincy Center - Alewife",
     "latitude": 42.251809,
     "longitude": -71.005409,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "heavy rail",
     "patterns": [
       "Red-3-1"
@@ -81277,7 +81277,7 @@
     "name": "Harvard - Upper Busway Berth B1",
     "latitude": 42.37372,
     "longitude": -71.119121,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "77-_-0"
@@ -81289,7 +81289,7 @@
     "name": "Harvard - Upper Busway Berth B2",
     "latitude": 42.373604,
     "longitude": -71.119242,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "96-_-0"
@@ -81301,7 +81301,7 @@
     "name": "Harvard - Upper Busway Berth B3",
     "latitude": 42.373516,
     "longitude": -71.119582,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "66-9-0",
@@ -81314,7 +81314,7 @@
     "name": "Harvard - Upper Busway Berth B4",
     "latitude": 42.373483,
     "longitude": -71.119771,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "71-1-1",
@@ -81329,7 +81329,7 @@
     "name": "Harvard - Upper Busway Berth B5",
     "latitude": 42.373448,
     "longitude": -71.119959,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "109-_-0"
@@ -81341,7 +81341,7 @@
     "name": "Harvard - Upper Busway Berth B6",
     "latitude": 42.373414,
     "longitude": -71.120134,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "74-1-0",
@@ -81356,7 +81356,7 @@
     "name": "Harvard - Lower Busway Berth A3",
     "latitude": 42.373612,
     "longitude": -71.119323,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "74-1-1",
@@ -91943,7 +91943,7 @@
     "name": "Forest Hills - Lower Busway",
     "latitude": 42.300479,
     "longitude": -71.113634,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "bus",
     "patterns": [
       "16-3-0",
@@ -104560,7 +104560,7 @@
     "name": "Quincy Center - Track 1 (All Trains)",
     "latitude": 42.251809,
     "longitude": -71.005409,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Greenbush-24230de0-1",
@@ -105984,7 +105984,7 @@
     "name": "Forest Hills - Commuter Rail - Track 3",
     "latitude": 42.301065,
     "longitude": -71.113491,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Franklin-1750decb-0",
@@ -106015,7 +106015,7 @@
     "name": "Forest Hills - Commuter Rail - Track 5",
     "latitude": 42.301105,
     "longitude": -71.113625,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Needham-68a3e69b-1",
@@ -106030,7 +106030,7 @@
     "name": "Ruggles - Commuter Rail",
     "latitude": 42.336608,
     "longitude": -71.089208,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Franklin-C1-0",
@@ -106051,7 +106051,7 @@
     "name": "Ruggles - Commuter Rail - Track 1",
     "latitude": 42.336339,
     "longitude": -71.089517,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Franklin-1af2beab-0",
@@ -106086,7 +106086,7 @@
     "name": "Ruggles - Commuter Rail - Track 2",
     "latitude": 42.337659,
     "longitude": -71.087737,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Franklin-1750decb-0",
@@ -106115,7 +106115,7 @@
     "name": "Ruggles - Commuter Rail - Track 3",
     "latitude": 42.336368,
     "longitude": -71.089554,
-    "monitoringMode": "surface",
+    "monitoringMode": "underground",
     "transitType": "commuter rail",
     "patterns": [
       "CR-Franklin-02118599-1",
