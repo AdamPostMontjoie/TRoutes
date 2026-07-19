@@ -10,9 +10,10 @@ enum JourneyAction: Equatable {
     case arriveAtStop
     case departFromStop
     case backtrackToStop
+    case handleNewPredictions
     case evaluatePredictionRefresh
     
-    func reduce(state: inout JourneyState) -> [JourneyEffect] {
+    func reduce(state: inout JourneyState, predictions: [TransitPrediction]? = nil) -> [JourneyEffect] {
         switch self {
         case .arriveAtStop:
             return arriveAtStop(state: &state)
@@ -20,6 +21,8 @@ enum JourneyAction: Equatable {
             return departFromStop(state: &state)
         case .backtrackToStop:
             return backtrackToStop(state: &state)
+        case .handleNewPredictions:
+            return handleNewPredictions(state: &state, predictions:predictions ?? nil)
         case .evaluatePredictionRefresh:
             return evaluatePredictionRefresh(state: &state)
         }
@@ -214,8 +217,49 @@ enum JourneyAction: Equatable {
     
     private func evaluatePredictionRefresh(state: inout JourneyState) -> [JourneyEffect] {
         guard state.activeLegPrediction != nil || state.transferLegPrediction != nil else { return [] }
+        
+        if state.activeLegPrediction != nil {
+            state.activeLegPrediction?.loadingState = .loading(stopId: state.activeLegPrediction!.predictedStop.mbtaStopId)
+        }
+        if state.transferLegPrediction != nil {
+            state.transferLegPrediction?.loadingState = .loading(stopId: state.transferLegPrediction!.predictedStop.mbtaStopId)
+        }
+        
         return [.fetchPredictions]
     }
+    
+    private func handleNewPredictions(state: inout JourneyState, predictions: [TransitPrediction]?) -> [JourneyEffect] {
+        guard let predictions else { return [] }
+        let times = predictions.map(\.display)
+        
+        let lastTrackedVehicle = state.trackedVehicleId
+        
+        let isTransfer = state.activeLegPrediction == nil && state.transferLegPrediction != nil
+        guard var targetPrediction = isTransfer ? state.transferLegPrediction : state.activeLegPrediction else { return [] }
+        
+        if times.isEmpty {
+            targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "No times available")
+        } else {
+            targetPrediction.loadingState = .loaded(stopId: targetPrediction.predictedStop.mbtaStopId, times: times)
+            targetPrediction.cleanArrivedTrains(newPredictions: predictions)
+            
+            if !isTransfer, targetPrediction.predictedStopType == .boarding {
+                state.updateVehicleTracking(targetPrediction: targetPrediction, predictionResults: predictions)
+            }
+        }
+        // Save prediction state
+        if isTransfer {
+            state.transferLegPrediction = targetPrediction
+        } else {
+            state.activeLegPrediction = targetPrediction
+        }
+        var effects: [JourneyEffect] = []
+        if state.trackedVehicleId != lastTrackedVehicle {
+            effects.append(.updateTrackedVehicle(vehicleId: state.trackedVehicleId, tripId: state.trackedTripId))
+        }
+        return effects
+    }
+    
     private func effectsForNextStop(
         _ nextStop: ResolvedStop,
         previousMonitoringMode: MonitoringMode,
@@ -252,10 +296,12 @@ enum JourneyAction: Equatable {
     }
 }
 
+//Journey Effects need to happen in strict order of operations to work effectively
 enum JourneyEffect: Equatable {
-    case monitorStop(ResolvedStop) // rename start monitoring for?
-    case fetchPredictions
-    case switchMonitoringMode(MonitoringMode)
+    case switchMonitoringMode(MonitoringMode) //first in order
+    case monitorStop(ResolvedStop) //second
+    case fetchPredictions//third
+    
     case sendNotification(_ debug: String, user: String? = nil)
     case endRoute
     

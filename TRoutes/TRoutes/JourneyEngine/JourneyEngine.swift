@@ -13,16 +13,6 @@ enum ManualEvent: Equatable {
     case atStopTapped
 }
 
-enum JourneyCommand: Equatable {
-    case executeEntry(stopId:String)//user has entered the stop
-    case executeExit(stopId:String)//user has left the stop
-    case missedVehicle(stopId: String)//we missed the train
-    case confirmDeparture(stopId: String)//w
-    case refreshTimes(stopId: String)
-    case locationAuthorizationDenied
-    case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
-}
-
 
 ///Manages The Journey
 actor JourneyEngine {
@@ -50,8 +40,10 @@ actor JourneyEngine {
     private var lastManualRefresh: Date?
     private var lastPredictionFetchTime: Date?
     
-    //monitoring mode
-    private var monitoringMode:MonitoringMode?
+    //journey
+    private var activeJourney:JourneyState?
+    
+    
     
     //underground fields
     public var matchedPath:MatchedLegPath?
@@ -213,7 +205,7 @@ actor JourneyEngine {
     
     //this will handle both widget and in app i think
     func manualEventValidator(_ event:ManualEvent) async{
-        guard let currentStop = userDefaultsClient.loadActiveJourney()?.currentStop else { return }
+        guard let currentStop = self.activeJourney?.currentStop else { return }
         switch event {
         case .atStopTapped:
             await self.validateJourneyCommand(JourneyCommand.executeEntry(stopId: currentStop.mbtaStopId))
@@ -225,25 +217,30 @@ actor JourneyEngine {
     
     //did we already receive this valid command from a different source and make the change?
     func validateJourneyCommand(_ event:JourneyCommand) async {
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
-        
+        guard var currentJourney = self.activeJourney else { return }
+        var mutatedJourney = currentJourney
         let effects = JourneyCommandValidator.reduce(
-            state: &currentJourney,
+            state: &mutatedJourney,
             command: event
         )
-        saveActiveJourneyAndPublish(currentJourney)
+        
+        // save if state changed
+        if mutatedJourney != currentJourney {
+            saveActiveJourneyAndPublish(mutatedJourney)
+        }
+       
         await runJourneyEffects(effects)
     }
     
     func handleDepartureConfirmation(boarded: Bool) async {
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
+        guard var currentJourney = self.activeJourney else { return }
         let effects = JourneyCommandValidator.handleDepartureConfirmation(state: &currentJourney, boarded: boarded)
         saveActiveJourneyAndPublish(currentJourney)
         await runJourneyEffects(effects)
     }
     
     // MARK: - Journey Effects (Outputs)
-    
+
     private func runJourneyEffects(_ effects: [JourneyEffect]) async {
         for effect in effects {
             switch effect {
@@ -265,11 +262,20 @@ actor JourneyEngine {
             case .endRoute:
                 print("JourneyEngine effect: endRoute")
                 await endRoute()
-                
+            
             case let .updateTrackedVehicle(vehicleId, tripId):
-                print("JourneyEngine effect: updateTrackedVehicle to \(vehicleId ?? "nil")")
-                self.trackedVehicleId = vehicleId
-                self.trackedTripId = tripId
+                guard let targetPrediction = self.activeJourney?.currentPredictionState, self.activeJourney?.monitoringMode == .underground else {
+                    return
+                }
+                print("JourneyEngine set UGM vehicle: \(vehicleId ?? "nil") trip: \(tripId ?? "nil")")
+                await UndergroundManager.shared.setTrackedVehicle(
+                    vehicleId: vehicleId,
+                    tripId: tripId,
+                    boardingStopId: targetPrediction.predictedStop.mbtaStopId,
+                    waitToBoard: targetPrediction.predictedStopType == .boarding,
+                    stopLatitude: targetPrediction.predictedStop.latitude,
+                    stopLongitude: targetPrediction.predictedStop.longitude
+                )
                 
             case .resetTrackingState:
                 print("JourneyEngine effect: resetTrackingState")
@@ -288,9 +294,7 @@ actor JourneyEngine {
     // This needs to execute before register region every time.
     // we can just stop the current session, as the registration will be simple
     func switchMonitoringMode(newMode: MonitoringMode) async {
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
         print("JourneyEngine switchMonitoringMode \(newMode)")
-        currentJourney.monitoringMode = newMode
         switch newMode {
         case .surface:
             //end UGM
@@ -305,11 +309,10 @@ actor JourneyEngine {
             print("underground monitoring")
             await startListeningToUndergroundEvents()
         }
-        saveActiveJourneyAndPublish(currentJourney)
     }
 
     func monitorNextStop(stop:ResolvedStop) async {
-        guard let currentJourney = userDefaultsClient.loadActiveJourney() else { return }
+        guard let currentJourney = self.activeJourney else { return }
         let mode = currentJourney.monitoringMode
         print("JourneyEngine monitorNextStop stop: \(stop.mbtaStopId) mode: \(mode) role: \(stop.journeyRole)")
         switch mode {
@@ -327,7 +330,7 @@ actor JourneyEngine {
             
             let trackedVehicleId = currentJourney.trackedVehicleId
             let trackedTripId = currentJourney.trackedTripId
-            print("JourneyEngine set UGM vehicle: \(trackedVehicleId ?? "nil") trip: \(trackedTripId ?? "nil") stop: \(stop.mbtaStopId)")
+            
             await UndergroundManager.shared.setTrackedVehicle(
                 vehicleId: trackedVehicleId,
                 tripId: trackedTripId,
@@ -342,7 +345,7 @@ actor JourneyEngine {
     // MARK: - MBTA API & Predictions
     
     func manualRefreshPredictions() async {
-        guard var currentJourney = userDefaultsClient.loadActiveJourney() else { return }
+        guard let stopId = self.activeJourney?.currentStop?.mbtaStopId else { return }
 
         // Debounce: prevent spamming refresh
         let now = Date()
@@ -351,101 +354,18 @@ actor JourneyEngine {
         }
         self.lastManualRefresh = now
         
-        if var activePrediction = currentJourney.activeLegPrediction {
-            activePrediction.loadingState = .loading(stopId: activePrediction.predictedStop.mbtaStopId)
-            currentJourney.activeLegPrediction = activePrediction
-        }
-        if var transferPrediction = currentJourney.transferLegPrediction {
-            transferPrediction.loadingState = .loading(stopId: transferPrediction.predictedStop.mbtaStopId)
-            currentJourney.transferLegPrediction = transferPrediction
-        }
-        
-        saveActiveJourneyAndPublish(currentJourney)
-        
-        await fetchPredictions()
+        await self.validateJourneyCommand(.refreshTimes(stopId: stopId))
     }
-    
     
     private func fetchPredictions() async {
-        guard let currentJourney = userDefaultsClient.loadActiveJourney() else { return }
-        
         lastPredictionFetchTime = Date()
-        let isTransfer = currentJourney.activeLegPrediction == nil && currentJourney.transferLegPrediction != nil
-        let currentPredictionState = isTransfer ? currentJourney.transferLegPrediction : currentJourney.activeLegPrediction
-        guard let currentPredictionState else { return }
+        
+        guard let currentPredictionState = self.activeJourney?.currentPredictionState else { return }
         do {
             let results = try await PredictionManager.shared.fetchPredictionsWithFallback(for: currentPredictionState, requestType: .currentStopPrediction)
-            await handlePredictionResults(predictionResults: results, isTransfer: isTransfer)
+            await validateJourneyCommand(.handleNewPredictions(predictionResults: results))
         } catch {
             handleVehicleFetchError(error: error)
-        }
-        
-    }
-    
-    private func handlePredictionResults(predictionResults: [TransitPrediction], isTransfer: Bool) async {
-        guard var freshJourney = userDefaultsClient.loadActiveJourney() else { return }
-        guard var targetPrediction = isTransfer ? freshJourney.transferLegPrediction : freshJourney.activeLegPrediction else { return }
-        
-        let times = predictionResults.map(\.display)
-        
-        if times.isEmpty {
-            targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "No times available")
-        } else {
-            targetPrediction.loadingState = .loaded(stopId: targetPrediction.predictedStop.mbtaStopId, times: times)
-            
-            // Diff predictions to populate arrivedTrains queue
-            targetPrediction.cleanArrivedTrains(newPredictions: predictionResults)
-            
-            // Track top vehicle for underground handoff
-            if !isTransfer, targetPrediction.predictedStopType == .boarding {
-                await updateVehicleTracking(targetPrediction:targetPrediction, predictionResults:predictionResults)
-            }
-        }
-        
-        if isTransfer {
-            freshJourney.transferLegPrediction = targetPrediction
-        } else {
-            freshJourney.activeLegPrediction = targetPrediction
-        }
-        self.saveActiveJourneyAndPublish(freshJourney)
-    }
-    
-    private func updateVehicleTracking(targetPrediction: PredictionState, predictionResults: [TransitPrediction]) async {
-        let trackedVehicleId = self.trackedVehicleId
-        var currentTrackedStillValid = trackedVehicleId != nil //Our current train needs to change
-        let firstReturned = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil })
-            
-        //We're tracking a train, and one has just arrived
-        if !targetPrediction.arrivedTrains.isEmpty {
-            // Force swap if a valid train physically arrived and dropped off the board before our tracked train.
-            if let justArrived = targetPrediction.arrivedTrains.last, justArrived.vehicleId != trackedVehicleId {
-                currentTrackedStillValid = false
-                self.trackedVehicleId = justArrived.vehicleId
-                self.trackedTripId = justArrived.tripId
-            }
-        }
-        else {
-            //Update the first train to be the first one in predictions in case that's changed
-            if firstReturned?.vehicleId != trackedVehicleId {
-                self.trackedVehicleId = firstReturned?.vehicleId
-                self.trackedTripId = firstReturned?.tripId
-                currentTrackedStillValid = false
-            }
-        }
-        
-        //update UGM if we aren't tracking proper train anymore
-        if !currentTrackedStillValid && self.monitoringMode == .underground  {
-            let vehicleIdToTrack = self.trackedVehicleId
-            let tripIdToTrack = self.trackedTripId
-            
-            await UndergroundManager.shared.setTrackedVehicle(
-                vehicleId: vehicleIdToTrack,
-                tripId: tripIdToTrack,
-                boardingStopId: targetPrediction.predictedStop.mbtaStopId,
-                waitToBoard: true,
-                stopLatitude: targetPrediction.predictedStop.latitude,
-                stopLongitude: targetPrediction.predictedStop.longitude
-            )
         }
     }
     
@@ -457,7 +377,7 @@ actor JourneyEngine {
     private func updateLivePath(tripId:String) async {
         do {
             let liveTripPath = try await mbtaClient.fetchTripPathData(tripId, .patternMatching)
-            guard let currentLeg = userDefaultsClient.loadActiveJourney()?.currentLeg else { return }
+            guard let currentLeg = self.activeJourney?.currentLeg else { return }
             matchedPath = MatchedLegPath( leg: currentLeg,tripPath: liveTripPath)
         } catch {
             handleVehicleFetchError(error: error)
@@ -479,13 +399,10 @@ actor JourneyEngine {
     internal func saveActiveJourneyAndPublish(_ journey: JourneyState) {
         var journeyToSave = journey
         //update JourneyState before saving
-        journeyToSave.trackedVehicleId = self.trackedVehicleId
-        journeyToSave.trackedTripId = self.trackedTripId
-        journeyToSave.trackedBoardingStopId = self.trackedBoardingStopId
         journeyToSave.timeSaved = Date()
         
-        //update Journey Engine state for easy of use
-        self.monitoringMode = journeyToSave.monitoringMode
+        //update Journey Engine observable state for ease of use
+        self.activeJourney = journeyToSave
     
         userDefaultsClient.saveActiveJourney(journeyToSave)
         managePredictionTimer(for: journeyToSave)
@@ -536,7 +453,7 @@ actor JourneyEngine {
                 
                 guard !Task.isCancelled else { break }
                 
-                if let journey = userDefaultsClient.loadActiveJourney(), let stop = journey.currentStop {
+                if let journey = self.activeJourney, let stop = journey.currentStop {
                     await validateJourneyCommand(.refreshTimes(stopId: stop.mbtaStopId))
                 }
             }

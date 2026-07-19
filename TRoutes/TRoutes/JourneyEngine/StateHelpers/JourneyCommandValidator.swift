@@ -1,5 +1,16 @@
 import Foundation
 
+enum JourneyCommand: Equatable {
+    case executeEntry(stopId:String)//user has entered the stop
+    case executeExit(stopId:String)//user has left the stop
+    case missedVehicle(stopId: String)//we missed the train
+    case confirmDeparture(stopId: String)//w
+    case handleNewPredictions(predictionResults:[TransitPrediction])
+    case refreshTimes(stopId: String)
+    case locationAuthorizationDenied
+    case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
+}
+
 ///Determines JourneyCommand Validity, Runs JourneyAction, and emits JourneyEffects
 struct JourneyCommandValidator {
     static func reduce(
@@ -23,6 +34,8 @@ struct JourneyCommandValidator {
                 var effects: [JourneyEffect] = []
                 if let recent = state.activeLegPrediction?.arrivedTrains.last {
                     print("JourneyEngine: Exit matched with arrived train \(recent.vehicleId).")
+                    state.trackedVehicleId = recent.vehicleId
+                    state.trackedTripId = recent.tripId
                     effects.append(.updateTrackedVehicle(vehicleId: recent.vehicleId, tripId: recent.tripId))
                     effects.append(.refreshTripPath(tripId: recent.tripId))
                 } else {
@@ -62,7 +75,11 @@ struct JourneyCommandValidator {
                 print("JourneyEngine ignored missedVehicle \(id) current: \(state.currentStop?.mbtaStopId ?? "nil") status: \(state.movementStatus)")
             }
             return effects
+        
+        case let .handleNewPredictions(predictions):
+            return JourneyAction.handleNewPredictions.reduce(state: &state, predictions:predictions)
             
+            //determine to emit updatetrackedvehicle effect
         case let .refreshTimes(stopId: id):
             if let currentStop = state.currentStop, currentStop.mbtaStopId == id {
                 return JourneyAction.evaluatePredictionRefresh.reduce(state: &state)
