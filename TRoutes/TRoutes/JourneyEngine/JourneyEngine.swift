@@ -345,7 +345,7 @@ actor JourneyEngine {
         }
         self.lastManualRefresh = now
         
-        await self.validateJourneyCommand(.refreshTimes(stopId: stopId))
+        await self.validateJourneyCommand(.refreshTimes(stopId: stopId, isUserInitiated: true))
     }
     
     private func fetchPredictions() async {
@@ -445,7 +445,7 @@ actor JourneyEngine {
                 guard !Task.isCancelled else { break }
                 
                 if let journey = self.activeJourney, let stop = journey.currentStop {
-                    await validateJourneyCommand(.refreshTimes(stopId: stop.mbtaStopId))
+                    await validateJourneyCommand(.refreshTimes(stopId: stop.mbtaStopId, isUserInitiated: false))
                 }
             }
         }

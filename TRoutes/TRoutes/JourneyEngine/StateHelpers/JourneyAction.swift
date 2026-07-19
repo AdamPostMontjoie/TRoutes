@@ -13,7 +13,7 @@ enum JourneyAction: Equatable {
     case handleNewPredictions
     case evaluatePredictionRefresh
     
-    func reduce(state: inout JourneyState, predictions: [TransitPrediction]? = nil) -> [JourneyEffect] {
+    func reduce(state: inout JourneyState, predictions: [TransitPrediction]? = nil, isManual: Bool = false) -> [JourneyEffect] {
         switch self {
         case .arriveAtStop:
             return arriveAtStop(state: &state)
@@ -24,7 +24,7 @@ enum JourneyAction: Equatable {
         case .handleNewPredictions:
             return handleNewPredictions(state: &state, predictions:predictions ?? nil)
         case .evaluatePredictionRefresh:
-            return evaluatePredictionRefresh(state: &state)
+            return evaluatePredictionRefresh(state: &state, isManual: isManual)
         }
     }
     
@@ -215,18 +215,19 @@ enum JourneyAction: Equatable {
         return effects
     }
     
-    private func evaluatePredictionRefresh(state: inout JourneyState) -> [JourneyEffect] {
+    private func evaluatePredictionRefresh(state: inout JourneyState, isManual: Bool) -> [JourneyEffect] {
         guard state.activeLegPrediction != nil || state.transferLegPrediction != nil else { return [] }
         
-        
-        if state.activeLegPrediction != nil {
-            guard let activeStopId = state.activeLegPrediction?.predictedStop.mbtaStopId else { return [] }
-            state.activeLegPrediction?.loadingState = .loading(stopId: activeStopId)
-        }
-        
-        if state.transferLegPrediction != nil {
-            guard let transferStopId = state.transferLegPrediction?.predictedStop.mbtaStopId else { return []}
-            state.transferLegPrediction?.loadingState = .loading(stopId: transferStopId)
+        if isManual {
+            if state.activeLegPrediction != nil {
+                guard let activeStopId = state.activeLegPrediction?.predictedStop.mbtaStopId else { return [] }
+                state.activeLegPrediction?.loadingState = .loading(stopId: activeStopId)
+            }
+            
+            if state.transferLegPrediction != nil {
+                guard let transferStopId = state.transferLegPrediction?.predictedStop.mbtaStopId else { return []}
+                state.transferLegPrediction?.loadingState = .loading(stopId: transferStopId)
+            }
         }
         
         return [.fetchPredictions]

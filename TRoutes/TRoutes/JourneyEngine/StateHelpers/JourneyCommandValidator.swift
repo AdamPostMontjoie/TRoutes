@@ -6,7 +6,7 @@ enum JourneyCommand: Equatable {
     case missedVehicle(stopId: String)//we missed the train
     case confirmDeparture(stopId: String)//w
     case handleNewPredictions(predictionResults:[TransitPrediction])
-    case refreshTimes(stopId: String)
+    case refreshTimes(stopId: String, isUserInitiated: Bool)
     case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
 }
@@ -80,9 +80,9 @@ struct JourneyCommandValidator {
             return JourneyAction.handleNewPredictions.reduce(state: &state, predictions:predictions)
             
             //determine to emit updatetrackedvehicle effect
-        case let .refreshTimes(stopId: id):
+        case let .refreshTimes(stopId: id, isUserInitiated: isUserInitiated):
             if let currentStop = state.currentStop, currentStop.mbtaStopId == id {
-                return JourneyAction.evaluatePredictionRefresh.reduce(state: &state)
+                return JourneyAction.evaluatePredictionRefresh.reduce(state: &state, isManual: isUserInitiated)
             }
             return []
             
