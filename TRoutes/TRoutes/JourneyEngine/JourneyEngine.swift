@@ -490,7 +490,7 @@ actor JourneyEngine {
     
     private func updateLivePath(tripId:String) async {
         do {
-            let liveTripPath = try await mbtaClient.fetchTripTrackingData(tripId, .patternMatching)
+            let liveTripPath = try await mbtaClient.fetchTripPathData(tripId, .patternMatching)
             guard let currentLeg = userDefaultsClient.loadActiveJourney()?.currentLeg else { return }
             
             matchedPath = MatchedLegPath( leg: currentLeg,tripPath: liveTripPath)

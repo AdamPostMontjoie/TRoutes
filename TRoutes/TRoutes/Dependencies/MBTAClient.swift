@@ -8,17 +8,17 @@
 import ComposableArchitecture
 import Foundation
 
-//this will fetch whatever route times we need once we either A. Start a route B. Enter step location
 struct MBTAClient {
-    //predictions
+    //predictions and schedules
     var fetchTransitTimes: @Sendable (ResolvedStop, [String], MBTARequestType) async throws -> [TransitPrediction]
+    var fetchSchedule: @Sendable (ResolvedStop, MBTARequestType) async throws -> [TransitSchedule]
     //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
     var fetchStops: @Sendable (Int, String, MBTARequestType) async throws -> [Stop]
     //position and matching
     var fetchVehicleData: @Sendable (String, MBTARequestType) async throws -> VehicleData
-    var fetchTripTrackingData: @Sendable (String, MBTARequestType) async throws -> LiveTripPath
+    var fetchTripPathData: @Sendable (String, MBTARequestType) async throws -> LiveTripPath
 }
 
 
@@ -151,6 +151,64 @@ extension MBTAClient:DependencyKey {
                 }
                 
                 return upcomingTimes
+            } catch {
+                throw MBTAError.decodingError
+            }
+        },
+        fetchSchedule: { stop, requestType in
+            do {
+                try await RateLimitQueue.shared.acquireToken(for: requestType)
+            } catch {
+                throw MBTAError.rateLimitDropped
+            }
+            
+            // Format current time as HH:mm to filter out past schedules for today
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "HH:mm"
+            dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            let minTime = dateFormatter.string(from: Date())
+            
+            guard let url = URL(string: "\(header)schedules?filter[stop]=\(stop.mbtaStopId)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[min_time]=\(minTime)&sort=time&page[limit]=3") else {
+                throw MBTAError.networkError
+            }
+            
+            let (data, response) = try await URLSession.shared.data(from: url)
+            try reviewHttpResponse(response, data)
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            do {
+                let scheduleResponse = try decoder.decode(ScheduleResponse.self, from: data)
+                let isoFormatter = ISO8601DateFormatter()
+                
+                let displayFormatter = DateFormatter()
+                displayFormatter.timeStyle = .short
+                displayFormatter.timeZone = TimeZone.current
+                
+                var upcomingSchedules: [TransitSchedule] = []
+                
+                for schedule in scheduleResponse.data {
+                    let dateStr = schedule.attributes.departureTime ?? schedule.attributes.arrivalTime
+                    guard let dateStr = dateStr, let date = isoFormatter.date(from: dateStr) else { continue }
+                    
+                    let display = displayFormatter.string(from: date)
+                    
+                    let transitSchedule = TransitSchedule(
+                        display: display,
+                        vehicleId: schedule.relationships.vehicle?.data?.id,
+                        ScheduleId: schedule.id,
+                        tripId: schedule.relationships.trip?.data?.id,
+                        stopId: schedule.relationships.stop?.data?.id,
+                        routeId: schedule.relationships.route?.data?.id,
+                        headsign: schedule.attributes.tripHeadsign,
+                        directionId: schedule.attributes.directionId,
+                        stopSequence: schedule.attributes.stopSequence
+                    )
+                    upcomingSchedules.append(transitSchedule)
+                }
+                
+                return upcomingSchedules
             } catch {
                 throw MBTAError.decodingError
             }
@@ -293,7 +351,7 @@ extension MBTAClient:DependencyKey {
             }
         },
 
-        fetchTripTrackingData: { tripId, requestType in
+        fetchTripPathData: { tripId, requestType in
             do {
                 try await RateLimitQueue.shared.acquireToken(for: requestType)
             } catch {
@@ -304,7 +362,7 @@ extension MBTAClient:DependencyKey {
                   let url = URL(string: "\(header)trips/\(encodedTripId)?include=stops,predictions,vehicle,route_pattern") else {
                 throw MBTAError.networkError
             }
-            print("MBTAClient fetchTripTrackingData URL: \(url.absoluteString)")
+            print("MBTAClient fetchTripPathData URL: \(url.absoluteString)")
 
             let (data, response) = try await URLSession.shared.data(from: url)
             try reviewHttpResponse(response, data)
@@ -313,7 +371,7 @@ extension MBTAClient:DependencyKey {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
 
             do {
-                let tripResponse = try decoder.decode(TripTrackingResponse.self, from: data)
+                let tripResponse = try decoder.decode(TripPathResponse.self, from: data)
                 return makeLiveTripPath(from: tripResponse)
             } catch {
                 throw MBTAError.decodingError
@@ -329,7 +387,7 @@ extension DependencyValues {
     }
 }
 
-private func makeLiveTripPath(from response: TripTrackingResponse) -> LiveTripPath {
+private func makeLiveTripPath(from response: TripPathResponse) -> LiveTripPath {
     let included = response.included ?? []
     let includedById = Dictionary(uniqueKeysWithValues: included.map { ($0.id, $0) })
     let vehicleId = response.data.relationships.vehicle?.data?.id
