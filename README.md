@@ -1,5 +1,10 @@
 # T Routes
-A serverless iOS app to track journeys along the T
+
+[![iOS 17.0+](https://img.shields.io/badge/iOS-17.0%2B-blue.svg)](https://developer.apple.com/ios/)
+[![Swift 6](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
+[![Architecture: TCA](https://img.shields.io/badge/Architecture-TCA-lightgrey.svg)](https://github.com/pointfreeco/swift-composable-architecture)
+**A serverless iOS app to track journeys along the T** 
+### 🚀 [Try the Beta on TestFlight!](https://testflight.apple.com/join/q4FWgyqT)
 
 ## About The Project
 
@@ -42,6 +47,5 @@ graph TD
 ## Coming Soon
 
 - Core Motion jolt detection
-- Quick Route Reversal
-- Commuter Rail Schedule Fallback
-- Improved Terminus Tracking
+- Quick route reversal
+- Underground terminus tracking improvement
