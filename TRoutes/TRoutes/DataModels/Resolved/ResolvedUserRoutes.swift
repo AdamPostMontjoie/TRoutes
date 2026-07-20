@@ -23,6 +23,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
     var longitude: Double
     var latitude: Double
     var address: String // display on review feature
+    var acceptableStopIds: [String]
     var journeyRole: JourneyStopRole = .boarding
     var monitoringMode:MonitoringMode
     var transitType: GTFSTransitType
@@ -45,6 +46,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
         longitude: Double,
         latitude: Double,
         address: String,
+        acceptableStopIds: [String],
         journeyRole: JourneyStopRole = .boarding,
         monitoringMode: MonitoringMode,
         transitType: GTFSTransitType,
@@ -65,6 +67,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
         self.longitude = longitude
         self.latitude = latitude
         self.address = address
+        self.acceptableStopIds = acceptableStopIds
         self.journeyRole = journeyRole
         self.stopType = journeyRole.stopType
         self.monitoringMode = monitoringMode

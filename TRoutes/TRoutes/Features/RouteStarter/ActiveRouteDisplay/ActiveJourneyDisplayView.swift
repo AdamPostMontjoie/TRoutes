@@ -279,18 +279,28 @@ struct ActiveJourneyDisplayView: View {
     }
     
     @ViewBuilder
-    private func timesRow(times: [String], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+    private func timesRow(times: [JourneyAttributes.PredictionDisplay], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
         HStack(spacing: 8) {
-            ForEach(Array(times.enumerated()), id: \.offset) { index, time in
+            ForEach(Array(times.enumerated()), id: \.offset) { index, prediction in
                 let bgStyle: AnyShapeStyle = (color == .white.opacity(0.2)) ? AnyShapeStyle(color) : AnyShapeStyle(color.gradient)
+                let branchLabel = prediction.badge
                 
                 HStack(spacing: 4) {
-                    if time.lowercased().contains("stopped") {
+                    if let branchLabel {
+                        Text(branchLabel)
+                            .font(.footnote.weight(.black))
+                            .foregroundStyle(.black)
+                            .frame(width: 20, height: 20)
+                            .background(.white)
+                            .clipShape(Circle())
+                    }
+                    
+                    if prediction.time.lowercased().contains("stopped") {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.yellow)
                         Text("Stopped")
                     } else {
-                        Text(time)
+                        Text(prediction.time)
                     }
                 }
                 .font(.subheadline.weight(.heavy))
@@ -308,7 +318,7 @@ struct ActiveJourneyDisplayView: View {
     }
 
     @ViewBuilder
-    private func predictionTimesBlock(state: PredictionLoadingState?, times: [String], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
+    private func predictionTimesBlock(state: PredictionLoadingState?, times: [JourneyAttributes.PredictionDisplay], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
         if let state = state {
             HStack(spacing: 8) {
                 if let iconName = iconName {

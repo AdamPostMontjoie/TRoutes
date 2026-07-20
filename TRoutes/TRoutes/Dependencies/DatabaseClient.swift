@@ -435,6 +435,13 @@ private func resolveLeg(
     let selectedCandidate = try selectCandidate(validCandidates, leg: leg)
     let allAcceptablePatternIds = validCandidates.map(\.patternId).sorted()
     let allAcceptableRouteIds = Array(Set(validCandidates.compactMap { $0.pattern?.routeId })).sorted()
+    
+    // Group ALL platforms in the system by their parent station ID.
+    // This allows acceptableStopIds to contain every platform at a station, 
+    // ensuring we don't miss an arrival if a vehicle pulls into a sibling platform
+    // or an unexpected branch platform.
+    let siblingPlatformsByStation = Dictionary(grouping: allPlatforms, by: \.stationId)
+        .mapValues { platforms in Array(Set(platforms.map(\.platformId))) }
 
     let patternStops = try selectedCandidate.patternEdges.enumerated().map { patternStopIndex, edge in
         try makeResolvedPatternStop(
@@ -446,7 +453,14 @@ private func resolveLeg(
     }
 
     let stops = try selectedCandidate.edges.enumerated().map { stopIndex, edge in
-        try makeResolvedStop(
+        var acceptable = siblingPlatformsByStation[edge.stationId] ?? [edge.platformId]
+        if let idx = acceptable.firstIndex(of: edge.platformId) {
+            acceptable.swapAt(0, idx)
+        } else {
+            acceptable.insert(edge.platformId, at: 0)
+        }
+        
+        return try makeResolvedStop(
             edge: edge,
             leg: leg,
             legIndex: legIndex,
@@ -457,7 +471,8 @@ private func resolveLeg(
             nextLeg: nextLeg,
             platform: platformsById[edge.platformId],
             station: stationsById[edge.stationId],
-            directionId: directionId
+            directionId: directionId,
+            acceptableStopIds: acceptable
         )
     }
 
@@ -664,7 +679,8 @@ private func makeResolvedStop(
     nextLeg: Leg?,
     platform: TransitPlatform?,
     station: TransitStation?,
-    directionId: Int
+    directionId: Int,
+    acceptableStopIds: [String]
 ) throws -> ResolvedStop {
     guard let platform else {
         throw ResolvedRouteError.missingPlatform(platformId: edge.platformId)
@@ -700,6 +716,7 @@ private func makeResolvedStop(
         longitude: station.longitude,
         latitude: station.latitude,
         address: station.municipality ?? leg.startStop.address,
+        acceptableStopIds: acceptableStopIds,
         journeyRole: journeyRole,
         monitoringMode: platform.monitoringMode.resolvedMonitoringMode,
         transitType: platform.transitType.resolvedGTFSTransitType,

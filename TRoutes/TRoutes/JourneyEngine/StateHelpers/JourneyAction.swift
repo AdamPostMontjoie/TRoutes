@@ -10,9 +10,10 @@ enum JourneyAction: Equatable {
     case arriveAtStop
     case departFromStop
     case backtrackToStop
+    case handleNewPredictions
     case evaluatePredictionRefresh
     
-    func reduce(state: inout JourneyState) -> [JourneyEffect] {
+    func reduce(state: inout JourneyState, predictions: [TransitPrediction]? = nil, isManual: Bool = false) -> [JourneyEffect] {
         switch self {
         case .arriveAtStop:
             return arriveAtStop(state: &state)
@@ -20,8 +21,10 @@ enum JourneyAction: Equatable {
             return departFromStop(state: &state)
         case .backtrackToStop:
             return backtrackToStop(state: &state)
+        case .handleNewPredictions:
+            return handleNewPredictions(state: &state, predictions:predictions ?? nil)
         case .evaluatePredictionRefresh:
-            return evaluatePredictionRefresh(state: &state)
+            return evaluatePredictionRefresh(state: &state, isManual: isManual)
         }
     }
     
@@ -212,10 +215,56 @@ enum JourneyAction: Equatable {
         return effects
     }
     
-    private func evaluatePredictionRefresh(state: inout JourneyState) -> [JourneyEffect] {
+    private func evaluatePredictionRefresh(state: inout JourneyState, isManual: Bool) -> [JourneyEffect] {
         guard state.activeLegPrediction != nil || state.transferLegPrediction != nil else { return [] }
+        
+        if isManual {
+            if state.activeLegPrediction != nil {
+                guard let activeStopId = state.activeLegPrediction?.predictedStop.mbtaStopId else { return [] }
+                state.activeLegPrediction?.loadingState = .loading(stopId: activeStopId)
+            }
+            
+            if state.transferLegPrediction != nil {
+                guard let transferStopId = state.transferLegPrediction?.predictedStop.mbtaStopId else { return []}
+                state.transferLegPrediction?.loadingState = .loading(stopId: transferStopId)
+            }
+        }
+        
         return [.fetchPredictions]
     }
+    
+    private func handleNewPredictions(state: inout JourneyState, predictions: [TransitPrediction]?) -> [JourneyEffect] {
+        guard let predictions else { return [] }
+        let times = predictions.map(\.display)
+        
+        let lastTrackedVehicle = state.trackedVehicleId
+        
+        let isTransfer = state.activeLegPrediction == nil && state.transferLegPrediction != nil
+        guard var targetPrediction = isTransfer ? state.transferLegPrediction : state.activeLegPrediction else { return [] }
+        
+        if times.isEmpty {
+            targetPrediction.loadingState = .unavailable(stopId: targetPrediction.predictedStop.mbtaStopId, message: "No times available")
+        } else {
+            targetPrediction.loadingState = .loaded(stopId: targetPrediction.predictedStop.mbtaStopId, times: times)
+            targetPrediction.cleanArrivedTrains(newPredictions: predictions)
+            
+            if !isTransfer, targetPrediction.predictedStopType == .boarding {
+                state.updateVehicleTracking(targetPrediction: targetPrediction, predictionResults: predictions)
+            }
+        }
+        // Save prediction state
+        if isTransfer {
+            state.transferLegPrediction = targetPrediction
+        } else {
+            state.activeLegPrediction = targetPrediction
+        }
+        var effects: [JourneyEffect] = []
+        if state.trackedVehicleId != lastTrackedVehicle {
+            effects.append(.updateTrackedVehicle(vehicleId: state.trackedVehicleId, tripId: state.trackedTripId))
+        }
+        return effects
+    }
+    
     private func effectsForNextStop(
         _ nextStop: ResolvedStop,
         previousMonitoringMode: MonitoringMode,
@@ -252,10 +301,12 @@ enum JourneyAction: Equatable {
     }
 }
 
+//Journey Effects need to happen in strict order of operations to work effectively
 enum JourneyEffect: Equatable {
-    case monitorStop(ResolvedStop) // rename start monitoring for?
-    case fetchPredictions
-    case switchMonitoringMode(MonitoringMode)
+    case switchMonitoringMode(MonitoringMode) //first in order
+    case monitorStop(ResolvedStop) //second
+    case fetchPredictions//third
+    
     case sendNotification(_ debug: String, user: String? = nil)
     case endRoute
     

@@ -15,8 +15,21 @@ struct JourneyState: Equatable, Codable {
     var stopIndex: Int = 0
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
+    
+    //Prediction State
     var activeLegPrediction: PredictionState? = nil
     var transferLegPrediction: PredictionState? = nil
+    //Prediction State helpers
+    var currentPredictionState: PredictionState? {
+        if activeLegPrediction == nil && transferLegPrediction != nil {
+            return transferLegPrediction
+        }
+        return activeLegPrediction
+    }
+    var isCurrentlyTransferring: Bool {
+        activeLegPrediction == nil && transferLegPrediction != nil
+    }
+    
     var monitoringMode:MonitoringMode = .underground
     var pendingDepartureConfirmation: Bool = false
     
@@ -121,7 +134,25 @@ struct JourneyState: Equatable, Codable {
         timeSaved = try container.decodeIfPresent(Date.self, forKey: .timeSaved) ?? Date()
     }
     
-    //determine monitoring mode here? or in journey actions?
+    mutating func updateVehicleTracking(targetPrediction: PredictionState, predictionResults: [TransitPrediction]) {
+        let currentVehicleId = self.trackedVehicleId
+        let firstReturned = predictionResults.first(where: { $0.vehicleId != nil && $0.tripId != nil })
+        
+        // We're tracking a train, and one has just arrived
+        if !targetPrediction.arrivedTrains.isEmpty {
+            // Force swap if a valid train physically arrived and dropped off the board before our tracked train.
+            if let justArrived = targetPrediction.arrivedTrains.last, justArrived.vehicleId != currentVehicleId {
+                self.trackedVehicleId = justArrived.vehicleId
+                self.trackedTripId = justArrived.tripId
+            }
+        } else {
+            // Update the first train to be the first one in predictions in case that's changed
+            if firstReturned?.vehicleId != currentVehicleId {
+                self.trackedVehicleId = firstReturned?.vehicleId
+                self.trackedTripId = firstReturned?.tripId
+            }
+        }
+    }
     mutating func advanceToNextStop() -> ResolvedStop? {
         guard let nextStop else {
             return nil

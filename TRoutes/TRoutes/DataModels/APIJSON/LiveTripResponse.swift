@@ -30,31 +30,31 @@ struct LiveTripPrediction: Equatable {
     let departureTime: String?
 }
 
-struct TripTrackingResponse: Codable {
-    let data: TripTrackingData
-    let included: [TripTrackingIncluded]?
+struct TripPathResponse: Codable {
+    let data: TripPathData
+    let included: [TripPathIncluded]?
 }
 
-struct TripTrackingData: Codable {
+struct TripPathData: Codable {
     let id: String
-    let relationships: TripTrackingRelationships
+    let relationships: TripPathRelationships
 }
 
-struct TripTrackingRelationships: Codable {
+struct TripPathRelationships: Codable {
     let vehicle: RelationshipSingle?
     let routePattern: RelationshipSingle?
     let stops: RelationshipMultiple?
     let predictions: RelationshipMultiple?
 }
 
-struct TripTrackingIncluded: Codable {
+struct TripPathIncluded: Codable {
     let type: String
     let id: String
-    let attributes: TripTrackingIncludedAttributes?
-    let relationships: TripTrackingIncludedRelationships?
+    let attributes: TripPathIncludedAttributes?
+    let relationships: TripPathIncludedRelationships?
 }
 
-struct TripTrackingIncludedAttributes: Codable {
+struct TripPathIncludedAttributes: Codable {
     let name: String?
     let currentStatus: String?
     let currentStopSequence: Int?
@@ -63,7 +63,7 @@ struct TripTrackingIncludedAttributes: Codable {
     let departureTime: String?
 }
 
-struct TripTrackingIncludedRelationships: Codable {
+struct TripPathIncludedRelationships: Codable {
     let parentStation: RelationshipSingle?
     let stop: RelationshipSingle?
 }

@@ -71,15 +71,15 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
+    // MARK: - Tracking State
     private var currentVehicle = TrackedVehicleState()
-    private var currentStopToMonitorId: String?
+    private var currentStopToMonitorIds: [String] = []
     private var previousVehiclePosition: TrackedVehiclePosition?
     private var currentVehiclePosition: TrackedVehiclePosition?
     private var phase: VehicleTrackingPhase = .idle
     
     // GPS proximity detection for first underground boarding stop
     private var boardingStopCoordinate: CLLocationCoordinate2D?
-    private var isFirstStop = false
     private var hasYieldedInitialEntry = false
     
     
@@ -126,18 +126,20 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     func setTrackedVehicle(
         vehicleId: String?,
         tripId: String?,
-        boardingStopId: String,
+        acceptableStopIds: [String],
         waitToBoard: Bool,
         stopLatitude: Double,
-        stopLongitude: Double,
-        isFirstStop: Bool
+        stopLongitude: Double
     ) async {
+        print("UGM setTrackedVehicle vehicle: \(vehicleId ?? "nil") trip: \(tripId ?? "nil") stops: \(acceptableStopIds) waitToBoard: \(waitToBoard)")
+        self.currentStopToMonitorIds = acceptableStopIds
+        self.boardingStopCoordinate = CLLocationCoordinate2D(latitude: stopLatitude, longitude: stopLongitude)
+        
         currentVehicle = TrackedVehicleState()
         currentVehicle.updateVehicleInfo(
             vehicleId: vehicleId,
             tripId: tripId
         )
-        currentStopToMonitorId = boardingStopId
         previousVehiclePosition = nil
         currentVehiclePosition = nil
         preparedCommand = nil
@@ -148,11 +150,9 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         boardingStopCoordinate = CLLocationCoordinate2D(
             latitude: stopLatitude, longitude: stopLongitude
         )
-        self.isFirstStop = isFirstStop
         hasYieldedInitialEntry = false
         
-        print("UGM setTrackedVehicle vehicle: \(vehicleId) trip: \(tripId) stop: \(boardingStopId) waitToBoard: \(waitToBoard) isFirstStop: \(isFirstStop) ")
-
+        print("UGM setTrackedVehicle vehicle: \(vehicleId ?? "nil") trip: \(tripId ?? "nil") stop: \(acceptableStopIds.first ?? "nil") waitToBoard: \(waitToBoard)")
         await fetchVehicleData()
     }
 
@@ -266,7 +266,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     private func evaluateDepartureProximity() {
         guard phase == .evaluatingDeparture,
-              let currentStopToMonitorId else { return }
+              let primaryStopId = currentStopToMonitorIds.first else { return }
         
         let userLocation = locationManager.location
         let vehicleLat = currentVehiclePosition?.vehicleLatitude
@@ -303,7 +303,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                     locationManager.distanceFilter = 50 // Return to low battery polling
                     evaluatingDepartureStartTime = nil
                     highConfidenceMissedCount = 0
-                    continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
+                    continuation?.yield(.executeExit(stopId: primaryStopId))
                     return
                 }
                 
@@ -315,7 +315,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                     locationManager.distanceFilter = 50 // Return to low battery polling
                     evaluatingDepartureStartTime = nil
                     highConfidenceMissedCount = 0
-                    continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
+                    continuation?.yield(.executeExit(stopId: primaryStopId))
                     return
                 }
                 
@@ -329,7 +329,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
                         locationManager.distanceFilter = 50 // Return to low battery polling
                         evaluatingDepartureStartTime = nil
                         highConfidenceMissedCount = 0
-                        continuation?.yield(.missedVehicle(stopId: currentStopToMonitorId))
+                        continuation?.yield(.missedVehicle(stopId: primaryStopId))
                         return
                     }
                 } else {
@@ -351,7 +351,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
             locationManager.distanceFilter = 50 // Return to low battery polling
             evaluatingDepartureStartTime = nil
             highConfidenceMissedCount = 0
-            continuation?.yield(.confirmDeparture(stopId: currentStopToMonitorId))
+            continuation?.yield(.confirmDeparture(stopId: primaryStopId))
             return
         }
         
@@ -363,26 +363,26 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         let hasDepartedStop = vehicleHasDepartedStop()
         print("UGM tracking entered: \(hasEnteredStop) departed: \(hasDepartedStop)")
         if hasEnteredStop,
-           let currentStopToMonitorId {
-            print("UGM yield entry \(currentStopToMonitorId)")
-            continuation?.yield(.executeEntry(stopId: currentStopToMonitorId))
+           let primaryStopId = currentStopToMonitorIds.first {
+            print("UGM yield entry \(primaryStopId)")
+            continuation?.yield(.executeEntry(stopId: primaryStopId))
         } else if hasDepartedStop,
-                  let currentStopToMonitorId {
-            print("UGM yield exit \(currentStopToMonitorId)")
-            continuation?.yield(.executeExit(stopId: currentStopToMonitorId))
+                  let primaryStopId = currentStopToMonitorIds.first {
+            print("UGM yield exit \(primaryStopId)")
+            continuation?.yield(.executeExit(stopId: primaryStopId))
         }
     }
 
     // MARK: - State Helpers
     
     private func vehicleHasDepartedStop() -> Bool {
-        guard let currentStopToMonitorId,
+        guard !currentStopToMonitorIds.isEmpty,
               let previousVehiclePosition,
               let currentVehiclePosition else { return false }
 
-        let wasStoppedAtTrackedStop = previousVehiclePosition.vehicleStopId == currentStopToMonitorId &&
+        let wasStoppedAtTrackedStop = previousVehiclePosition.vehicleStopId.map { currentStopToMonitorIds.contains($0) } ?? false &&
             previousVehiclePosition.vehicleStatus == "stopped_at"
-        let isStillStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId == currentStopToMonitorId &&
+        let isStillStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId.map { currentStopToMonitorIds.contains($0) } ?? false &&
             currentVehiclePosition.vehicleStatus == "stopped_at"
 
         return wasStoppedAtTrackedStop && !isStillStoppedAtTrackedStop
@@ -390,13 +390,14 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
     //check if we've entered the tracked stop.
     private func vehicleHasEnteredStop() -> Bool {
-        guard let currentStopToMonitorId,
+        guard !currentStopToMonitorIds.isEmpty,
               let currentVehiclePosition else { return false }
 
-        let isStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId == currentStopToMonitorId &&
+        let isStoppedAtTrackedStop = currentVehiclePosition.vehicleStopId.map { currentStopToMonitorIds.contains($0) } ?? false &&
             currentVehiclePosition.vehicleStatus == "stopped_at"
-        let wasAlreadyStoppedAtTrackedStop = previousVehiclePosition?.vehicleStopId == currentStopToMonitorId &&
-            previousVehiclePosition?.vehicleStatus == "stopped_at"
+        let wasAlreadyStoppedAtTrackedStop = previousVehiclePosition != nil &&
+            previousVehiclePosition!.vehicleStopId.map { currentStopToMonitorIds.contains($0) } ?? false &&
+            previousVehiclePosition!.vehicleStatus == "stopped_at"
 
         return isStoppedAtTrackedStop && !wasAlreadyStoppedAtTrackedStop
     }
@@ -407,8 +408,8 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         let currentStop = currentVehiclePosition?.vehicleStopId ?? "nil"
         let currentStatus = currentVehiclePosition?.vehicleStatus ?? "nil"
         let currentSequence = currentVehiclePosition?.apiStopSequence.map(String.init) ?? "nil"
-        let watchedStop = currentStopToMonitorId ?? "nil"
-        print("UGM User at: \(watchedStop) Vehicle was at: \(previousStop) \(previousStatus) Vehicle is at: \(currentStop) \(currentStatus) seq: \(currentSequence)")
+        let watchedStops = currentStopToMonitorIds.isEmpty ? "nil" : currentStopToMonitorIds.joined(separator: ", ")
+        print("UGM User at: [\(watchedStops)] Vehicle was at: \(previousStop) \(previousStatus) Vehicle is at: \(currentStop) \(currentStatus) seq: \(currentSequence)")
     }
 
 
@@ -439,13 +440,12 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
 
     private func resetTracking() {
         currentVehicle = TrackedVehicleState()
-        currentStopToMonitorId = nil
+        currentStopToMonitorIds = []
         previousVehiclePosition = nil
         currentVehiclePosition = nil
         preparedCommand = nil
         phase = .idle
         boardingStopCoordinate = nil
-        isFirstStop = false
         hasYieldedInitialEntry = false
         evaluatingDepartureStartTime = nil
         highConfidenceMissedCount = 0
@@ -471,7 +471,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         
         if distance < 250 {
             hasYieldedInitialEntry = true
-            if let stopId = currentStopToMonitorId {
+            if let stopId = currentStopToMonitorIds.first {
                 print("UGM proximity entry for first stop \(stopId)")
                 continuation?.yield(.executeEntry(stopId: stopId))
             }
@@ -499,7 +499,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         if status == .denied || status == .restricted {
-            if self.currentStopToMonitorId != nil || self.phase != .idle {
+            if !self.currentStopToMonitorIds.isEmpty || self.phase != .idle {
                 self.authorizationDenied()
             }
         }

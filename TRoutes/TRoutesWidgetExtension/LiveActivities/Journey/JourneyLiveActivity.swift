@@ -37,11 +37,11 @@ struct JourneyLiveActivity: Widget {
                     .bold()
             } compactTrailing: {
                 if let next = context.state.activePredictions.first {
-                    Text(formatIslandTime(next))
+                    Text(formatIslandTime(next.time))
                 }
             } minimal: {
                 if let next = context.state.activePredictions.first {
-                    Text(formatIslandTime(next))
+                    Text(formatIslandTime(next.time))
                         .foregroundStyle(Color(hex: context.state.currentTransitColor))
                         .bold()
                 } else {
@@ -124,20 +124,30 @@ struct JourneyWatchOSView: View {
     }
     
     @ViewBuilder
-    private func timesView(times: [String], colorHex: String, foregroundHex: String) -> some View {
+    private func timesView(times: [JourneyAttributes.PredictionDisplay], colorHex: String, foregroundHex: String) -> some View {
         HStack(spacing: 4) {
-            ForEach(Array(times.prefix(2).enumerated()), id: \.offset) { index, time in
-                Text(formatIslandTime(time))
-                    .font(.subheadline.bold())
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .foregroundStyle(Color(hex: foregroundHex))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color(hex: colorHex).gradient.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .layoutPriority(1)
+            ForEach(Array(times.prefix(2).enumerated()), id: \.offset) { index, prediction in
+                HStack(spacing: 2) {
+                    if let badge = prediction.badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.black)
+                            .frame(width: 14, height: 14)
+                            .background(.white)
+                            .clipShape(Circle())
+                    }
+                    Text(formatIslandTime(prediction.time))
+                        .font(.subheadline.bold())
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(Color(hex: foregroundHex))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(hex: colorHex).gradient.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .layoutPriority(1)
             }
         }
     }
@@ -179,7 +189,7 @@ struct JourneyExpandedIslandView: View {
             if let loadingState = state.activePredictionLoadingState {
                 predictionTimesBlock(
                     state: loadingState,
-                    times: state.activePredictions.map { formatIslandTime($0) },
+                    times: state.activePredictions,
                     color: transitColor,
                     iconName: state.currentIconName,
                     iconColor: transitColor,
@@ -191,18 +201,27 @@ struct JourneyExpandedIslandView: View {
     }
     
     @ViewBuilder
-    private func timesRow(times: [String], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+    private func timesRow(times: [JourneyAttributes.PredictionDisplay], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
         HStack(spacing: 8) {
-            ForEach(Array(times.enumerated()), id: \.offset) { index, time in
+            ForEach(Array(times.enumerated()), id: \.offset) { index, prediction in
                 let bgStyle: AnyShapeStyle = (color == .white.opacity(0.2)) ? AnyShapeStyle(color) : AnyShapeStyle(color.gradient)
                 
                 HStack(spacing: 4) {
-                    if time.lowercased().contains("stopped") {
+                    if let badge = prediction.badge {
+                        Text(badge)
+                            .font(.footnote.weight(.black))
+                            .foregroundStyle(.black)
+                            .frame(width: 20, height: 20)
+                            .background(.white)
+                            .clipShape(Circle())
+                    }
+                    
+                    if prediction.time.lowercased().contains("stopped") {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.yellow)
                         Text("Stopped")
                     } else {
-                        Text(time)
+                        Text(formatIslandTime(prediction.time))
                     }
                 }
                 .font(.subheadline.weight(.heavy))
@@ -220,7 +239,7 @@ struct JourneyExpandedIslandView: View {
     }
 
     @ViewBuilder
-    private func predictionTimesBlock(state: JourneyAttributes.WidgetPredictionLoadingState, times: [String], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
+    private func predictionTimesBlock(state: JourneyAttributes.WidgetPredictionLoadingState, times: [JourneyAttributes.PredictionDisplay], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
         HStack(spacing: 8) {
             if let iconName = iconName {
                 Image(systemName: iconName)
@@ -408,18 +427,27 @@ struct JourneyLockScreenView: View {
     }
     
     @ViewBuilder
-    private func timesRow(times: [String], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
+    private func timesRow(times: [JourneyAttributes.PredictionDisplay], color: Color, foregroundColor: Color, opacity: Double = 1.0) -> some View {
         HStack(spacing: 8) {
-            ForEach(Array(times.enumerated()), id: \.offset) { index, time in
+            ForEach(Array(times.enumerated()), id: \.offset) { index, prediction in
                 let bgStyle: AnyShapeStyle = (color == .white.opacity(0.2)) ? AnyShapeStyle(color) : AnyShapeStyle(color.gradient)
                 
                 HStack(spacing: 4) {
-                    if time.lowercased().contains("stopped") {
+                    if let badge = prediction.badge {
+                        Text(badge)
+                            .font(.footnote.weight(.black))
+                            .foregroundStyle(.black)
+                            .frame(width: 20, height: 20)
+                            .background(.white)
+                            .clipShape(Circle())
+                    }
+                    
+                    if prediction.time.lowercased().contains("stopped") {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.yellow)
                         Text("Stopped")
                     } else {
-                        Text(time)
+                        Text(formatIslandTime(prediction.time))
                     }
                 }
                 .font(.subheadline.weight(.heavy))
@@ -437,7 +465,7 @@ struct JourneyLockScreenView: View {
     }
 
     @ViewBuilder
-    private func predictionTimesBlock(state: JourneyAttributes.WidgetPredictionLoadingState, times: [String], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
+    private func predictionTimesBlock(state: JourneyAttributes.WidgetPredictionLoadingState, times: [JourneyAttributes.PredictionDisplay], color: Color, iconName: String?, iconColor: Color, foregroundColor: Color) -> some View {
         HStack(spacing: 8) {
             if let iconName = iconName {
                 Image(systemName: iconName)
