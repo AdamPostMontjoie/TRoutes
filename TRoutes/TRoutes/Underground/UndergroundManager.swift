@@ -160,6 +160,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
         cancelTimer()
         resetTracking()
+        print("Underground Monitoring Stopped")
     }
     
     func killManager(){

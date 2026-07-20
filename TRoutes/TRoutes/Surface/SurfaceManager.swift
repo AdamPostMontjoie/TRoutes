@@ -29,7 +29,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
             case .arrivingOnFoot(.bus): return 30
             case .arrivingOnFoot(.lightRail): return 100
             case .arrivingOnFoot(.heavyRail): return 110
-            case .arrivingOnFoot(.commuterRail): return 120
+            case .arrivingOnFoot(.commuterRail): return 200
             case .arrivingOnFoot(.ferry): return 150
             case .emergingFromUnderground(.bus): return 80
             case .emergingFromUnderground(.lightRail): return 100
@@ -49,12 +49,12 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
             case .arrivingOnFoot(.bus): return 40
             case .arrivingOnFoot(.lightRail): return 120
             case .arrivingOnFoot(.heavyRail): return 130
-            case .arrivingOnFoot(.commuterRail): return 140
+            case .arrivingOnFoot(.commuterRail): return 250
             case .arrivingOnFoot(.ferry): return 170
             case .emergingFromUnderground(.bus): return 120
             case .emergingFromUnderground(.lightRail): return 140
             case .emergingFromUnderground(.heavyRail): return 200
-            case .emergingFromUnderground(.commuterRail): return 200
+            case .emergingFromUnderground(.commuterRail): return 400
             case .emergingFromUnderground(.ferry): return 220
             case .ridingAlongSurface(.bus): return 40
             case .ridingAlongSurface(.lightRail): return 80
@@ -149,6 +149,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         self.surfaceTrackingMode = .idle
         self.hasYieldedEntryForCurrentStop = false
         self.hasYieldedExitForCurrentStop = false
+        print("Surface Monitoring Stopped")
     }
     
     func killManager(){
@@ -167,7 +168,8 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
     
     func registerRegion(
         for stop: ResolvedStop,
-        previousMonitoringMode: MonitoringMode?
+        previousMonitoringMode: MonitoringMode?,
+        isAlreadyAtStop: Bool = false
     ) {
         let context = trackingContext(
             for: stop,
@@ -178,7 +180,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         self.trackingContext = context
         self.lastKnownState = nil
         self.surfaceTrackingMode = .cruising
-        self.hasYieldedEntryForCurrentStop = false
+        self.hasYieldedEntryForCurrentStop = isAlreadyAtStop
         self.hasYieldedExitForCurrentStop = false
         clearMonitoredRegions()
         let coordinate = CLLocationCoordinate2D(

@@ -319,13 +319,15 @@ actor JourneyEngine {
     func monitorNextStop(stop:ResolvedStop) async {
         guard let currentJourney = self.activeJourney else { return }
         let mode = currentJourney.monitoringMode
+        let isAtStop = currentJourney.movementStatus == .atStop
         print("JourneyEngine monitorNextStop stop: \(stop.mbtaStopId) mode: \(mode) role: \(stop.journeyRole)")
         switch mode {
         case .surface:
             print("surface monitoring")
             await SurfaceManager.shared.registerRegion(
                 for: stop,
-                previousMonitoringMode: currentJourney.previousStop?.monitoringMode
+                previousMonitoringMode: currentJourney.previousStop?.monitoringMode,
+                isAlreadyAtStop: isAtStop
             )
         case .underground:
             print("underground monitoring")
@@ -339,6 +341,17 @@ actor JourneyEngine {
                 stopLatitude: stop.latitude,
                 stopLongitude: stop.longitude
             )
+            
+            //MARK: Commuter Rail Terminus Band Aid (Temporary)
+            if stop.transitType == .commuterRail && isAtStop {
+                print("Commuter rail band-aid: registering surface backup region on entry")
+                await startListeningToLocationEvents()
+                await SurfaceManager.shared.registerRegion(
+                    for: stop,
+                    previousMonitoringMode: currentJourney.previousStop?.monitoringMode,
+                    isAlreadyAtStop: isAtStop
+                )
+            }
         }
     }
     
