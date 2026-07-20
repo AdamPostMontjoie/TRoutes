@@ -36,6 +36,7 @@ actor JourneyEngine {
     private var locationListeningTask: Task<Void, Never>?
     private var undergroundListeningTask: Task<Void, Never>?
     private var predictionRefreshTask: Task<Void, Never>?
+    private var vehicleSearchTask: Task<Void, Never>?
     private var loadingTask: Task<Void, Never>?
     private var lastManualRefresh: Date?
     private var lastPredictionFetchTime: Date?
@@ -217,7 +218,7 @@ actor JourneyEngine {
     
     //Receives commands that will update state and runs effects
     func validateJourneyCommand(_ event:JourneyCommand) async {
-        guard var currentJourney = self.activeJourney else { return }
+        guard let currentJourney = self.activeJourney else { return }
         var mutatedJourney = currentJourney
         let effects = JourneyCommandValidator.reduce(
             state: &mutatedJourney,
@@ -286,6 +287,10 @@ actor JourneyEngine {
                 if tripId != self.matchedPath?.tripId {
                     await self.updateLivePath(tripId: tripId)
                 }
+                
+            case .searchForVehicle:
+                print("JourneyEngine effect: searchForVehicle")
+                startVehicleSearch()
             }
         }
     }
@@ -375,6 +380,54 @@ actor JourneyEngine {
         }
     }
     
+    // MARK: - Vehicle Search
+    
+    private func startVehicleSearch() {
+        stopVehicleSearch()
+        vehicleSearchTask = Task {
+            while !Task.isCancelled {
+                guard let journey = self.activeJourney,
+                      journey.trackedVehicleId == nil,
+                      journey.monitoringMode == .surface,
+                      let currentStop = journey.currentStop else {
+                    return
+                }
+                
+                let searchPredictionState = PredictionState(
+                    predictedStop: currentStop,
+                    predictedStopType: .boarding,
+                    acceptableRouteIds: journey.acceptableRouteIds(for: currentStop),
+                    loadingState: .loading(stopId: currentStop.mbtaStopId)
+                )
+                
+                do {
+                    let results = try await PredictionManager.shared.fetchPredictionsWithFallback(
+                        for: searchPredictionState,
+                        requestType: .currentStopPrediction
+                    )
+                    
+                    if let first = results.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
+                       let vehicleId = first.vehicleId,
+                       let tripId = first.tripId {
+                        print("JourneyEngine: Vehicle search found vehicle: \(vehicleId) trip: \(tripId)")
+                        await self.validateJourneyCommand(.handleVehicleSearchResult(vehicleId: vehicleId, tripId: tripId))
+                        return
+                    }
+                } catch {
+                    print("JourneyEngine: Vehicle search error: \(error.localizedDescription)")
+                }
+                
+                print("JourneyEngine: Vehicle search found no vehicle. Retrying in 30 seconds.")
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+    }
+    
+    private func stopVehicleSearch() {
+        vehicleSearchTask?.cancel()
+        vehicleSearchTask = nil
+    }
+    
     // MARK: - State Publishing Helpers
     
     private func managePredictionTimer(for journey: JourneyState) {
@@ -421,6 +474,7 @@ actor JourneyEngine {
     func endRoute() async {
         clearActiveJourneyAndPublish()
         stopPredictionRefreshTimer()
+        stopVehicleSearch()
         matchedPath = nil
         trackedVehicleId = nil
         trackedTripId = nil

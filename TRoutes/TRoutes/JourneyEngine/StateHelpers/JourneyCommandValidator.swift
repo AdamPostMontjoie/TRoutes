@@ -9,6 +9,7 @@ enum JourneyCommand: Equatable {
     case refreshTimes(stopId: String, isUserInitiated: Bool)
     case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
+    case handleVehicleSearchResult(vehicleId: String, tripId: String)
 }
 
 ///Determines JourneyCommand Validity, Runs JourneyAction, and emits JourneyEffects
@@ -32,17 +33,26 @@ struct JourneyCommandValidator {
                 print("JourneyEngine accepted exit \(id)")
                 
                 var effects: [JourneyEffect] = []
-                if let recent = state.activeLegPrediction?.arrivedTrains.last {
-                    print("JourneyEngine: Exit matched with arrived train \(recent.vehicleId).")
-                    state.trackedVehicleId = recent.vehicleId
-                    state.trackedTripId = recent.tripId
-                    effects.append(.updateTrackedVehicle(vehicleId: recent.vehicleId, tripId: recent.tripId))
-                    effects.append(.refreshTripPath(tripId: recent.tripId))
-                } else {
-                    print("JourneyEngine: Exit with no arrived trains in queue. Keeping current tracked vehicle.")
+                if state.activeLegPrediction != nil {
+                    if let recent = state.activeLegPrediction?.arrivedTrains.last {
+                        print("JourneyEngine: Exit matched with arrived train \(recent.vehicleId).")
+                        state.trackedVehicleId = recent.vehicleId
+                        state.trackedTripId = recent.tripId
+                        effects.append(.updateTrackedVehicle(vehicleId: recent.vehicleId, tripId: recent.tripId))
+                        effects.append(.refreshTripPath(tripId: recent.tripId))
+                    } else {
+                        print("JourneyEngine: Exit with no arrived trains in queue. Keeping current tracked vehicle.")
+                    }
                 }
                 
+                
                 effects.append(contentsOf: JourneyAction.departFromStop.reduce(state: &state))
+                
+                // If we exited without a tracked vehicle on surface, start searching
+                if state.trackedVehicleId == nil && state.monitoringMode == .surface {
+                    effects.append(.searchForVehicle)
+                }
+                
                 return effects
             } else {
                 print("JourneyEngine ignored exit \(id) current: \(state.currentStop?.mbtaStopId ?? "nil") status: \(state.movementStatus)")
@@ -108,6 +118,15 @@ struct JourneyCommandValidator {
                 "monitoring failed for \(stopId): \(error)"
             }
             return [.sendNotification(notificationMessage, user: userMessage)]
+            
+        case let .handleVehicleSearchResult(vehicleId, tripId):
+            guard state.monitoringMode == .surface, state.trackedVehicleId == nil else { return [] }
+            state.trackedVehicleId = vehicleId
+            state.trackedTripId = tripId
+            return [
+                .updateTrackedVehicle(vehicleId: vehicleId, tripId: tripId),
+                .refreshTripPath(tripId: tripId)
+            ]
         }
     }
     

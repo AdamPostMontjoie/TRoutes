@@ -29,7 +29,7 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
     var transitType: GTFSTransitType
     var overlapsWithNext: Bool
     var stopType: StopType
-
+    
     init(
         id: UUID = UUID(),
         sourceLegId: UUID,
