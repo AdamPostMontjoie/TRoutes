@@ -6,6 +6,15 @@
 **A serverless iOS app to track journeys along the T** 
 ### 🚀 [Try the Beta on TestFlight!](https://testflight.apple.com/join/q4FWgyqT)
 
+<p align="center">
+<img width="250"   alt="IMG_0022" src="https://github.com/user-attachments/assets/956effcd-dd2d-4f7e-9746-d102f78ef878" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+
+<img width="250"   alt="IMG_0023" src="https://github.com/user-attachments/assets/926d5d8b-1afa-477a-922a-1807b82749f0" />
+</p>
+
+
+
 ## About The Project
 
 T Routes lets a user create a custom route using any of the MBTA's modes of transport, including transfers to different lines as part of the route.
