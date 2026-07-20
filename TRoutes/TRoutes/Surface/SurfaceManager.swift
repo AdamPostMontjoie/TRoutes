@@ -54,7 +54,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
             case .emergingFromUnderground(.bus): return 120
             case .emergingFromUnderground(.lightRail): return 140
             case .emergingFromUnderground(.heavyRail): return 200
-            case .emergingFromUnderground(.commuterRail): return 200
+            case .emergingFromUnderground(.commuterRail): return 400
             case .emergingFromUnderground(.ferry): return 220
             case .ridingAlongSurface(.bus): return 40
             case .ridingAlongSurface(.lightRail): return 80
@@ -149,6 +149,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         self.surfaceTrackingMode = .idle
         self.hasYieldedEntryForCurrentStop = false
         self.hasYieldedExitForCurrentStop = false
+        print("Surface Monitoring Stopped")
     }
     
     func killManager(){

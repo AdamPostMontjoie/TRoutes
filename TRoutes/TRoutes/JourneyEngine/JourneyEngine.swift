@@ -339,6 +339,15 @@ actor JourneyEngine {
                 stopLatitude: stop.latitude,
                 stopLongitude: stop.longitude
             )
+            
+            //MARK: Commuter Rail Terminus Band Aid (Temporary)
+            if stop.transitType == .commuterRail {
+                print("Commuter rail band-aid: registering surface backup region")
+                await SurfaceManager.shared.registerRegion(
+                    for: stop,
+                    previousMonitoringMode: currentJourney.previousStop?.monitoringMode
+                )
+            }
         }
     }
     
