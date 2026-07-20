@@ -311,8 +311,8 @@ struct LegFormFeature {
                 // Generic directions for multi-branch — not tied to one branch
                 state.currentFormStep = .selectDirection
                 state.directionOptions = [
-                    TransitDirection(directionId: 0, directionName: "Westbound", destination: "All Branches"),
-                    TransitDirection(directionId: 1, directionName: "Eastbound", destination: "All Branches")
+                    TransitDirection(directionId: 0, directionName: "West/South", destination: "All Branches"),
+                    TransitDirection(directionId: 1, directionName: "East/North", destination: "All Branches")
                 ]
                 return .none
 
