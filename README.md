@@ -4,7 +4,7 @@
 [![Swift 6](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Architecture: TCA](https://img.shields.io/badge/Architecture-TCA-lightgrey.svg)](https://github.com/pointfreeco/swift-composable-architecture)
 **A serverless iOS app to track journeys along the T** 
-### 🚀 [Try the Beta on TestFlight!](https://testflight.apple.com/join/q4FWgyqT)
+### 🚀 [Try the Beta on TestFlight!](https://testflight.apple.com/join/PuzRsdkz)
 
 <p align="center">
 <img width="250"   alt="IMG_0022" src="https://github.com/user-attachments/assets/956effcd-dd2d-4f7e-9746-d102f78ef878" />
