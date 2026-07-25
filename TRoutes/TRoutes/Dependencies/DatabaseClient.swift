@@ -451,7 +451,7 @@ private func resolveLeg(
     // ensuring we don't miss an arrival if a vehicle pulls into a sibling platform
     // or an unexpected branch platform, while excluding unrelated platforms like busways.
     let siblingPlatformsByStation = Dictionary(
-        grouping: allPlatforms.filter { targetTransitType == nil || $0.transitType == targetTransitType }, 
+        grouping: allPlatforms.filter { (targetTransitType == nil || $0.transitType == targetTransitType) && !$0.stationId.isEmpty }, 
         by: \.stationId
     )
         .mapValues { platforms in Array(Set(platforms.map(\.platformId))) }

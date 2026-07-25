@@ -332,7 +332,7 @@ actor JourneyEngine {
         case .underground:
             print("underground monitoring")
             await UndergroundManager.shared.startSession()
-            
+            await MotionManager().requestMotionPermission()
             await UndergroundManager.shared.setTrackedVehicle(
                 vehicleId: currentJourney.trackedVehicleId,
                 tripId: currentJourney.trackedTripId,

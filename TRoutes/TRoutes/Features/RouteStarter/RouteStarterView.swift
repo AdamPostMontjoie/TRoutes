@@ -48,6 +48,15 @@ struct RouteStarterView: View {
                         )
                         .padding(.bottom, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
+                        
+                        MotionDashboardView(
+                            store: store.scope(
+                                state: \.motionDashboardDisplay,
+                                action: \.motionDashboardDisplay
+                            )
+                        )
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
             }
