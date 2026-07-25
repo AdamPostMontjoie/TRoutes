@@ -122,7 +122,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         // throw if not authorized somewhere in here, in case user disables location access mid journey
     }
     
-    func makeEventStream() -> AsyncStream<JourneyCommand> {
+    func makeCommandStream() -> AsyncStream<JourneyCommand> {
         AsyncStream { continuation in
             self.continuation = continuation
             

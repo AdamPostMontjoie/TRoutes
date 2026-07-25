@@ -43,6 +43,7 @@ struct RouteStarterFeature {
         
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
+        @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
         @Shared(.hasOnboarded) var hasOnboarded = false
         @Shared(.importedFeedVersion) var importedFeedVersion = ""
         var isTransitDataLoading: Bool { importedFeedVersion != DatabaseClient.currentFeedVersion }

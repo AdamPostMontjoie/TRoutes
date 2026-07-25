@@ -123,7 +123,7 @@ actor JourneyEngine {
     
     func startListeningToLocationEvents() async {
         guard locationListeningTask == nil else { return }
-        let stream = await SurfaceManager.shared.makeEventStream()
+        let stream = await SurfaceManager.shared.makeCommandStream()
         
         locationListeningTask = Task {
             for await event in stream {
@@ -136,7 +136,7 @@ actor JourneyEngine {
     func startListeningToUndergroundEvents() async {
         guard undergroundListeningTask == nil else { return }
         print("JourneyEngine start underground listener")
-        let stream = await UndergroundManager.shared.makeEventStream()
+        let stream = await UndergroundManager.shared.makeCommandStream()
 
         undergroundListeningTask = Task {
             for await event in stream {
@@ -332,7 +332,7 @@ actor JourneyEngine {
         case .underground:
             print("underground monitoring")
             await UndergroundManager.shared.startSession()
-            await MotionManager().requestMotionPermission()
+          //  await MotionManager().requestMotionPermission()
             await UndergroundManager.shared.setTrackedVehicle(
                 vehicleId: currentJourney.trackedVehicleId,
                 tripId: currentJourney.trackedTripId,

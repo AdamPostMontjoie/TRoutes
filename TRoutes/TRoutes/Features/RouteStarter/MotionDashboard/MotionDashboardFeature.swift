@@ -27,8 +27,7 @@ struct MotionDashboardFeature {
                 state.isListening.toggle()
                 if state.isListening {
                     return .run { send in
-                        await MotionManager.shared.requestMotionPermission()
-                        await MotionManager.shared.startActivityUpdates()
+                        await MotionManager.shared.startEvents()
                         let stream = await MotionManager.shared.makeEventStream()
                         for await event in stream {
                             await send(.activityUpdated(event.state.rawValue, event.confidence))
@@ -37,7 +36,7 @@ struct MotionDashboardFeature {
                     .cancellable(id: "MotionStream")
                 } else {
                     return .run { _ in
-                        await MotionManager.shared.stopActivityUpdates()
+                        await MotionManager.shared.stopEvents()
                     }
                     .merge(with: .cancel(id: "MotionStream"))
                 }
