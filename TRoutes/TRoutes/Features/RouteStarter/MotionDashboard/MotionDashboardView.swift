@@ -36,12 +36,26 @@ struct MotionDashboardView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 debugSection(
-                    "Activity",
+                    "Accelerometer",
                     rows: [
-                        ("State", store.currentActivity),
-                        ("Confidence", store.confidence)
+                        ("State", store.currentState),
+                        ("Magnitude", store.magnitude),
+                        ("Variance", store.variance),
+                        ("Jolt Duration", store.joltDuration),
+                        ("Jolt Detected", store.isJoltDetected ? "YES" : "—")
                     ]
                 )
+            }
+            
+            if store.isJoltDetected {
+                HStack {
+                    Image(systemName: "train.side.front.car")
+                    Text("DEPARTURE DETECTED")
+                        .font(.caption2)
+                        .fontWeight(.heavy)
+                }
+                .foregroundStyle(.green)
+                .transition(.opacity)
             }
         }
         .padding(12)
@@ -49,9 +63,10 @@ struct MotionDashboardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.blue.opacity(0.22), lineWidth: 1)
+                .stroke(store.isJoltDetected ? .green.opacity(0.5) : .blue.opacity(0.22), lineWidth: 1)
         }
         .padding(.horizontal)
+        .animation(.easeInOut(duration: 0.3), value: store.isJoltDetected)
     }
 
     private func debugSection(_ title: String, rows: [(String, String)]) -> some View {
