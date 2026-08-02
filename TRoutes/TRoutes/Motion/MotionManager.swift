@@ -54,18 +54,17 @@ actor MotionManager {
     //   drops, we reset this to nil. Without this, a single bump would trigger a
     //   false positive.
     
-    private var gravityEstimate: (x: Double, y: Double, z: Double) = (0, 0, 0)
     private var magnitudeBuffer: [Double] = []
-    private var joltStartTime: Date?
+    private var stateBuffer: [MotionState] = []
+    private var joltScore: Double = 0.0
     
     // MARK: - Tuning Constants
     //   These are starting points. You will tune them by riding the T
     //   with the dashboard showing real magnitude and variance values.
     
-    private let gravityFilterAlpha = 0.8
     private let magnitudeThreshold = 0.08  // in G — train departure is ~0.1-0.2G
     private let varianceCeiling = 0.008    // above this = walking
-    private let requiredJoltDuration = 4.0 // seconds of sustained signal
+    private let requiredJoltDuration = 10.0 // seconds of sustained signal
     private let bufferSize = 50            // samples (~1 second at 50Hz)
     private let updateFrequency = 50.0     // Hz
     
@@ -94,23 +93,23 @@ actor MotionManager {
     // MARK: - Controls
     
     func startCommands() {
-        startAccelerometerUpdates()
+        startDeviceMotionUpdates()
     }
     
     func stopCommands() {
         commandStreamContinuation?.finish()
         commandStreamContinuation = nil
-        stopAccelerometerUpdates()
+        stopDeviceMotionUpdates()
     }
     
     func startEvents() {
-        startAccelerometerUpdates()
+        startDeviceMotionUpdates()
     }
     
     func stopEvents() {
         eventStreamContinuation?.finish()
         eventStreamContinuation = nil
-        stopAccelerometerUpdates()
+        stopDeviceMotionUpdates()
     }
     
     func stopAllUpdates() {
@@ -118,35 +117,31 @@ actor MotionManager {
         commandStreamContinuation = nil
         eventStreamContinuation?.finish()
         eventStreamContinuation = nil
-        stopAccelerometerUpdates()
+        stopDeviceMotionUpdates()
     }
     
-    // MARK: - Accelerometer Lifecycle
+    // MARK: - Device Motion Lifecycle
     
-    private func startAccelerometerUpdates() {
-        guard motionManager.isAccelerometerAvailable else { return }
-        motionManager.accelerometerUpdateInterval = 1.0 / updateFrequency
+    private func startDeviceMotionUpdates() {
+        guard motionManager.isDeviceMotionAvailable else { return }
+        motionManager.deviceMotionUpdateInterval = 1.0 / updateFrequency
         
-        motionManager.startAccelerometerUpdates(to: motionQueue) { [weak self] data, error in
-            guard let data = data, let self = self else { return }
-            // CMAccelerometerData is NOT Sendable — extract the raw doubles
-            // here on the motionQueue before hopping into the actor.
-            let x = data.acceleration.x
-            let y = data.acceleration.y
-            let z = data.acceleration.z
-            Task { await self.processAccelerometerData(x: x, y: y, z: z) }
+        motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, error in
+            guard let motion = motion, let self = self else { return }
+            let accel = motion.userAcceleration
+            Task { await self.processAccelerometerData(x: accel.x, y: accel.y, z: accel.z) }
         }
     }
     
-    private func stopAccelerometerUpdates() {
-        motionManager.stopAccelerometerUpdates()
+    private func stopDeviceMotionUpdates() {
+        motionManager.stopDeviceMotionUpdates()
         resetJoltState()
     }
     
     private func resetJoltState() {
-        gravityEstimate = (0, 0, 0)
         magnitudeBuffer.removeAll()
-        joltStartTime = nil
+        stateBuffer.removeAll()
+        joltScore = 0.0
     }
     
     // MARK: - The Math
@@ -158,41 +153,7 @@ actor MotionManager {
     private func processAccelerometerData(x rawX: Double, y rawY: Double, z rawZ: Double) {
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 1: HIGH-PASS FILTER — Remove gravity from the raw signal
-        // ──────────────────────────────────────────────────────────────────
-        //
-        // Problem: The accelerometer ALWAYS reports gravity (~1G) in the
-        // readings. If the phone is flat on a table, z ≈ -1.0. If it's
-        // upright in your pocket, y ≈ -1.0. The train's departure
-        // acceleration is only ~0.1G — it's invisible under gravity's 1G.
-        //
-        // Solution: Exponential Moving Average (EMA). Gravity is the
-        // "slow-moving" part of the signal (it barely changes). The EMA
-        // tracks it by heavily weighting previous estimates:
-        //
-        //   gravity_new = 0.8 * gravity_old + 0.2 * raw_value
-        //
-        // With alpha=0.8, this says: "I'm 80% sure gravity is where it
-        // was last frame, and only 20% influenced by this new reading."
-        // This means sudden jolts (which are 100% in the new reading)
-        // barely move the gravity estimate. After subtracting, what
-        // remains is the "linear acceleration" — the actual movement.
-        //
-        // On the very first frame, gravityEstimate is (0,0,0), so the
-        // filter takes ~10 frames (~0.2 seconds) to converge. That's
-        // fine — we require 2.5 seconds of sustained signal anyway.
-        
-        let alpha = gravityFilterAlpha
-        gravityEstimate.x = alpha * gravityEstimate.x + (1 - alpha) * rawX
-        gravityEstimate.y = alpha * gravityEstimate.y + (1 - alpha) * rawY
-        gravityEstimate.z = alpha * gravityEstimate.z + (1 - alpha) * rawZ
-        
-        let linearX = rawX - gravityEstimate.x
-        let linearY = rawY - gravityEstimate.y
-        let linearZ = rawZ - gravityEstimate.z
-        
-        // ──────────────────────────────────────────────────────────────────
-        // STEP 2: MAGNITUDE — Collapse 3 axes into 1 orientation-free number
+        // STEP 1: MAGNITUDE — Collapse 3 axes into 1 orientation-free number
         // ──────────────────────────────────────────────────────────────────
         //
         // Problem: The phone could be in any orientation in your pocket.
@@ -204,18 +165,19 @@ actor MotionManager {
         //   magnitude = sqrt(x² + y² + z²)
         //
         // This is a single number representing "how much total acceleration
-        // is happening" regardless of direction. It's rotation-invariant
-        // by definition — rotating the phone just redistributes the same
-        // force across axes, but the magnitude stays identical.
+        // is happening" regardless of direction. Because we are using 
+        // CMDeviceMotion's `userAcceleration`, Apple's sensor fusion has 
+        // ALREADY used the gyroscope to completely subtract gravity, even 
+        // if the phone is tilted.
         //
-        // At rest: magnitude ≈ 0.0 (gravity was subtracted)
+        // At rest: magnitude ≈ 0.0
         // Walking: magnitude spikes rhythmically (0.1-0.5G peaks)
         // Train:   magnitude rises smoothly to ~0.1-0.2G and holds
         
-        let magnitude = sqrt(linearX * linearX + linearY * linearY + linearZ * linearZ)
+        let magnitude = sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ)
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 3: VARIANCE — Distinguish walking from train movement
+        // STEP 2: VARIANCE — Distinguish walking from train movement
         // ──────────────────────────────────────────────────────────────────
         //
         // Problem: Both walking and a train departure produce magnitude
@@ -273,29 +235,33 @@ actor MotionManager {
         // satisfy both for one frame. So we add a DURATION requirement:
         // both conditions must hold for 2.5 consecutive seconds.
         //
-        // joltStartTime tracks when we first entered the "possible jolt"
-        // state. If conditions break, we reset it to nil.
+        // ──────────────────────────────────────────────────────────────────
+        // STEP 3: LEAKY BUCKET — Confidence Score Tracking
+        // ──────────────────────────────────────────────────────────────────
+        //
+        // Add points for perfect frames, subtract points for bouncy/stationary
+        // frames.
         
+        let maxJoltScore = requiredJoltDuration * 50.0 // 50Hz
         let isAboveThreshold = magnitude > magnitudeThreshold
         let isSmooth = variance < varianceCeiling
         
-        var joltDuration = 0.0
-        var isJoltDetected = false
-        
         if isAboveThreshold && isSmooth {
-            if joltStartTime == nil {
-                joltStartTime = Date.now
-            }
-            joltDuration = Date.now.timeIntervalSince(joltStartTime!)
-            
-            if joltDuration >= requiredJoltDuration {
-                isJoltDetected = true
-                // TODO: yield .executeExit to commandStreamContinuation
-                // commandStreamContinuation?.yield(.executeExit(stopId: ???))
-            }
+            // Train accelerating perfectly
+            joltScore += 1.0
+        } else if isAboveThreshold && !isSmooth {
+            // Moving horizontally, but bouncy (walking/shuffling)
+            joltScore -= 0.5
         } else {
-            joltStartTime = nil
+            // Not moving horizontally (stationary or slowing down)
+            joltScore -= 2.0
         }
+        
+        // Clamp the score between 0 and max
+        joltScore = max(0, min(joltScore, maxJoltScore))
+        
+        let isJoltDetected = (joltScore >= maxJoltScore)
+        let joltDuration = joltScore / 50.0 // Convert score back to a 'seconds' duration for the dashboard
         
         // MARK: - Classify State
         // Derive what the user is likely doing from the numbers we already computed.
@@ -303,21 +269,33 @@ actor MotionManager {
         //   - Low variance + above threshold = smooth sustained force = vehicle
         //   - Below threshold + low variance = not moving = unknown/stationary
         
-        let state: MotionState
+        let instantState: MotionState
         if variance > 0.03 {
-            state = .running
+            instantState = .running
         } else if variance > varianceCeiling {
-            state = .walking
-        } else if isAboveThreshold && isJoltDetected {
-            state = .vehicle
+            instantState = .walking
+        } else if isAboveThreshold {
+            instantState = .vehicle
         } else {
-            state = .unknown
+            instantState = .unknown
         }
+        
+        stateBuffer.append(instantState)
+        if stateBuffer.count > 75 { // 1.5 seconds of history at 50Hz
+            stateBuffer.removeFirst()
+        }
+        
+        // Find the most frequent state in the buffer (the mode) to prevent flickering
+        var stateCounts: [MotionState: Int] = [:]
+        for s in stateBuffer {
+            stateCounts[s, default: 0] += 1
+        }
+        let smoothedState = stateCounts.max(by: { $0.value < $1.value })?.key ?? .unknown
         
         // MARK: - Route to Streams
         
         let event = MotionEvent(
-            state: state,
+            state: smoothedState,
             magnitude: magnitude,
             variance: variance,
             joltDuration: joltDuration,
