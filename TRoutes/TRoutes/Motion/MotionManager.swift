@@ -6,12 +6,13 @@
 //
 import CoreMotion
 import ComposableArchitecture
+import UserNotifications
 
 public enum MotionState: String, Sendable {
     case walking = "Walking"
     case running = "Running"
-    case vehicle = "Vehicle"
-    case unknown = "Unknown"
+    case vehicle = "Accelerating"
+    case unknown = "Stationary"
 }
 
 public struct MotionEvent: Sendable {
@@ -55,8 +56,10 @@ actor MotionManager {
     //   false positive.
     
     private var magnitudeBuffer: [Double] = []
+    private var vectorBuffer: [(x: Double, y: Double, z: Double)] = []
     private var stateBuffer: [MotionState] = []
     private var joltScore: Double = 0.0
+    private var hasYieldedJolt: Bool = false
     
     // MARK: - Tuning Constants
     //   These are starting points. You will tune them by riding the T
@@ -64,7 +67,7 @@ actor MotionManager {
     
     private let magnitudeThreshold = 0.08  // in G — train departure is ~0.1-0.2G
     private let varianceCeiling = 0.008    // above this = walking
-    private let requiredJoltDuration = 10.0 // seconds of sustained signal
+    private let requiredJoltDuration = 4.0 // seconds of sustained signal
     private let bufferSize = 50            // samples (~1 second at 50Hz)
     private let updateFrequency = 50.0     // Hz
     
@@ -140,8 +143,10 @@ actor MotionManager {
     
     private func resetJoltState() {
         magnitudeBuffer.removeAll()
+        vectorBuffer.removeAll()
         stateBuffer.removeAll()
         joltScore = 0.0
+        hasYieldedJolt = false
     }
     
     // MARK: - The Math
@@ -153,71 +158,60 @@ actor MotionManager {
     private func processAccelerometerData(x rawX: Double, y rawY: Double, z rawZ: Double) {
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 1: MAGNITUDE — Collapse 3 axes into 1 orientation-free number
+        // STEP 1: LOW-PASS VECTOR AVERAGING — Eliminate Walking Noise
         // ──────────────────────────────────────────────────────────────────
         //
-        // Problem: The phone could be in any orientation in your pocket.
-        // If the train accelerates "forward," that might show up on the
-        // x-axis, y-axis, or some combination — depending on how the
-        // phone is rotated.
+        // Problem: Human walking acts like an inverted pendulum. With every step,
+        // the body accelerates forward (+0.1G) and then decelerates backward (-0.1G).
+        // If we calculate the Magnitude on every frame, we square the negative signs, 
+        // turning both directions into a positive +0.1G. This tricks the math into 
+        // seeing constant acceleration.
         //
-        // Solution: Calculate the vector magnitude:
-        //   magnitude = sqrt(x² + y² + z²)
-        //
-        // This is a single number representing "how much total acceleration
-        // is happening" regardless of direction. Because we are using 
-        // CMDeviceMotion's `userAcceleration`, Apple's sensor fusion has 
-        // ALREADY used the gyroscope to completely subtract gravity, even 
-        // if the phone is tilted.
-        //
-        // At rest: magnitude ≈ 0.0
-        // Walking: magnitude spikes rhythmically (0.1-0.5G peaks)
-        // Train:   magnitude rises smoothly to ~0.1-0.2G and holds
+        // Solution: Buffer the raw (X, Y, Z) vectors over a 1-second window. 
+        // A walking human's +0.1G and -0.1G vectors will cancel each other out, 
+        // dropping the average magnitude to ~0.0G. A departing train's constant 
+        // +0.1G will survive the average intact.
         
-        let magnitude = sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ)
+        vectorBuffer.append((x: rawX, y: rawY, z: rawZ))
+        if vectorBuffer.count > bufferSize {
+            vectorBuffer.removeFirst()
+        }
+        
+        let rawMagnitude = sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ)
+        magnitudeBuffer.append(rawMagnitude)
+        if magnitudeBuffer.count > bufferSize {
+            magnitudeBuffer.removeFirst()
+        }
+        
+        guard vectorBuffer.count == bufferSize else {
+            // Still filling the buffer — send a "warming up" event to dashboard
+            eventStreamContinuation?.yield(
+                MotionEvent(state: .unknown, magnitude: rawMagnitude, variance: 0, joltDuration: 0, isJoltDetected: false)
+            )
+            return
+        }
+        
+        let sumX = vectorBuffer.reduce(0) { $0 + $1.x }
+        let sumY = vectorBuffer.reduce(0) { $0 + $1.y }
+        let sumZ = vectorBuffer.reduce(0) { $0 + $1.z }
+        
+        let avgX = sumX / Double(bufferSize)
+        let avgY = sumY / Double(bufferSize)
+        let avgZ = sumZ / Double(bufferSize)
+        
+        let averagedMagnitude = sqrt(avgX * avgX + avgY * avgY + avgZ * avgZ)
         
         // ──────────────────────────────────────────────────────────────────
         // STEP 2: VARIANCE — Distinguish walking from train movement
         // ──────────────────────────────────────────────────────────────────
         //
-        // Problem: Both walking and a train departure produce magnitude
-        // above our threshold. A single magnitude reading can't tell
-        // them apart.
-        //
-        // Solution: Look at how STABLE the magnitude is over the last
-        // second. Variance measures "how much do the values bounce around
-        // their average?"
-        //
-        //   variance = average of (each_value - mean)²
-        //
-        // Walking: The magnitude spikes UP with each footstep and drops
-        //   DOWN between steps. This creates a saw-tooth pattern with
-        //   HIGH variance (values are far from the mean).
-        //
-        // Train: The magnitude rises smoothly and holds steady. Values
-        //   cluster tightly around the mean. LOW variance.
-        //
-        // So: high variance = walking (veto the jolt).
-        //     low variance  = smooth sustained force (could be a train).
+        // Variance is calculated on the RAW magnitudes to measure instantaneous 
+        // "bounciness" of the signal.
         
-        magnitudeBuffer.append(magnitude)
-        if magnitudeBuffer.count > bufferSize {
-            magnitudeBuffer.removeFirst()
-        }
-        
-        // Don't calculate until we have a full window of data
-        guard magnitudeBuffer.count == bufferSize else {
-            // Still filling the buffer — send a "warming up" event to dashboard
-            eventStreamContinuation?.yield(
-                MotionEvent(state: .unknown, magnitude: magnitude, variance: 0, joltDuration: 0, isJoltDetected: false)
-            )
-            return
-        }
-        
-        let mean = magnitudeBuffer.reduce(0, +) / Double(magnitudeBuffer.count)
+        let meanRawMag = magnitudeBuffer.reduce(0, +) / Double(bufferSize)
         let variance = magnitudeBuffer.reduce(0) { sum, val in
-            sum + (val - mean) * (val - mean)
-        } / Double(magnitudeBuffer.count)
+            sum + (val - meanRawMag) * (val - meanRawMag)
+        } / Double(bufferSize)
         
         // ──────────────────────────────────────────────────────────────────
         // STEP 4: THRESHOLD + DURATION — Confirm it's a real departure
@@ -243,7 +237,7 @@ actor MotionManager {
         // frames.
         
         let maxJoltScore = requiredJoltDuration * 50.0 // 50Hz
-        let isAboveThreshold = magnitude > magnitudeThreshold
+        let isAboveThreshold = averagedMagnitude > magnitudeThreshold
         let isSmooth = variance < varianceCeiling
         
         if isAboveThreshold && isSmooth {
@@ -262,6 +256,18 @@ actor MotionManager {
         
         let isJoltDetected = (joltScore >= maxJoltScore)
         let joltDuration = joltScore / 50.0 // Convert score back to a 'seconds' duration for the dashboard
+        
+        //MARK: Temporary notification
+        if isJoltDetected && !hasYieldedJolt {
+            hasYieldedJolt = true
+            let content = UNMutableNotificationContent()
+            content.title = "DEPARTURE DETECTED!"
+            content.body = "MotionManager triggered a departure."
+            content.sound = .default
+            
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request)
+        }
         
         // MARK: - Classify State
         // Derive what the user is likely doing from the numbers we already computed.
@@ -296,7 +302,7 @@ actor MotionManager {
         
         let event = MotionEvent(
             state: smoothedState,
-            magnitude: magnitude,
+            magnitude: averagedMagnitude,
             variance: variance,
             joltDuration: joltDuration,
             isJoltDetected: isJoltDetected

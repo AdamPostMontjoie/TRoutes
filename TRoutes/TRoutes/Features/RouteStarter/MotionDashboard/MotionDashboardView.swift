@@ -86,7 +86,7 @@ struct MotionDashboardView: View {
 
                     Text(value)
                         .font(.caption2.monospaced())
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(value == "Accelerating" ? .red : .primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
