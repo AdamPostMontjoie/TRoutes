@@ -152,12 +152,7 @@ actor JourneyEngine {
     }
     
     func startListeningToMotionEvents(stop: ResolvedStop) async {
-        let isMotionEventsEnabled = UserDefaults.standard.object(forKey: DebugAvailability.isMotionEventsEnabledStorageKey) as? Bool ?? true
-        guard isMotionEventsEnabled else { return }
-        
-        let shouldStart = stop.journeyRole == .boarding || stop.journeyRole == .transfer(overlapsNext: true) || stop.journeyRole == .transfer(overlapsNext: false)
-        guard shouldStart else { return }
-        
+        guard stop.journeyRole == .boarding else { return }
         guard motionListeningTask == nil else { return }
         print("JourneyEngine start motion listener")
         let stream = await MotionManager.shared.makeCommandStream()
