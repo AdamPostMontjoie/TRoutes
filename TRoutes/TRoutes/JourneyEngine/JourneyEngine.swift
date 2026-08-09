@@ -39,6 +39,7 @@ actor JourneyEngine {
     private var predictionRefreshTask: Task<Void, Never>?
     private var vehicleSearchTask: Task<Void, Never>?
     private var loadingTask: Task<Void, Never>?
+    private var routeEndTimerTask: Task<Void, Never>?
     private var lastManualRefresh: Date?
     private var lastPredictionFetchTime: Date?
     
@@ -283,6 +284,10 @@ actor JourneyEngine {
                 
             case let .switchMonitoringMode(mode):
                 await switchMonitoringMode(newMode: mode)
+                
+            case let .scheduleEndRoute(seconds):
+                print("JourneyEngine effect: scheduleEndRoute in \(seconds)s")
+                startRouteEndTimer(seconds: seconds)
                 
             case .endRoute:
                 print("JourneyEngine effect: endRoute")
@@ -531,6 +536,9 @@ actor JourneyEngine {
         stopPredictionRefreshTimer()
         stopVehicleSearch()
         
+        routeEndTimerTask?.cancel()
+        routeEndTimerTask = nil
+        
         motionListeningTask?.cancel()
         motionListeningTask = nil
         
@@ -569,6 +577,16 @@ actor JourneyEngine {
     private func stopPredictionRefreshTimer() {
         predictionRefreshTask?.cancel()
         predictionRefreshTask = nil
+    }
+    
+    ///Kills Journey in case user never leaves area
+    private func startRouteEndTimer(seconds: Int) {
+        routeEndTimerTask?.cancel()
+        routeEndTimerTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self.endRoute()
+        }
     }
     
 }
