@@ -48,17 +48,16 @@ struct RouteStarterView: View {
                         )
                         .padding(.bottom, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
-                        
-                        if store.isMotionEventsEnabled {
-                            MotionDashboardView(
-                                store: store.scope(
-                                    state: \.motionDashboardDisplay,
-                                    action: \.motionDashboardDisplay
-                                )
+                    }
+                    if store.isMotionEventsEnabled {
+                        MotionDashboardView(
+                            store: store.scope(
+                                state: \.motionDashboardDisplay,
+                                action: \.motionDashboardDisplay
                             )
-                            .padding(.bottom, 8)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
+                        )
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
             }

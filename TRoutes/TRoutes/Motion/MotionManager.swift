@@ -19,7 +19,7 @@ public struct MotionEvent: Sendable {
     public let state: MotionState
     public let magnitude: Double
     public let variance: Double
-    public let joltDuration: Double  // seconds since jolt started, 0 if no jolt
+    public let joltDuration: Double  // seconds since jolt started
     public let isJoltDetected: Bool
 }
 
@@ -60,6 +60,7 @@ actor MotionManager {
     private var stateBuffer: [MotionState] = []
     private var joltScore: Double = 0.0
     private var hasYieldedJolt: Bool = false
+    private var targetStopId: String?
     
     // MARK: - Tuning Constants
     //   These are starting points. You will tune them by riding the T
@@ -95,13 +96,15 @@ actor MotionManager {
     
     // MARK: - Controls
     
-    func startCommands() {
+    func startCommands(stopId: String) {
+        self.targetStopId = stopId
         startDeviceMotionUpdates()
     }
     
     func stopCommands() {
         commandStreamContinuation?.finish()
         commandStreamContinuation = nil
+        targetStopId = nil
         stopDeviceMotionUpdates()
     }
     
@@ -149,7 +152,7 @@ actor MotionManager {
         hasYieldedJolt = false
     }
     
-    // MARK: - The Math
+    // MARK: - Data Handler
     //
     // This function runs once per accelerometer tick (~50 times/second).
     // It processes raw accelerometer data through 4 steps to determine
@@ -158,7 +161,7 @@ actor MotionManager {
     private func processAccelerometerData(x rawX: Double, y rawY: Double, z rawZ: Double) {
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 1: LOW-PASS VECTOR AVERAGING — Eliminate Walking Noise
+        // LOW-PASS VECTOR AVERAGING — Eliminate Walking Noise
         // ──────────────────────────────────────────────────────────────────
         //
         // Problem: Human walking acts like an inverted pendulum. With every step,
@@ -202,7 +205,7 @@ actor MotionManager {
         let averagedMagnitude = sqrt(avgX * avgX + avgY * avgY + avgZ * avgZ)
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 2: VARIANCE — Distinguish walking from train movement
+        // VARIANCE — Distinguish walking from train movement
         // ──────────────────────────────────────────────────────────────────
         //
         // Variance is calculated on the RAW magnitudes to measure instantaneous 
@@ -214,7 +217,7 @@ actor MotionManager {
         } / Double(bufferSize)
         
         // ──────────────────────────────────────────────────────────────────
-        // STEP 4: THRESHOLD + DURATION — Confirm it's a real departure
+        // THRESHOLD + DURATION — Confirm it's a real departure
         // ──────────────────────────────────────────────────────────────────
         //
         // We now have two numbers:
@@ -260,6 +263,11 @@ actor MotionManager {
         //MARK: Temporary notification
         if isJoltDetected && !hasYieldedJolt {
             hasYieldedJolt = true
+            
+            if let stopId = targetStopId {
+                commandStreamContinuation?.yield(.executeExit(stopId: stopId))
+            }
+            
             let content = UNMutableNotificationContent()
             content.title = "DEPARTURE DETECTED!"
             content.body = "MotionManager triggered a departure."
