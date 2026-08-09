@@ -102,7 +102,7 @@ final class UndergroundManager: NSObject, CLLocationManagerDelegate {
     
     // MARK: - Lifecycle & Stream
     
-    func makeEventStream() -> AsyncStream<JourneyCommand> {
+    func makeCommandStream() -> AsyncStream<JourneyCommand> {
         AsyncStream { continuation in
             print("UGM event stream created")
             self.continuation = continuation

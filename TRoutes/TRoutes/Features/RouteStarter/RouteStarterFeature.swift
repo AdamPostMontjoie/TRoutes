@@ -32,6 +32,7 @@ struct RouteStarterFeature {
                 // without allowing child mutations.
             }
         }
+        var motionDashboardDisplay = MotionDashboardFeature.State()
         var routeSelector = SelectorFeature.State()
         
         var activeJourney: JourneyState?
@@ -42,6 +43,7 @@ struct RouteStarterFeature {
         
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
+        @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
         @Shared(.hasOnboarded) var hasOnboarded = false
         @Shared(.importedFeedVersion) var importedFeedVersion = ""
         var isTransitDataLoading: Bool { importedFeedVersion != DatabaseClient.currentFeedVersion }
@@ -59,6 +61,7 @@ struct RouteStarterFeature {
         case checkOnboarding
         case activeJourneyDisplay(ActiveJourneyDisplayFeature.Action)
         case debugDashboardDisplay(DebugDashboardFeature.Action)
+        case motionDashboardDisplay(MotionDashboardFeature.Action)
         case onCreateButtonTapped
         case onSettingsButtonTapped
         case routeSelector(SelectorFeature.Action)
@@ -90,6 +93,9 @@ struct RouteStarterFeature {
         }
         Scope(state: \.debugDashboardDisplay, action: \.debugDashboardDisplay) {
             DebugDashboardFeature()
+        }
+        Scope(state: \.motionDashboardDisplay, action: \.motionDashboardDisplay) {
+            MotionDashboardFeature()
         }
         Scope(state: \.routeSelector, action: \.routeSelector) {
             SelectorFeature()
@@ -270,7 +276,7 @@ struct RouteStarterFeature {
                     await notificationsClient.requestAuthorization()
                 }
 
-            case .activeJourneyDisplay, .debugDashboardDisplay, .routeSelector, .destination:
+            case .activeJourneyDisplay, .debugDashboardDisplay, .motionDashboardDisplay, .routeSelector, .destination:
                 return .none
             }
         }

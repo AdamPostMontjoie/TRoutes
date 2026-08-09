@@ -35,6 +35,7 @@ actor JourneyEngine {
     
     private var locationListeningTask: Task<Void, Never>?
     private var undergroundListeningTask: Task<Void, Never>?
+    private var motionListeningTask: Task<Void, Never>?
     private var predictionRefreshTask: Task<Void, Never>?
     private var vehicleSearchTask: Task<Void, Never>?
     private var loadingTask: Task<Void, Never>?
@@ -95,6 +96,9 @@ actor JourneyEngine {
                 await startListeningToLocationEvents()
             case .underground:
                 await startListeningToUndergroundEvents()
+                if let stop = reconciledJourney.currentStop, reconciledJourney.movementStatus == .atStop {
+                    await startListeningToMotionEvents(stop: stop)
+                }
             }
             
             if let freshStop = reconciledJourney.currentStop {
@@ -123,7 +127,7 @@ actor JourneyEngine {
     
     func startListeningToLocationEvents() async {
         guard locationListeningTask == nil else { return }
-        let stream = await SurfaceManager.shared.makeEventStream()
+        let stream = await SurfaceManager.shared.makeCommandStream()
         
         locationListeningTask = Task {
             for await event in stream {
@@ -136,7 +140,7 @@ actor JourneyEngine {
     func startListeningToUndergroundEvents() async {
         guard undergroundListeningTask == nil else { return }
         print("JourneyEngine start underground listener")
-        let stream = await UndergroundManager.shared.makeEventStream()
+        let stream = await UndergroundManager.shared.makeCommandStream()
 
         undergroundListeningTask = Task {
             for await event in stream {
@@ -147,12 +151,32 @@ actor JourneyEngine {
         }
     }
     
+    func startListeningToMotionEvents(stop: ResolvedStop) async {
+        guard stop.journeyRole == .boarding else { return }
+        guard motionListeningTask == nil else { return }
+        print("JourneyEngine start motion listener")
+        let stream = await MotionManager.shared.makeCommandStream()
+
+        motionListeningTask = Task {
+            await MotionManager.shared.startCommands(stopId: stop.mbtaStopId)
+            for await event in stream {
+                print("JourneyEngine received motion command: \(event)")
+                await self.validateJourneyCommand(event)
+            }
+            self.motionEventStreamDidFinish()
+        }
+    }
+    
     private func locationEventStreamDidFinish() {
         locationListeningTask = nil
     }
     
     private func undergroundEventStreamDidFinish() {
         undergroundListeningTask = nil
+    }
+    
+    private func motionEventStreamDidFinish() {
+        motionListeningTask = nil
     }
     
     func requestAuthorization() async {
@@ -194,6 +218,7 @@ actor JourneyEngine {
                 await startListeningToLocationEvents()
             } else {
                 await startListeningToUndergroundEvents()
+                await startListeningToMotionEvents(stop: firstStop)
             }
             await monitorNextStop(stop: firstStop)
             await self.fetchPredictions()
@@ -306,6 +331,7 @@ actor JourneyEngine {
         case .surface:
             //end UGM
             await UndergroundManager.shared.stopFunction()
+            await MotionManager.shared.stopCommands()
             //start RGM
             await startListeningToLocationEvents()
         case .underground:
@@ -313,6 +339,9 @@ actor JourneyEngine {
             await SurfaceManager.shared.stopFunction()
             //start UGM
             await startListeningToUndergroundEvents()
+            if let stop = activeJourney?.currentStop {
+                await startListeningToMotionEvents(stop: stop)
+            }
         }
     }
 
@@ -333,6 +362,14 @@ actor JourneyEngine {
             print("underground monitoring")
             await UndergroundManager.shared.startSession()
             
+            if isAtStop && (stop.journeyRole == .boarding) {
+                await startListeningToMotionEvents(stop: stop)
+            } else {
+                await MotionManager.shared.stopCommands()
+                motionListeningTask?.cancel()
+                motionListeningTask = nil
+            }
+            
             await UndergroundManager.shared.setTrackedVehicle(
                 vehicleId: currentJourney.trackedVehicleId,
                 tripId: currentJourney.trackedTripId,
@@ -342,8 +379,8 @@ actor JourneyEngine {
                 stopLongitude: stop.longitude
             )
             
-            //MARK: Commuter Rail Terminus Band Aid (Temporary)
-            if stop.transitType == .commuterRail && isAtStop {
+            //MARK: Terminus Band Aid
+            if (stop.transitType == .commuterRail || stop.stopName == "Alewife" || stop.stopName == "Forest Hills")  && isAtStop {
                 print("Commuter rail band-aid: registering surface backup region on entry")
                 await startListeningToLocationEvents()
                 await SurfaceManager.shared.registerRegion(
@@ -489,15 +526,22 @@ actor JourneyEngine {
     }
     
     func endRoute() async {
+        print("JourneyEngine ending route")
         clearActiveJourneyAndPublish()
         stopPredictionRefreshTimer()
         stopVehicleSearch()
+        
+        motionListeningTask?.cancel()
+        motionListeningTask = nil
+        
         matchedPath = nil
         trackedVehicleId = nil
         trackedTripId = nil
         trackedBoardingStopId = nil
+        
         await SurfaceManager.shared.killManager()
         await UndergroundManager.shared.killManager()
+        await MotionManager.shared.stopCommands()
         await LiveActivityManager.shared.endActivity()
     }
     

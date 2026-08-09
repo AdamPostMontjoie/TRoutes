@@ -12,6 +12,7 @@ struct UserSettingsFeature {
     struct State: Equatable {
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
+        @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
 
         var isDebugActive: Bool {
             isDebugAvailable && isDebugEnabled
@@ -20,6 +21,7 @@ struct UserSettingsFeature {
 
     enum Action: Equatable {
         case debugEnabledChanged(Bool)
+        case motionEventsEnabledChanged(Bool)
     }
 
     var body: some ReducerOf<Self> {
@@ -28,6 +30,12 @@ struct UserSettingsFeature {
             case let .debugEnabledChanged(enabled):
                 guard state.isDebugAvailable else { return .none }
                 state.$isDebugEnabled.withLock {
+                    $0 = enabled
+                }
+                return .none
+            case let .motionEventsEnabledChanged(enabled):
+                guard state.isDebugAvailable else { return .none }
+                state.$isMotionEventsEnabled.withLock {
                     $0 = enabled
                 }
                 return .none

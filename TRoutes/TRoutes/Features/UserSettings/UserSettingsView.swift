@@ -16,10 +16,17 @@ struct UserSettingsView: View {
             Form {
                 if store.isDebugAvailable {
                     Toggle(
-                        "Debug Mode",
+                        "Journey Engine Debug",
                         isOn: Binding(
                             get: { store.isDebugEnabled },
                             set: { store.send(.debugEnabledChanged($0)) }
+                        )
+                    )
+                    Toggle(
+                        "Motion Events Debug",
+                        isOn: Binding(
+                            get: { store.isMotionEventsEnabled },
+                            set: { store.send(.motionEventsEnabledChanged($0)) }
                         )
                     )
                 }

@@ -33,6 +33,7 @@ struct DebugState: Equatable {
 
 enum DebugAvailability {
     static let isDebugEnabledStorageKey = "debugIsEnabled"
+    static let isMotionEventsEnabledStorageKey = "motionEventsIsEnabled"
 
     static var current: Bool {
         #if DEBUG
@@ -51,6 +52,9 @@ enum DebugAvailability {
 extension SharedReaderKey where Self == AppStorageKey<Bool> {
     static var isDebugEnabled: Self {
         appStorage(DebugAvailability.isDebugEnabledStorageKey)
+    }
+    static var isMotionEventsEnabled: Self {
+        appStorage(DebugAvailability.isMotionEventsEnabledStorageKey)
     }
     static var hasOnboarded: Self {
         appStorage("hasOnboarded")

@@ -81,8 +81,8 @@ enum JourneyAction: Equatable {
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
                 fetchPredictions: true,
-                message: "transfered to \(nextStop.mbtaStopId)",
-                userMessage: "Transfer here for the \(nextStop.mbtaRouteId)"
+                message: "transfered to \(nextStop.stopName)",
+                userMessage: "Transfer here!"
             )
             
         case .intermediate:
@@ -102,7 +102,7 @@ enum JourneyAction: Equatable {
             return effects
             
         case .final:
-            return [.sendNotification("entered \(stop.mbtaStopId)", user: "You have arrived at your destination")]
+            return [.sendNotification("entered \(stop.stopName)", user: "You have arrived at your destination")]
         }
     }
     
@@ -131,7 +131,7 @@ enum JourneyAction: Equatable {
             
         case let .transfer(overlapsNext):
             guard !overlapsNext else {
-                return [.sendNotification("left \(stop.mbtaStopId)")]
+                return [.sendNotification("left \(stop.stopName)")]
             }
             
             let previousMonitoringMode = state.monitoringMode
@@ -144,7 +144,7 @@ enum JourneyAction: Equatable {
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
                 fetchPredictions: state.activeLegPrediction != nil || state.transferLegPrediction != nil,
-                message: "left \(stop.mbtaStopId)"
+                message: "left \(stop.stopName)"
             )
         case .intermediate:
             let previousMonitoringMode = state.monitoringMode
@@ -157,7 +157,7 @@ enum JourneyAction: Equatable {
                 nextStop,
                 previousMonitoringMode: previousMonitoringMode,
                 fetchPredictions: state.activeLegPrediction != nil || state.transferLegPrediction != nil,
-                message: "left \(stop.mbtaStopId)"
+                message: "left \(stop.stopName)"
             )
         case .final:
             return [
