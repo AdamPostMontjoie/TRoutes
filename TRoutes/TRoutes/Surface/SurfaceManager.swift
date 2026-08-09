@@ -308,7 +308,7 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
 
     private func startCruisingLocationUpdates() {
         locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.pausesLocationUpdatesAutomatically = true
+        locationManager.pausesLocationUpdatesAutomatically = false
         locationManager.activityType = .otherNavigation
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.distanceFilter = 50
@@ -332,6 +332,17 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
         startApproachingLocationUpdates()
     }
 
+    private func updateCruisingDistanceFilter(distanceToStop: CLLocationDistance) {
+        guard surfaceTrackingMode == .cruising else { return }
+        let filter: CLLocationDistance
+        switch distanceToStop {
+        case ..<500:   filter = 50
+        case ..<2000:  filter = 200
+        default:       filter = 500
+        }
+        locationManager.distanceFilter = filter
+    }
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.last {
             print("RGM: Polling location [\(location.coordinate.latitude), \(location.coordinate.longitude)]")
@@ -345,6 +356,8 @@ class SurfaceManager: NSObject, CLLocationManagerDelegate {
 
         let stopLocation = CLLocation(latitude: stop.latitude, longitude: stop.longitude)
         let distance = location.distance(from: stopLocation)
+
+        updateCruisingDistanceFilter(distanceToStop: distance)
 
         if distance <= trackingContext.entryDistance, !hasYieldedEntryForCurrentStop {
             hasYieldedEntryForCurrentStop = true

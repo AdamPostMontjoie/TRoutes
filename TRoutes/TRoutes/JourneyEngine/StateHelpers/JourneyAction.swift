@@ -102,7 +102,10 @@ enum JourneyAction: Equatable {
             return effects
             
         case .final:
-            return [.sendNotification("entered \(stop.stopName)", user: "You have arrived at your destination")]
+            return [
+                .scheduleEndRoute(seconds: 60),
+                .sendNotification("entered \(stop.stopName)", user: "You have arrived at your destination")
+            ]
         }
     }
     
@@ -308,6 +311,7 @@ enum JourneyEffect: Equatable {
     case fetchPredictions//third
     
     case sendNotification(_ debug: String, user: String? = nil)
+    case scheduleEndRoute(seconds: Int)
     case endRoute
     
     case updateTrackedVehicle(vehicleId: String?, tripId: String?)
