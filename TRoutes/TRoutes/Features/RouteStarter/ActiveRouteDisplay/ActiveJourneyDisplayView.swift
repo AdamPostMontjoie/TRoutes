@@ -102,9 +102,6 @@ struct ActiveJourneyDisplayView: View {
             let hasTransferPrediction = store.presentation.transferPredictionLoadingState != nil
             
             if hasTransferContext || hasTransferPrediction {
-                let transferColor = store.presentation.nextLegTransitType?.color ?? transitColor
-                let transferForeground = transferColor.isLightBackground ? Color.black : Color.white
-                
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.triangle.swap")
@@ -151,7 +148,21 @@ struct ActiveJourneyDisplayView: View {
     }
     
     private var transitColor: Color {
-        store.presentation.currentTransitType?.color ?? Color.accentColor
+        if store.presentation.shortRouteName.hasPrefix("SL") {
+            return Color(hex: "#7C878E")
+        }
+        return store.presentation.currentTransitType?.color ?? Color.accentColor
+    }
+    
+    private var transferColor: Color {
+        if let nextLegShortName = store.presentation.nextLegShortRouteName, nextLegShortName.hasPrefix("SL") {
+            return Color(hex: "#7C878E")
+        }
+        return store.presentation.nextLegTransitType?.color ?? transitColor
+    }
+    
+    private var transferForeground: Color {
+        transferColor.isLightBackground ? .black : .white
     }
     
     private var transitForegroundColor: Color {

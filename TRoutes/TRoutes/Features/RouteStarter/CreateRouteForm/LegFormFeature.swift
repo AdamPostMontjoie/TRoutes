@@ -306,13 +306,44 @@ struct LegFormFeature {
 
             case .multiBranchConfirmed:
                 guard let firstBranch = state.selectedBranches.first else { return .none }
+                
+                if state.selectedBranches.count == 1 {
+                    return .send(.branchSelected(firstBranch))
+                }
+                
                 state.selectedBranch = firstBranch
                 state.mbtaRouteId = firstBranch.id
-                // Generic directions for multi-branch — not tied to one branch
+                
+                let selectedIds = Set(state.selectedBranches.map(\.id))
+                let hasB = selectedIds.contains("Green-B")
+                let hasC = selectedIds.contains("Green-C")
+                let hasD = selectedIds.contains("Green-D")
+                let hasE = selectedIds.contains("Green-E")
+                
+                // Outbound Destination (0)
+                let outboundDestination: String
+                if hasE && (hasB || hasC || hasD) {
+                    outboundDestination = "Copley"
+                } else if !hasE && (selectedIds.count >= 2) {
+                    outboundDestination = "Kenmore"
+                } else {
+                    outboundDestination = "Multiple Branches"
+                }
+                
+                // Inbound Destination (1)
+                let inboundDestination: String
+                if (hasB || hasC) && selectedIds.count >= 2 {
+                    inboundDestination = "Government Center"
+                } else if !hasB && !hasC && hasD && hasE {
+                    inboundDestination = "Lechmere"
+                } else {
+                    inboundDestination = "Multiple Branches"
+                }
+                
                 state.currentFormStep = .selectDirection
                 state.directionOptions = [
-                    TransitDirection(directionId: 0, directionName: "West/South", destination: "All Branches"),
-                    TransitDirection(directionId: 1, directionName: "East/North", destination: "All Branches")
+                    TransitDirection(directionId: 0, directionName: "West", destination: outboundDestination),
+                    TransitDirection(directionId: 1, directionName: "East", destination: inboundDestination)
                 ]
                 return .none
 
