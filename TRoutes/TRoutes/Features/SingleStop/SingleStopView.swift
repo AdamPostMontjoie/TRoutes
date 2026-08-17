@@ -13,47 +13,69 @@ struct SingleStopView: View {
     
     var body: some View {
         NavigationStack {
-            VStack {
-                if store.hasValidApiKey {
-                    StopsListView(store: store.scope(state: \.stopsList, action: \.stopsList))
-                } else {
-                    Spacer()
-                    Button {
-                        store.send(.apiKeyLinkTapped)
-                    } label: {
-                        Text("Add an API Key to get started")
-                    }
-                    Spacer()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Single Stop")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        store.send(.onSettingsButtonTapped)
-                    } label: {
-                        Image(systemName: "gear")
+            mainContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("Single Stop")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            store.send(.onSettingsButtonTapped)
+                        } label: {
+                            Image(systemName: "gear")
+                        }
                     }
                 }
-            }
-            .sheet(
-                item: $store.scope(
-                    state: \.destination?.apiKeyAlert,
-                    action: \.destination.apiKeyAlert
+                .sheet(
+                    item: $store.scope(
+                        state: \.destination?.apiKeyAlert,
+                        action: \.destination.apiKeyAlert
+                    )
+                ) { apiKeyAlertStore in
+                    ApiKeyAlertView(store: apiKeyAlertStore)
+                }
+                .sheet(
+                    item: $store.scope(
+                        state: \.destination?.userSettings,
+                        action: \.destination.userSettings
+                    )
+                ) { userSettingsStore in
+                    UserSettingsView(store: userSettingsStore)
+                }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        VStack {
+            if store.hasValidApiKey {
+                Group {
+                    if store.search.query.isEmpty {
+                        StopsListView(store: store.scope(state: \.stopsList, action: \.stopsList))
+                    } else {
+                        StopSearchView(store: store.scope(state: \.search, action: \.search))
+                    }
+                }
+                .searchable(
+                    text: searchQueryBinding,
+                    prompt: "Search stations"
                 )
-            ) { apiKeyAlertStore in
-                ApiKeyAlertView(store: apiKeyAlertStore)
-            }
-            .sheet(
-                item: $store.scope(
-                    state: \.destination?.userSettings,
-                    action: \.destination.userSettings
-                )
-            ) { userSettingsStore in
-                UserSettingsView(store: userSettingsStore)
+            } else {
+                Spacer()
+                Button {
+                    store.send(.apiKeyLinkTapped)
+                } label: {
+                    Text("Add an API Key to get started")
+                }
+                Spacer()
             }
         }
+    }
+    
+    private var searchQueryBinding: Binding<String> {
+        Binding(
+            get: { store.search.query },
+            set: { store.send(.search(.queryChanged($0))) }
+        )
     }
 }

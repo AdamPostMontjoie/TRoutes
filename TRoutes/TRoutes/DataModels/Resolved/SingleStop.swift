@@ -17,7 +17,6 @@ struct SingleStop: Equatable, Codable, Identifiable, PredictionTarget {
     var transitType: TransitType
     var directionDestinations: [String]
     
-    // MARK: - PredictionTarget
     var predictionRouteId: String { routeId }
     var predictionStopIds: [String] { [stationId] } // Use stationId to get all platforms
     var predictionDirectionId: Int { directionId }

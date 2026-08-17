@@ -30,7 +30,6 @@ struct ResolvedStop:Equatable, Codable, Identifiable, PredictionTarget {
     var overlapsWithNext: Bool
     var stopType: StopType
     
-    // MARK: - PredictionTarget
     var predictionRouteId: String { mbtaRouteId }
     var predictionStopIds: [String] { acceptableStopIds.isEmpty ? [mbtaStopId] : acceptableStopIds }
     var predictionDirectionId: Int { mbtaDirectionId }

@@ -15,12 +15,14 @@ struct SingleStopFeature {
         @Presents var destination: Destination.State?
         
         var stopsList = StopsListFeature.State()
+        var search = StopSearchFeature.State()
     }
     
     enum Action: Equatable {
         case apiKeyLinkTapped
         case onSettingsButtonTapped
         case stopsList(StopsListFeature.Action)
+        case search(StopSearchFeature.Action)
         case destination(PresentationAction<Destination.Action>)
     }
     
@@ -38,6 +40,9 @@ struct SingleStopFeature {
             case .stopsList:
                 return .none
                 
+            case .search:
+                return .none
+                
             case .destination(.presented(.apiKeyAlert(.delegate(.dismiss)))):
                 state.destination = nil
                 return .none
@@ -50,6 +55,9 @@ struct SingleStopFeature {
         
         Scope(state: \.stopsList, action: \.stopsList) {
             StopsListFeature()
+        }
+        Scope(state: \.search, action: \.search) {
+            StopSearchFeature()
         }
     }
 }
