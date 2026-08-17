@@ -19,6 +19,8 @@ struct MBTAClient {
     //position and matching
     var fetchVehicleData: @Sendable (String, MBTARequestType) async throws -> VehicleData
     var fetchTripPathData: @Sendable (String, MBTARequestType) async throws -> LiveTripPath
+    //api key
+    var verifyAPIKey: @Sendable (String) async throws -> Bool
 }
 
 
@@ -378,6 +380,30 @@ extension MBTAClient:DependencyKey {
             } catch {
                 throw MBTAError.decodingError
             }
+        },
+        verifyAPIKey: { key in
+            guard let url = URL(string: "\(header)routes?page[limit]=1") else {
+                throw MBTAError.networkError
+            }
+            var request = URLRequest(url: url)
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return false
+            }
+            
+            if httpResponse.statusCode == 403 {
+                return false
+            }
+            
+            if let rateLimitHeader = httpResponse.value(forHTTPHeaderField: "x-ratelimit-limit"), rateLimitHeader == "1000" {
+                print("Rate limit is \(rateLimitHeader)")
+                return true
+            }
+            
+            return false
         }
     )
 }
