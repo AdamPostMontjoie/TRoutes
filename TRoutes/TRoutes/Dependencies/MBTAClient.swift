@@ -39,6 +39,16 @@ enum MBTAError: Error, Equatable {
     case networkError
 }
 
+private func createMBTAURLRequest(url: URL) -> URLRequest {
+    var request = URLRequest(url: url)
+    if UserDefaults.standard.bool(forKey: "hasValidApiKey"),
+       let apiKey = UserDefaults.standard.string(forKey: "mbtaApiKey"),
+       !apiKey.isEmpty {
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    return request
+}
+
 func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
     guard let httpResponse = response as? HTTPURLResponse else {
         throw MBTAError.networkError
@@ -81,7 +91,7 @@ extension MBTAClient:DependencyKey {
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")
             
             // data and response type
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             
             try reviewHttpResponse(response, data)
             //Now it's safe to decode
@@ -176,7 +186,7 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.networkError
             }
             
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
             
             let decoder = JSONDecoder()
@@ -226,7 +236,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)routes?filter[id]=\(routeId)&fields[route]=direction_names,direction_destinations,short_name,long_name") else {
                 throw MBTAError.networkError
             }
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -259,7 +269,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)routes?\(filterKey)=\(filterValue)&fields[route]=short_name,long_name,direction_names,direction_destinations") else {
                 throw MBTAError.networkError
             }
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -294,7 +304,7 @@ extension MBTAClient:DependencyKey {
             guard let url = URL(string: "\(header)stops?filter[route]=\(routeId)&filter[direction_id]=\(directionId)&fields[stop]=name,latitude,longitude,address") else {
                 throw MBTAError.networkError
             }
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -328,7 +338,7 @@ extension MBTAClient:DependencyKey {
             }
             print("MBTAClient fetchVehicle URL: \(url.absoluteString)")
             
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
             
             let decoder = JSONDecoder()
@@ -368,7 +378,7 @@ extension MBTAClient:DependencyKey {
             }
             print("MBTAClient fetchTripPathData URL: \(url.absoluteString)")
 
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
             try reviewHttpResponse(response, data)
 
             let decoder = JSONDecoder()
