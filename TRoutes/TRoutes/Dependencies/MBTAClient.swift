@@ -10,7 +10,7 @@ import Foundation
 
 struct MBTAClient {
     //predictions and schedules
-    var fetchTransitTimes: @Sendable (ResolvedStop, [String], MBTARequestType) async throws -> [TransitPrediction]
+    var fetchTransitTimes: @Sendable (any PredictionTarget, [String], MBTARequestType) async throws -> [TransitPrediction]
     var fetchSchedule: @Sendable (ResolvedStop, MBTARequestType) async throws -> [TransitSchedule]
     //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
@@ -83,9 +83,9 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.rateLimitDropped
             }
             // Use comma-separated route IDs for multi-branch filtering
-            let routeFilter = routeIds.isEmpty ? stop.mbtaRouteId : routeIds.joined(separator: ",")
-            let stopFilter = stop.acceptableStopIds.isEmpty ? stop.mbtaStopId : stop.acceptableStopIds.joined(separator: ",")
-            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stopFilter)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(routeFilter)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
+            let routeFilter = routeIds.isEmpty ? stop.predictionRouteId : routeIds.joined(separator: ",")
+            let stopFilter = stop.predictionStopIds.joined(separator: ",")
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stopFilter)&filter[direction_id]=\(stop.predictionDirectionId)&filter[route]=\(routeFilter)&filter[revenue]=\("REVENUE")&sort=time&page[limit]=15") else {
                 throw MBTAError.networkError
             }
          //   print("MBTAClient fetchTransitTimes URL: \(url.absoluteString)")

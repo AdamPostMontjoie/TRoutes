@@ -15,10 +15,7 @@ struct SingleStopView: View {
         NavigationStack {
             VStack {
                 if store.hasValidApiKey {
-                    Spacer()
-                    Text("Single Stop Tab")
-                        .font(.headline)
-                    Spacer()
+                    StopsListView(store: store.scope(state: \.stopsList, action: \.stopsList))
                 } else {
                     Spacer()
                     Button {
@@ -60,4 +57,3 @@ struct SingleStopView: View {
         }
     }
 }
-

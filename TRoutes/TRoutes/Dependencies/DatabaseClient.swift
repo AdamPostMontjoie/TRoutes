@@ -83,6 +83,7 @@ extension DatabaseClient: DependencyKey {
                     TransitPattern.self,
                     TransitSequenceEdge.self,
                     TransitReferenceImportMetadata.self,
+                    UserSavedStop.self,
                     configurations: configuration
                 )
             } catch {

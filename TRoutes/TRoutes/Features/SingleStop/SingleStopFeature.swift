@@ -13,11 +13,14 @@ struct SingleStopFeature {
     struct State: Equatable {
         @Shared(.hasValidApiKey) var hasValidApiKey = false
         @Presents var destination: Destination.State?
+        
+        var stopsList = StopsListFeature.State()
     }
     
     enum Action: Equatable {
         case apiKeyLinkTapped
         case onSettingsButtonTapped
+        case stopsList(StopsListFeature.Action)
         case destination(PresentationAction<Destination.Action>)
     }
     
@@ -32,6 +35,9 @@ struct SingleStopFeature {
                 state.destination = .userSettings(UserSettingsFeature.State())
                 return .none
                 
+            case .stopsList:
+                return .none
+                
             case .destination(.presented(.apiKeyAlert(.delegate(.dismiss)))):
                 state.destination = nil
                 return .none
@@ -41,6 +47,10 @@ struct SingleStopFeature {
             }
         }
         .ifLet(\.$destination, action: \.destination)
+        
+        Scope(state: \.stopsList, action: \.stopsList) {
+            StopsListFeature()
+        }
     }
 }
 

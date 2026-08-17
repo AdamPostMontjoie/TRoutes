@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct ResolvedStop:Equatable, Codable, Identifiable {
+struct ResolvedStop:Equatable, Codable, Identifiable, PredictionTarget {
     var id: UUID
     var sourceLegId: UUID
     var legIndex: Int
@@ -29,6 +29,11 @@ struct ResolvedStop:Equatable, Codable, Identifiable {
     var transitType: GTFSTransitType
     var overlapsWithNext: Bool
     var stopType: StopType
+    
+    // MARK: - PredictionTarget
+    var predictionRouteId: String { mbtaRouteId }
+    var predictionStopIds: [String] { acceptableStopIds.isEmpty ? [mbtaStopId] : acceptableStopIds }
+    var predictionDirectionId: Int { mbtaDirectionId }
     
     init(
         id: UUID = UUID(),
