@@ -14,14 +14,50 @@ struct SingleStopView: View {
     var body: some View {
         NavigationStack {
             VStack {
-                Spacer()
-                Text("Single Stop Tab")
-                    .font(.headline)
-                Spacer()
+                if store.hasValidApiKey {
+                    Spacer()
+                    Text("Single Stop Tab")
+                        .font(.headline)
+                    Spacer()
+                } else {
+                    Spacer()
+                    Button {
+                        store.send(.apiKeyLinkTapped)
+                    } label: {
+                        Text("Add an API Key to get started")
+                    }
+                    Spacer()
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Single Stop")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        store.send(.onSettingsButtonTapped)
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                }
+            }
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.apiKeyAlert,
+                    action: \.destination.apiKeyAlert
+                )
+            ) { apiKeyAlertStore in
+                ApiKeyAlertView(store: apiKeyAlertStore)
+            }
+            .sheet(
+                item: $store.scope(
+                    state: \.destination?.userSettings,
+                    action: \.destination.userSettings
+                )
+            ) { userSettingsStore in
+                UserSettingsView(store: userSettingsStore)
+            }
         }
     }
 }
+

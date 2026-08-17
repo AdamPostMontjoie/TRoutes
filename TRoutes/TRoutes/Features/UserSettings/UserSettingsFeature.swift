@@ -13,6 +13,7 @@ struct UserSettingsFeature {
         var isDebugAvailable = DebugAvailability.current
         @Shared(.isDebugEnabled) var isDebugEnabled = true
         @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
+        var apiKeyInput: String = ""
 
         var isDebugActive: Bool {
             isDebugAvailable && isDebugEnabled
@@ -22,6 +23,8 @@ struct UserSettingsFeature {
     enum Action: Equatable {
         case debugEnabledChanged(Bool)
         case motionEventsEnabledChanged(Bool)
+        case apiKeyInputChanged(String)
+        case apiKeySubmitted
     }
 
     var body: some ReducerOf<Self> {
@@ -39,7 +42,14 @@ struct UserSettingsFeature {
                     $0 = enabled
                 }
                 return .none
+            case let .apiKeyInputChanged(value):
+                state.apiKeyInput = value
+                return .none
+            case .apiKeySubmitted:
+                // TODO: Validate key via MBTAClient and set hasValidApiKey
+                return .none
             }
         }
     }
 }
+
