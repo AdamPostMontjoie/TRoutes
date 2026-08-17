@@ -22,6 +22,34 @@ struct JourneyPresentationState: Equatable, Codable {
     let transferPredictions: [JourneyAttributes.PredictionDisplay]?
     let transferPredictionLoadingState: PredictionLoadingState?
     let nextLegTransitType: TransitType?
+    let nextLegShortRouteName: String?
+    
+    private static func getShortRouteName(for leg: ResolvedLeg) -> String {
+        switch leg.transitType {
+        case .redLine: return "RL"
+        case .orangeLine: return "OL"
+        case .blueLine: return "BL"
+        case .greenLine: return "GL"
+        case .mattapan: return "M"
+        case .commuterRail: return "CR"
+        case .bus:
+            switch leg.mbtaRouteId {
+            case "741": return "SL1"
+            case "742": return "SL2"
+            case "743": return "SL3"
+            case "751": return "SL4"
+            case "749": return "SL5"
+            case "746": return "SLW"
+            default: return leg.mbtaRouteId
+            }
+        case .ferry:
+            if leg.mbtaRouteId.hasPrefix("Boat-") {
+                return leg.mbtaRouteId.replacingOccurrences(of: "Boat-", with: "")
+            } else {
+                return leg.mbtaRouteId
+            }
+        }
+    }
     
     init(journey: JourneyState?) {
         guard let journey = journey else {
@@ -37,26 +65,13 @@ struct JourneyPresentationState: Equatable, Codable {
             self.transferPredictions = nil
             self.transferPredictionLoadingState = nil
             self.nextLegTransitType = nil
+            self.nextLegShortRouteName = nil
             return
         }
         
         // shortRouteName
         if let leg = journey.currentLeg {
-            switch leg.transitType {
-            case .redLine: self.shortRouteName = "RL"
-            case .orangeLine: self.shortRouteName = "OL"
-            case .blueLine: self.shortRouteName = "BL"
-            case .greenLine: self.shortRouteName = "GL"
-            case .mattapan: self.shortRouteName = "M"
-            case .commuterRail: self.shortRouteName = "CR"
-            case .bus: self.shortRouteName = leg.mbtaRouteId
-            case .ferry:
-                if leg.mbtaRouteId.hasPrefix("Boat-") {
-                    self.shortRouteName = leg.mbtaRouteId.replacingOccurrences(of: "Boat-", with: "")
-                } else {
-                    self.shortRouteName = leg.mbtaRouteId
-                }
-            }
+            self.shortRouteName = Self.getShortRouteName(for: leg)
         } else {
             self.shortRouteName = ""
         }
@@ -199,9 +214,12 @@ struct JourneyPresentationState: Equatable, Codable {
         // Next Leg
         let nextIndex = journey.legIndex + 1
         if nextIndex < journey.legOrder.count {
-            self.nextLegTransitType = journey.legOrder[nextIndex].transitType
+            let nextLeg = journey.legOrder[nextIndex]
+            self.nextLegTransitType = nextLeg.transitType
+            self.nextLegShortRouteName = Self.getShortRouteName(for: nextLeg)
         } else {
             self.nextLegTransitType = nil
+            self.nextLegShortRouteName = nil
         }
     }
 }

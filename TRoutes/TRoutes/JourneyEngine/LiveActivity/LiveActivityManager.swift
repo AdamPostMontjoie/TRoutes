@@ -66,16 +66,16 @@ public actor LiveActivityManager {
             currentLocationContext: presentation.currentLocationContext,
             destinationContext: presentation.destinationContext,
             transferContext: presentation.transferContext,
-            currentTransitColor: hexString(for: presentation.currentTransitType),
-            currentTransitForegroundColor: foregroundHex(for: presentation.currentTransitType),
+            currentTransitColor: hexString(for: presentation.currentTransitType, shortRouteName: presentation.shortRouteName),
+            currentTransitForegroundColor: foregroundHex(for: presentation.currentTransitType, shortRouteName: presentation.shortRouteName),
             currentIconName: presentation.currentTransitType?.iconName,
             isEndOfJourney: presentation.isEndOfJourney,
             activePredictions: presentation.activePredictions,
             activePredictionLoadingState: activeLoadingState,
             transferPredictions: presentation.transferPredictions,
             transferPredictionLoadingState: transferLoadingState,
-            nextLegColor: hexString(for: presentation.nextLegTransitType),
-            nextLegForegroundColor: foregroundHex(for: presentation.nextLegTransitType),
+            nextLegColor: hexString(for: presentation.nextLegTransitType, shortRouteName: presentation.nextLegShortRouteName),
+            nextLegForegroundColor: foregroundHex(for: presentation.nextLegTransitType, shortRouteName: presentation.nextLegShortRouteName),
             nextLegIconName: presentation.nextLegTransitType?.iconName
         )
         
@@ -102,7 +102,10 @@ public actor LiveActivityManager {
     
     // MARK: - Helpers
     
-    private func hexString(for transitType: TransitType?) -> String {
+    private func hexString(for transitType: TransitType?, shortRouteName: String? = nil) -> String {
+        if let shortRouteName = shortRouteName, shortRouteName.hasPrefix("SL") {
+            return "#7C878E"
+        }
         guard let transitType = transitType else { return "#000000" }
         switch transitType {
         case .redLine: return "#DA291C"
@@ -116,7 +119,10 @@ public actor LiveActivityManager {
         }
     }
     
-    private func foregroundHex(for type: TransitType?) -> String {
+    private func foregroundHex(for type: TransitType?, shortRouteName: String? = nil) -> String {
+        if let shortRouteName = shortRouteName, shortRouteName.hasPrefix("SL") {
+            return "#000000"
+        }
         return (type?.color ?? .accentColor).isLightBackground ? "#000000" : "#FFFFFF"
     }
     
