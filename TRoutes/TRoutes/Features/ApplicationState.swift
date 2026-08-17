@@ -12,6 +12,7 @@ import Foundation
 struct ApplicationState: Equatable {
     var isDebugAvailable = DebugAvailability.current
     @Shared(.isDebugEnabled) var isDebugEnabled = true
+    @Shared(.hasValidApiKey) var hasValidApiKey = false
     var isDebugActive: Bool {
         isDebugAvailable && isDebugEnabled
     }
@@ -59,10 +60,16 @@ extension SharedReaderKey where Self == AppStorageKey<Bool> {
     static var hasOnboarded: Self {
         appStorage("hasOnboarded")
     }
+    static var hasValidApiKey: Self {
+        appStorage("hasValidApiKey")
+    }
 }
 
 extension SharedReaderKey where Self == AppStorageKey<String> {
     static var importedFeedVersion: Self {
         appStorage("importedFeedVersion")
+    }
+    static var mbtaApiKey: Self {
+        appStorage("mbtaApiKey")
     }
 }

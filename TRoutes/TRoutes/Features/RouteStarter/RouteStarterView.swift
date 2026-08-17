@@ -62,6 +62,7 @@ struct RouteStarterView: View {
                 }
             }
             .navigationTitle("Routes")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

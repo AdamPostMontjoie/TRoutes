@@ -9,14 +9,28 @@ import SwiftUI
 import ComposableArchitecture
 
 struct RootView: View {
-    let store: StoreOf<RootFeature>
+    @Bindable var store: StoreOf<RootFeature>
     
     var body: some View {
-        RouteStarterView(
-            store: store.scope(state: \.starter, action: \.starterTab)
-        )
-        .task {
-            store.send(.starterTab(.startListeningToJourneyUpdates))
+        TabView(selection: $store.selectedTab.sending(\.selectedTab)) {
+            RouteStarterView(
+                store: store.scope(state: \.routeStarter, action: \.routeStarterTab)
+            )
+            .tabItem {
+                Label("Routes", systemImage: "map")
+            }
+            .tag(RootFeature.Tab.routeStarter)
+            .task {
+                store.send(.routeStarterTab(.startListeningToJourneyUpdates))
+            }
+            
+            SingleStopView(
+                store: store.scope(state: \.singleStop, action: \.singleStopTab)
+            )
+            .tabItem {
+                Label("Single Stop", systemImage: "bus")
+            }
+            .tag(RootFeature.Tab.singleStop)
         }
     }
 }

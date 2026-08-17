@@ -12,21 +12,34 @@ struct RootFeature {
     @ObservableState
     struct State: Equatable {
         var application = ApplicationState()
-        var starter = RouteStarterFeature.State()
+        var routeStarter = RouteStarterFeature.State()
+        var singleStop = SingleStopFeature.State()
+        var selectedTab: Tab = .routeStarter
     }
     
+    enum Tab { case routeStarter, singleStop }
+    
     enum Action {
-       case starterTab(RouteStarterFeature.Action)
-        
+        case routeStarterTab(RouteStarterFeature.Action)
+        case singleStopTab(SingleStopFeature.Action)
+        case selectedTab(Tab)
     }
     
     var body: some ReducerOf<Self> {
-        Scope(state: \.starter, action: \.starterTab) {
-          RouteStarterFeature()
-       }
+        Scope(state: \.routeStarter, action: \.routeStarterTab) {
+            RouteStarterFeature()
+        }
+        Scope(state: \.singleStop, action: \.singleStopTab) {
+            SingleStopFeature()
+        }
         Reduce { state, action in
-            switch action{
-            case .starterTab:
+            switch action {
+            case let .selectedTab(tab):
+                state.selectedTab = tab
+                return .none
+            case .routeStarterTab:
+                return .none
+            case .singleStopTab:
                 return .none
             }
         }

@@ -41,7 +41,15 @@ actor RateLimitQueue {
     static let shared = RateLimitQueue()
     
     // Limits
-    private let limit = 20
+    private var limit: Int {
+        UserDefaults.standard.bool(forKey: "hasValidApiKey") ? 1000 : 20
+    }
+    private var highestPriorityThreshold: Int {
+        UserDefaults.standard.bool(forKey: "hasValidApiKey") ? 950 : 15
+    }
+    private var mediumPriorityThreshold: Int {
+        UserDefaults.standard.bool(forKey: "hasValidApiKey") ? 900 : 12
+    }
     private let limitResetTime: TimeInterval = 60
     
     // The Queue
@@ -58,9 +66,9 @@ actor RateLimitQueue {
         let count = requestHistory.count
         if count >= limit {
             return .noRequestsAvailable
-        } else if count >= 15 {
+        } else if count >= highestPriorityThreshold {
             return .highestPriorityRequests
-        } else if count >= 12 {
+        } else if count >= mediumPriorityThreshold {
             return .mediumPriorityRequests
         } else {
             return .anyPriorityRequest
@@ -120,7 +128,8 @@ actor RateLimitQueue {
         while let oldest = requestHistory.first, now.timeIntervalSince(oldest) > limitResetTime {
             _ = requestHistory.popFirst()
         }
-        print("requests cleared, queue size is now \(requestHistory.count)")
+        let percentage = Double(requestHistory.count) / Double(limit) * 100.0
+        print(String(format: "requests cleared, queue size is now %d (%.1f%% of limit)", requestHistory.count, percentage))
     }
     
     private func scheduleWakeUp() {
