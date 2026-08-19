@@ -30,7 +30,7 @@ Because of this, I want to make the search take inspiration from the Transit app
 
 SEARCH
 
-The Search bar that looks for stations by name would show something like
+The Search bar that looks for stations by name would show something like this for "North"
 
     North Station
 

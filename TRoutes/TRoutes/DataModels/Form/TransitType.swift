@@ -60,6 +60,19 @@ enum TransitType: String, Codable, CaseIterable {
         default: return false
         }
     }
+    
+    var sortOrder: Int {
+        switch self {
+        case .greenLine: return 0
+        case .orangeLine: return 1
+        case .redLine: return 2
+        case .blueLine: return 3
+        case .mattapan: return 4
+        case .bus: return 5
+        case .commuterRail: return 6
+        case .ferry: return 7
+        }
+    }
 }
 
 enum GTFSTransitType: String, Codable, Equatable {

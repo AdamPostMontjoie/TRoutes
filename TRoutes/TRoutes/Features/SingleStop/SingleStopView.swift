@@ -12,7 +12,7 @@ struct SingleStopView: View {
     @Bindable var store: StoreOf<SingleStopFeature>
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             mainContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .navigationTitle("Single Stop")
@@ -42,6 +42,8 @@ struct SingleStopView: View {
                 ) { userSettingsStore in
                     UserSettingsView(store: userSettingsStore)
                 }
+        } destination: { store in
+            SearchedStationView(store: store)
         }
     }
     

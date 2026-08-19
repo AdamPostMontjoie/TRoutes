@@ -16,6 +16,7 @@ struct SingleStopFeature {
         
         var stopsList = StopsListFeature.State()
         var search = StopSearchFeature.State()
+        var path = StackState<SearchedStationFeature.State>()
     }
     
     enum Action: Equatable {
@@ -24,6 +25,7 @@ struct SingleStopFeature {
         case stopsList(StopsListFeature.Action)
         case search(StopSearchFeature.Action)
         case destination(PresentationAction<Destination.Action>)
+        case path(StackActionOf<SearchedStationFeature>)
     }
     
     var body: some ReducerOf<Self> {
@@ -40,6 +42,10 @@ struct SingleStopFeature {
             case .stopsList:
                 return .none
                 
+            case let .search(.delegate(.stationTapped(station))):
+                state.path.append(SearchedStationFeature.State(station: station))
+                return .none
+                
             case .search:
                 return .none
                 
@@ -49,9 +55,15 @@ struct SingleStopFeature {
                 
             case .destination:
                 return .none
+                
+            case .path:
+                return .none
             }
         }
         .ifLet(\.$destination, action: \.destination)
+        .forEach(\.path, action: \.path) {
+            SearchedStationFeature()
+        }
         
         Scope(state: \.stopsList, action: \.stopsList) {
             StopsListFeature()
