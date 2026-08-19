@@ -1,13 +1,13 @@
 //
-//  SingleStop.swift
+//  PinnedStop.swift
 //  TRoutes
 //
-//  Created by Adam Post on 8/17/26.
+//  Created by Adam Post on 8/19/26.
 //
 
 import Foundation
 
-struct SingleStop: Equatable, Codable, Identifiable, PredictionTarget {
+struct PinnedStop: Equatable, Codable, Identifiable, PredictionTarget {
     var id: UUID = UUID()
     var stationId: String
     var platformId: String

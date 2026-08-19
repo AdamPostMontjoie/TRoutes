@@ -1,0 +1,58 @@
+I am changing how I want to define the single stops feature
+
+STOPSLIST
+
+There are 3 options in the stopslist
+
+Pinned Stops (Specific Direction, Station, Route) (Banner without swipe option, direction locked)
+
+    South Station
+
+    Red Line to Alewife
+
+Saved Stops (Specific Station, Route) (Banned with swipe option)
+
+    South Station
+
+        Red Line
+
+Nearby Stops (All routes for a station with their own banner) (Banners under collapsible station name)
+
+    South Station
+
+        Red Line
+
+        Each CR Line
+
+        Each Bus Line
+
+Because of this, I want to make the search take inspiration from the Transit app.
+
+SEARCH
+
+The Search bar that looks for stations by name would show something like
+
+    North Station
+
+    (CR, GL, OL, Bus, Ferry)
+    
+    North Quincy
+    
+    (RL) (Bus)
+    
+    Northeastern University
+    
+    (GL)
+
+Clicking on this would bring you to a stationviewfeature, with a list of the banners.
+
+BANNERS
+
+the banners for a station/platform (difficulty defining for stuff like the green line, but mayhaps like a Westward/Eastward thing (what Transit does))
+Each banner would allow to save, each specific swiped direction of the banner would allow you to pin. Up to 20 saved (for now), up to 3 pinned
+
+NEARBY STATIONS
+
+while I know what I want this to look like (list of stations with banners underneath), the actual difficulty comes with searching for them based on location. Not the CoreLocation stuff because I can do that easily (I will just use a mock coordinate and set up later), but the database search. I would need to search SwiftData for all stations by coordinate in a way that's not horribly inefficient. My hope is that I could do it without a strict distance limit (except for if extremely far). Say I'm in newburyport, the only station nearby is the commuter rail. My hope is that it would show that and nothing else. Can be revised with suggestions, but this is the most complicated part.
+
+

@@ -3,6 +3,7 @@
 //  TRoutes
 //
 //  Created by Adam Post on 8/17/26.
+//
 import SwiftUI
 import ComposableArchitecture
 
@@ -23,12 +24,12 @@ struct StopBannerView: View {
                         .fontWeight(.semibold)
                     
                     HStack(spacing: 4) {
-                        if store.target.directionId < store.target.directionDestinations.count {
-                            let destination = store.target.directionDestinations[store.target.directionId]
+                        if store.activeDirectionId < store.target.directionDestinations.count {
+                            let destination = store.target.directionDestinations[store.activeDirectionId]
                             Image(systemName: "arrow.right")
                             Text(destination)
                         } else {
-                            Text(store.target.directionId == 0 ? "Outbound" : "Inbound")
+                            Text(store.activeDirectionId == 0 ? "Outbound" : "Inbound")
                         }
                     }
                     .font(.caption)
@@ -36,6 +37,13 @@ struct StopBannerView: View {
                 }
                 
                 Spacer()
+                
+                // Pin indicator for pinned stops
+                if store.target.isDirectionLocked {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                        .foregroundStyle(store.transitColor)
+                }
             }
             
             // Predictions Block
@@ -55,18 +63,20 @@ struct StopBannerView: View {
                 }
             }
             
-            // Swipe Indicator Dots
-            HStack(spacing: 6) {
-                Spacer()
-                Circle()
-                    .fill(store.transitColor.opacity(store.target.directionId == 0 ? 1.0 : 0.4))
-                    .frame(width: 6, height: 6)
-                Circle()
-                    .fill(store.transitColor.opacity(store.target.directionId == 1 ? 1.0 : 0.4))
-                    .frame(width: 6, height: 6)
-                Spacer()
+            // Swipe Indicator Dots — only shown for non-pinned (swipeable) stops
+            if !store.target.isDirectionLocked {
+                HStack(spacing: 6) {
+                    Spacer()
+                    Circle()
+                        .fill(store.transitColor.opacity(store.activeDirectionId == 0 ? 1.0 : 0.4))
+                        .frame(width: 6, height: 6)
+                    Circle()
+                        .fill(store.transitColor.opacity(store.activeDirectionId == 1 ? 1.0 : 0.4))
+                        .frame(width: 6, height: 6)
+                    Spacer()
+                }
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
         .foregroundStyle(.primary)
         .padding(16)

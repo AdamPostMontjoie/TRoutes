@@ -11,15 +11,15 @@ struct StopsListFeature {
     @ObservableState
     struct State: Equatable {
         var pinnedBanners: IdentifiedArrayOf<StopBannerFeature.State> = [
-            StopBannerFeature.State(target: SingleStop(stationId: "place-north", platformId: "70026", routeId: "Orange", directionId: 1, stopName: "North Station", transitType: .orangeLine, directionDestinations: ["Forest Hills", "Oak Grove"]))
+            StopBannerFeature.State(target: .pinned(PinnedStop(stationId: "place-north", platformId: "70026", routeId: "Orange", directionId: 1, stopName: "North Station", transitType: .orangeLine, directionDestinations: ["Forest Hills", "Oak Grove"])))
         ]
         var savedBanners: IdentifiedArrayOf<StopBannerFeature.State> = [
-            StopBannerFeature.State(target: SingleStop(stationId: "place-sstat", platformId: "70068", routeId: "Red", directionId: 1, stopName: "South Station", transitType: .redLine, directionDestinations: ["Ashmont/Braintree", "Alewife"]))
+            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-sstat", platformId: "70068", routeId: "Red", stopName: "South Station", transitType: .redLine, directionDestinations: ["Ashmont/Braintree", "Alewife"])))
         ]
         var nearbyBanners: IdentifiedArrayOf<StopBannerFeature.State> = [
-            StopBannerFeature.State(target: SingleStop(stationId: "place-dwnxg", platformId: "70077", routeId: "Red", directionId: 0, stopName: "Downtown Crossing", transitType: .redLine, directionDestinations: ["Ashmont/Braintree", "Alewife"])),
-            StopBannerFeature.State(target: SingleStop(stationId: "place-park", platformId: "70196", routeId: "Green-B", directionId: 1, stopName: "Park Street", transitType: .greenLine, directionDestinations: ["Boston College", "Government Center"])),
-            StopBannerFeature.State(target: SingleStop(stationId: "place-govmn", platformId: "70041", routeId: "Blue", directionId: 0, stopName: "Government Center", transitType: .blueLine, directionDestinations: ["Bowdoin", "Wonderland"]))
+            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-dwnxg", platformId: "70077", routeId: "Red", stopName: "Downtown Crossing", transitType: .redLine, directionDestinations: ["Ashmont/Braintree", "Alewife"]))),
+            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-park", platformId: "70196", routeId: "Green-B", stopName: "Park Street", transitType: .greenLine, directionDestinations: ["Boston College", "Government Center"]))),
+            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-govmn", platformId: "70041", routeId: "Blue", stopName: "Government Center", transitType: .blueLine, directionDestinations: ["Bowdoin", "Wonderland"])))
         ]
         
         var isPinnedExpanded: Bool = true

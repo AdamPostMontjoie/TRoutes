@@ -3,6 +3,7 @@
 //  TRoutes
 //
 //  Created by Adam Post on 8/17/26.
+//
 import ComposableArchitecture
 import Foundation
 import SwiftUI
@@ -11,11 +12,18 @@ import SwiftUI
 struct StopBannerFeature {
     @ObservableState
     struct State: Equatable, Identifiable {
-        var target: SingleStop
-        var id: UUID { target.id }        
+        var target: BannerTarget
+        var id: UUID { target.id }
+        var activeDirectionId: Int
         var isVisible: Bool = false
         var predictions: [TransitPrediction] = []
         var isFetching: Bool = false
+        
+        init(target: BannerTarget) {
+            self.target = target
+            // Pinned stops lock to their direction; saved stops start at 0
+            self.activeDirectionId = target.lockedDirectionId ?? 0
+        }
         
         var transitColor: SwiftUI.Color {
             if target.routeId.hasPrefix("SL") {
@@ -51,8 +59,9 @@ struct StopBannerFeature {
                 return .none
                 
             case .switchDirectionTapped:
-                // Flip direction 0 <-> 1
-                state.target.directionId = state.target.directionId == 0 ? 1 : 0
+                // Only allow direction switching for non-pinned (saved) stops
+                guard !state.target.isDirectionLocked else { return .none }
+                state.activeDirectionId = state.activeDirectionId == 0 ? 1 : 0
                 state.predictions = []
                 return .send(.fetchPredictions)
                 
@@ -60,10 +69,15 @@ struct StopBannerFeature {
                 guard state.isVisible else { return .none }
                 state.isFetching = true
                 
-                let target = state.target
+                let request = BannerPredictionRequest(
+                    predictionRouteId: state.target.routeId,
+                    predictionStopIds: [state.target.stationId],
+                    predictionDirectionId: state.activeDirectionId
+                )
+                let routeIds = [state.target.routeId]
                 return .run { send in
                     do {
-                        let predictions = try await mbtaClient.fetchTransitTimes(target, [target.routeId], .predictionRefresh)
+                        let predictions = try await mbtaClient.fetchTransitTimes(request, routeIds, .predictionRefresh)
                         await send(.predictionsResponse(.success(predictions)))
                     } catch {
                         await send(.predictionsResponse(.success([])))
@@ -77,4 +91,12 @@ struct StopBannerFeature {
             }
         }
     }
+}
+
+/// Lightweight PredictionTarget for banner API calls.
+/// Constructed from the banner's target + active direction state.
+private struct BannerPredictionRequest: PredictionTarget {
+    var predictionRouteId: String
+    var predictionStopIds: [String]
+    var predictionDirectionId: Int
 }
