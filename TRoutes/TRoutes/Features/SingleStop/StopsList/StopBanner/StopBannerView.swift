@@ -38,11 +38,29 @@ struct StopBannerView: View {
                 
                 Spacer()
                 
-                // Pin indicator for pinned stops
                 if store.target.isDirectionLocked {
                     Image(systemName: "pin.fill")
                         .font(.caption)
                         .foregroundStyle(store.transitColor)
+                } else {
+                    HStack(spacing: 16) {
+                        Button {
+                            store.send(.pinTapped, animation: .default)
+                        } label: {
+                            Image(systemName: store.pinnedDirections.contains(store.activeDirectionId) ? "pin.fill" : "pin")
+                                .font(.title3)
+                                .foregroundStyle(store.transitColor)
+                        }
+                        
+                        Button {
+                            store.send(.saveTapped, animation: .default)
+                        } label: {
+                            Image(systemName: store.isSaved ? "star.fill" : "star")
+                                .font(.title3)
+                                .foregroundStyle(store.transitColor)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             
@@ -102,6 +120,7 @@ struct StopBannerView: View {
         .onDisappear {
             store.send(.onDisappear)
         }
+        .alert($store.scope(state: \.alert, action: \.alert))
     }
     
     @ViewBuilder

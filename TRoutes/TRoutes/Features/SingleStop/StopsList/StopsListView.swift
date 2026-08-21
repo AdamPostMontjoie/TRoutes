@@ -63,5 +63,8 @@ struct StopsListView: View {
             }
         }
         .listStyle(.plain)
+        .onAppear {
+            store.send(.onAppear)
+        }
     }
 }

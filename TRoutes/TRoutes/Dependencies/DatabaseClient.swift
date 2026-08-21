@@ -10,18 +10,31 @@ import Foundation
 import SwiftData
 
 struct DatabaseClient {
+    // Journey Engine
     var saveRoute: @Sendable ([Leg]) async throws -> Void
     var updateRoute: @Sendable (UserRoute) async throws -> Void
     var deleteRoute: @Sendable (UUID) async throws -> Void
     var fetchSavedRoutes: @Sendable () async throws -> [ResolvedUserRoute]
+    var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
+    
+    // Reference Data Import
     var saveImportedStations: @Sendable ([JsonBuilderStation]) async throws -> Void
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
+    
+    // Single Stop Search
     var searchStations: @Sendable (String) async throws -> [Station]
     var fetchStationDetail: @Sendable (String) async throws -> Station
     var findNearbyStations: @Sendable (Double, Double, Int) async throws -> [Station]
+    
+    // Single Stop Saved & Pinned
+    var fetchSavedStops: @Sendable () async throws -> [SingleStop]
+    var fetchPinnedStops: @Sendable () async throws -> [PinnedStop]
+    var addSavedStop: @Sendable (SingleStop) async throws -> Void
+    var removeSavedStop: @Sendable (SingleStop) async throws -> Void
+    var addPinnedStop: @Sendable (PinnedStop) async throws -> Void
+    var removePinnedStop: @Sendable (PinnedStop) async throws -> Void
 }
 
 extension DatabaseClient {
@@ -32,6 +45,8 @@ extension DatabaseClient {
 
 enum DatabaseError: Error, Equatable {
     case emptyRoute
+    case savedLimitReached
+    case pinnedLimitReached
 }
 
 enum DatabaseImportError: Error, Equatable {
@@ -87,6 +102,7 @@ extension DatabaseClient: DependencyKey {
                     TransitSequenceEdge.self,
                     TransitReferenceImportMetadata.self,
                     UserSavedStop.self,
+                    UserPinnedStop.self,
                     configurations: configuration
                 )
             } catch {
@@ -94,6 +110,7 @@ extension DatabaseClient: DependencyKey {
             }
         
         return Self(
+            // MARK: - Journey Engine
             saveRoute: { legs in
                 guard let firstLeg = legs.first,
                       let lastLeg = legs.last else {
@@ -169,6 +186,12 @@ extension DatabaseClient: DependencyKey {
                     )
                 }
             },
+            resolveUserRoute: { userRoute in
+                let context = ModelContext(sharedContainer)
+                return try resolveUserRouteStruct(userRoute, context: context)
+            },
+            
+            // MARK: - Reference Data Import
             saveImportedStations: { stations in
                 let context = ModelContext(sharedContainer)
                 let metadataDescriptor = FetchDescriptor<TransitReferenceImportMetadata>(
@@ -305,10 +328,9 @@ extension DatabaseClient: DependencyKey {
 
                 try context.save()
             },
-            resolveUserRoute: { userRoute in
-                let context = ModelContext(sharedContainer)
-                return try resolveUserRouteStruct(userRoute, context: context)
-            },
+
+            
+            // MARK: - Single Stop Search
             searchStations: { query in
                 let context = ModelContext(sharedContainer)
                 let descriptor = FetchDescriptor<TransitStation>(
@@ -490,6 +512,70 @@ extension DatabaseClient: DependencyKey {
                 }
                 
                 return results
+            },
+            // MARK: - Single Stop Saved & Pinned
+            fetchSavedStops: {
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserSavedStop>(
+                    sortBy: [SortDescriptor(\.addedAt)]
+                )
+                return try context.fetch(descriptor).map { $0.toSingleStop() }
+            },
+            fetchPinnedStops: {
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserPinnedStop>(
+                    sortBy: [SortDescriptor(\.addedAt)]
+                )
+                return try context.fetch(descriptor).map { $0.toPinnedStop() }
+            },
+            addSavedStop: { stop in
+                print("addSavedStop called for \(stop.stopName) - \(stop.routeId)")
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserSavedStop>()
+                let count = try context.fetchCount(descriptor)
+                if count >= 20 { throw DatabaseError.savedLimitReached }
+                
+                let userStop = UserSavedStop(from: stop)
+                context.insert(userStop)
+                try context.save()
+            },
+            removeSavedStop: { stop in
+                print("removeSavedStop called for \(stop.stopName) - \(stop.routeId)")
+                let context = ModelContext(sharedContainer)
+                let stationId = stop.stationId
+                let routeId = stop.routeId
+                let descriptor = FetchDescriptor<UserSavedStop>(
+                    predicate: #Predicate { $0.stationId == stationId && $0.routeId == routeId }
+                )
+                if let saved = try context.fetch(descriptor).first {
+                    context.delete(saved)
+                    try context.save()
+                }
+            },
+            addPinnedStop: { stop in
+                print("addPinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserPinnedStop>()
+                let count = try context.fetchCount(descriptor)
+                if count >= 3 { throw DatabaseError.pinnedLimitReached }
+                
+                let userStop = UserPinnedStop(from: stop)
+                context.insert(userStop)
+                try context.save()
+            },
+            removePinnedStop: { stop in
+                print("removePinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
+                let context = ModelContext(sharedContainer)
+                let stationId = stop.stationId
+                let routeId = stop.routeId
+                let directionId = stop.directionId
+                let descriptor = FetchDescriptor<UserPinnedStop>(
+                    predicate: #Predicate { $0.stationId == stationId && $0.routeId == routeId && $0.pinnedDirectionId == directionId }
+                )
+                if let saved = try context.fetch(descriptor).first {
+                    context.delete(saved)
+                    try context.save()
+                }
             }
         )
     }()

@@ -8,11 +8,21 @@
 import Foundation
 import SwiftData
 
-/// SwiftData model for persisting both saved and pinned stops.
-/// - Saved stop: pinnedDirectionId is nil (direction is swipeable)
-/// - Pinned stop: pinnedDirectionId is set (direction is locked)
+/// Protocol defining common properties for user-saved stops.
+protocol BaseUserStop {
+    var id: UUID { get set }
+    var stationId: String { get set }
+    var platformId: String { get set }
+    var routeId: String { get set }
+    var stopName: String { get set }
+    var transitTypeRaw: String { get set }
+    var directionDestinations: [String] { get set }
+    var addedAt: Date { get set }
+}
+
+/// SwiftData model for persisting saved stops (direction is swipeable).
 @Model
-final class UserSavedStop {
+final class UserSavedStop: BaseUserStop {
     @Attribute(.unique) var id: UUID
     var stationId: String
     var platformId: String
@@ -20,10 +30,7 @@ final class UserSavedStop {
     var stopName: String
     var transitTypeRaw: String
     var directionDestinations: [String]
-    var pinnedDirectionId: Int?
     var addedAt: Date
-
-    var isPinned: Bool { pinnedDirectionId != nil }
 
     init(
         id: UUID = UUID(),
@@ -33,7 +40,41 @@ final class UserSavedStop {
         stopName: String,
         transitTypeRaw: String,
         directionDestinations: [String] = [],
-        pinnedDirectionId: Int? = nil,
+        addedAt: Date = Date()
+    ) {
+        self.id = id
+        self.stationId = stationId
+        self.platformId = platformId
+        self.routeId = routeId
+        self.stopName = stopName
+        self.transitTypeRaw = transitTypeRaw
+        self.directionDestinations = directionDestinations
+        self.addedAt = addedAt
+    }
+}
+
+/// SwiftData model for persisting pinned stops (direction is locked).
+@Model
+final class UserPinnedStop: BaseUserStop {
+    @Attribute(.unique) var id: UUID
+    var stationId: String
+    var platformId: String
+    var routeId: String
+    var stopName: String
+    var transitTypeRaw: String
+    var directionDestinations: [String]
+    var pinnedDirectionId: Int
+    var addedAt: Date
+    
+    init(
+        id: UUID = UUID(),
+        stationId: String,
+        platformId: String,
+        routeId: String,
+        stopName: String,
+        transitTypeRaw: String,
+        directionDestinations: [String] = [],
+        pinnedDirectionId: Int,
         addedAt: Date = Date()
     ) {
         self.id = id
@@ -63,17 +104,17 @@ extension UserSavedStop {
             directionDestinations: directionDestinations
         )
     }
+}
 
+extension UserPinnedStop {
     /// Convert a persisted pinned stop to a PinnedStop value type.
-    /// Returns nil if this stop is not pinned.
-    func toPinnedStop() -> PinnedStop? {
-        guard let directionId = pinnedDirectionId else { return nil }
-        return PinnedStop(
+    func toPinnedStop() -> PinnedStop {
+        PinnedStop(
             id: id,
             stationId: stationId,
             platformId: platformId,
             routeId: routeId,
-            directionId: directionId,
+            directionId: pinnedDirectionId,
             stopName: stopName,
             transitType: TransitType(rawValue: transitTypeRaw) ?? .bus,
             directionDestinations: directionDestinations
@@ -93,12 +134,13 @@ extension UserSavedStop {
             routeId: stop.routeId,
             stopName: stop.stopName,
             transitTypeRaw: stop.transitType.rawValue,
-            directionDestinations: stop.directionDestinations,
-            pinnedDirectionId: nil
+            directionDestinations: stop.directionDestinations
         )
     }
+}
 
-    /// Create a UserSavedStop from a PinnedStop (pinned with locked direction)
+extension UserPinnedStop {
+    /// Create a UserPinnedStop from a PinnedStop (pinned with locked direction)
     convenience init(from stop: PinnedStop) {
         self.init(
             id: stop.id,

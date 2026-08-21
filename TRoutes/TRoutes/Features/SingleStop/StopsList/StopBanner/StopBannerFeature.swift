@@ -35,6 +35,11 @@ struct StopBannerFeature {
         var transitForegroundColor: SwiftUI.Color {
             transitColor.isLightBackground ? .black : .white
         }
+        
+        var isSaved: Bool = false
+        var pinnedDirections: Set<Int> = []
+        
+        @Presents var alert: AlertState<Action.Alert>?
     }
 
     enum Action: Equatable {
@@ -43,9 +48,23 @@ struct StopBannerFeature {
         case fetchPredictions
         case predictionsResponse(Result<[TransitPrediction], Never>)
         case switchDirectionTapped
+        case saveTapped
+        case pinTapped
+        case toggleSavedResponse(Result<Bool, DatabaseError>)
+        case togglePinnedResponse(Result<Bool, DatabaseError>)
+        case alert(PresentationAction<Alert>)
+        case delegate(Delegate)
+        
+        enum Alert: Equatable {}
+        
+        enum Delegate: Equatable {
+            case didChangeSaveStatus
+            case didChangePinnedStatus
+        }
     }
 
     @Dependency(\.mbtaClient) var mbtaClient
+    @Dependency(\.databaseClient) var databaseClient
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -88,8 +107,106 @@ struct StopBannerFeature {
                 state.isFetching = false
                 state.predictions = predictions
                 return .none
+                
+            case .saveTapped:
+                let target = state.target
+                let isSaved = state.isSaved
+                let stop = SingleStop(
+                    id: target.id,
+                    stationId: target.stationId,
+                    platformId: target.platformId,
+                    routeId: target.routeId,
+                    stopName: target.stopName,
+                    transitType: target.transitType,
+                    directionDestinations: target.directionDestinations
+                )
+                return .run { send in
+                    do {
+                        if isSaved {
+                            try await databaseClient.removeSavedStop(stop)
+                            await send(.toggleSavedResponse(.success(false)))
+                        } else {
+                            try await databaseClient.addSavedStop(stop)
+                            await send(.toggleSavedResponse(.success(true)))
+                        }
+                    } catch let error as DatabaseError {
+                        await send(.toggleSavedResponse(.failure(error)))
+                    } catch {
+                        // ignore unknown errors
+                    }
+                }
+                
+            case .pinTapped:
+                let target = state.target
+                let directionId = state.activeDirectionId
+                let isPinned = state.pinnedDirections.contains(directionId)
+                let pinnedStop = PinnedStop(
+                    id: UUID(), // Pinned stops get unique IDs per pin
+                    stationId: target.stationId,
+                    platformId: target.platformId,
+                    routeId: target.routeId,
+                    directionId: directionId,
+                    stopName: target.stopName,
+                    transitType: target.transitType,
+                    directionDestinations: target.directionDestinations
+                )
+                
+                return .run { send in
+                    do {
+                        if isPinned {
+                            try await databaseClient.removePinnedStop(pinnedStop)
+                            await send(.togglePinnedResponse(.success(false)))
+                        } else {
+                            try await databaseClient.addPinnedStop(pinnedStop)
+                            await send(.togglePinnedResponse(.success(true)))
+                        }
+                    } catch let error as DatabaseError {
+                        await send(.togglePinnedResponse(.failure(error)))
+                    } catch {
+                        // ignore unknown errors
+                    }
+                }
+                
+            case .toggleSavedResponse(.success(let saved)):
+                state.isSaved = saved
+                return .send(.delegate(.didChangeSaveStatus))
+                
+            case .toggleSavedResponse(.failure(let error)):
+                if error == .savedLimitReached {
+                    state.alert = AlertState {
+                        TextState("Saved Limit Reached")
+                    } message: {
+                        TextState("You can only have up to 20 saved stops. Please remove one before adding another.")
+                    }
+                }
+                return .none
+                
+            case .togglePinnedResponse(.success(let pinned)):
+                if pinned {
+                    state.pinnedDirections.insert(state.activeDirectionId)
+                } else {
+                    state.pinnedDirections.remove(state.activeDirectionId)
+                }
+                return .send(.delegate(.didChangePinnedStatus))
+                
+            case .togglePinnedResponse(.failure(let error)):
+                if error == .pinnedLimitReached {
+                    state.alert = AlertState {
+                        TextState("Pinned Limit Reached")
+                    } message: {
+                        TextState("You can only have up to 3 pinned stops. Please remove one before pinning another.")
+                    }
+                }
+                return .none
+                
+            case .alert:
+                return .none
+                
+            case .delegate:
+                return .none
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }
 
