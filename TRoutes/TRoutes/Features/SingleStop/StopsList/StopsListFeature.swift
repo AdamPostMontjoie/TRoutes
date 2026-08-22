@@ -63,21 +63,35 @@ struct StopsListFeature {
                 }
                 
             case let .savedStopsResponse(.success(stops)):
-                let newBanners = stops.map { stop -> StopBannerFeature.State in
-                    var bannerState = StopBannerFeature.State(target: .saved(stop))
-                    bannerState.isSaved = true
-                    return bannerState
+                var updatedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
+                for stop in stops {
+                    if var existingBanner = state.savedBanners[id: stop.id] {
+                        existingBanner.target = .saved(stop)
+                        existingBanner.isSaved = true
+                        updatedBanners.append(existingBanner)
+                    } else {
+                        var newBanner = StopBannerFeature.State(target: .saved(stop))
+                        newBanner.isSaved = true
+                        updatedBanners.append(newBanner)
+                    }
                 }
-                state.savedBanners = IdentifiedArray(uniqueElements: newBanners)
+                state.savedBanners = updatedBanners
                 return .none
                 
             case let .pinnedStopsResponse(.success(stops)):
-                let newBanners = stops.map { stop -> StopBannerFeature.State in
-                    var bannerState = StopBannerFeature.State(target: .pinned(stop))
-                    bannerState.pinnedDirections = [stop.directionId]
-                    return bannerState
+                var updatedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
+                for stop in stops {
+                    if var existingBanner = state.pinnedBanners[id: stop.id] {
+                        existingBanner.target = .pinned(stop)
+                        existingBanner.pinnedDirections = [stop.directionId]
+                        updatedBanners.append(existingBanner)
+                    } else {
+                        var newBanner = StopBannerFeature.State(target: .pinned(stop))
+                        newBanner.pinnedDirections = [stop.directionId]
+                        updatedBanners.append(newBanner)
+                    }
                 }
-                state.pinnedBanners = IdentifiedArray(uniqueElements: newBanners)
+                state.pinnedBanners = updatedBanners
                 return .none
                 
             case let .togglePinned(expanded):

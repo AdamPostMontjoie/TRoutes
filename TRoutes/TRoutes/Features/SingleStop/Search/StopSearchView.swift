@@ -23,7 +23,7 @@ struct StopSearchView: View {
                             .foregroundColor(.primary)
                         
                         HStack(spacing: 6) {
-                            let uniqueTypes = Array(Set(station.routes.map(\.transitType)))
+                            let uniqueTypes = Array(Set(station.stops.map(\.transitType)))
                                 .sorted { $0.sortOrder < $1.sortOrder }
                             
                             ForEach(uniqueTypes, id: \.self) { type in

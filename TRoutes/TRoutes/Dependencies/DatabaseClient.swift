@@ -340,7 +340,7 @@ extension DatabaseClient: DependencyKey {
                 let stations = try context.fetch(descriptor)
                 
                 let mappedStations = stations.map { station in
-                    var routesDict: [String: StationRoute] = [:]
+                    var routesDict: [String: StationStop] = [:]
                     for platform in station.platforms {
                         for edge in platform.sequenceEdges {
                             guard let pattern = edge.pattern, pattern.isCanonical else { continue }
@@ -349,7 +349,7 @@ extension DatabaseClient: DependencyKey {
                             let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
                             
                             if routesDict[routeId] == nil {
-                                routesDict[routeId] = StationRoute(
+                                routesDict[routeId] = StationStop(
                                     routeId: routeId,
                                     routeName: routeId,
                                     transitType: transitType(for: routeId),
@@ -376,13 +376,13 @@ extension DatabaseClient: DependencyKey {
                         stationName: station.name,
                         latitude: station.latitude,
                         longitude: station.longitude,
-                        routes: stationRoutes
+                        stops: stationRoutes
                     )
                 }
                 
                 return mappedStations.sorted {
-                    if $0.routes.count != $1.routes.count {
-                        return $0.routes.count > $1.routes.count
+                    if $0.stops.count != $1.stops.count {
+                        return $0.stops.count > $1.stops.count
                     }
                     return $0.stationName < $1.stationName
                 }
@@ -395,7 +395,7 @@ extension DatabaseClient: DependencyKey {
                 guard let station = try context.fetch(descriptor).first else {
                     throw DatabaseError.emptyRoute // or some missing station error
                 }
-                var routesDict: [String: StationRoute] = [:]
+                var routesDict: [String: StationStop] = [:]
                 for platform in station.platforms {
                     for edge in platform.sequenceEdges {
                         guard let pattern = edge.pattern, pattern.isCanonical else { continue }
@@ -404,7 +404,7 @@ extension DatabaseClient: DependencyKey {
                         let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
                         
                         if routesDict[routeId] == nil {
-                            routesDict[routeId] = StationRoute(
+                            routesDict[routeId] = StationStop(
                                 routeId: routeId,
                                 routeName: routeId,
                                 transitType: transitType(for: routeId),
@@ -431,7 +431,7 @@ extension DatabaseClient: DependencyKey {
                     stationName: station.name,
                     latitude: station.latitude,
                     longitude: station.longitude,
-                    routes: stationRoutes
+                    stops: stationRoutes
                 )
             },
             findNearbyStations: { latitude, longitude, limit in
@@ -467,7 +467,7 @@ extension DatabaseClient: DependencyKey {
                     }
                     
                     results = sortedDbStations.prefix(limit).map { station in
-                        var routesDict: [String: StationRoute] = [:]
+                        var routesDict: [String: StationStop] = [:]
                         for platform in station.platforms {
                             for edge in platform.sequenceEdges {
                                 guard let pattern = edge.pattern, pattern.isCanonical else { continue }
@@ -476,7 +476,7 @@ extension DatabaseClient: DependencyKey {
                                 let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
                                 
                                 if routesDict[routeId] == nil {
-                                    routesDict[routeId] = StationRoute(
+                                    routesDict[routeId] = StationStop(
                                         routeId: routeId,
                                         routeName: routeId,
                                         transitType: transitType(for: routeId),
@@ -503,7 +503,7 @@ extension DatabaseClient: DependencyKey {
                             stationName: station.name,
                             latitude: station.latitude,
                             longitude: station.longitude,
-                            routes: stationRoutes
+                            stops: stationRoutes
                         )
                     }
                     

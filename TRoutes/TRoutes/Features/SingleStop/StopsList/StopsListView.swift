@@ -11,38 +11,42 @@ struct StopsListView: View {
     
     var body: some View {
         List {
-            DisclosureGroup(
-                isExpanded: Binding(
-                    get: { store.isPinnedExpanded },
-                    set: { store.send(.togglePinned($0)) }
-                )
-            ) {
-                ForEach(
-                    store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
-                ) { bannerStore in
-                    StopBannerView(store: bannerStore)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
+            if !store.pinnedBanners.isEmpty {
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { store.isPinnedExpanded },
+                        set: { store.send(.togglePinned($0)) }
+                    )
+                ) {
+                    ForEach(
+                        store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
+                    ) { bannerStore in
+                        StopBannerView(store: bannerStore)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowSeparator(.hidden)
+                    }
+                } label: {
+                    Text("Pinned").font(.headline)
                 }
-            } label: {
-                Text("Pinned").font(.headline)
             }
             
-            DisclosureGroup(
-                isExpanded: Binding(
-                    get: { store.isSavedExpanded },
-                    set: { store.send(.toggleSaved($0)) }
-                )
-            ) {
-                ForEach(
-                    store.scope(state: \.savedBanners, action: \.savedBanners)
-                ) { bannerStore in
-                    StopBannerView(store: bannerStore)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
+            if !store.savedBanners.isEmpty {
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { store.isSavedExpanded },
+                        set: { store.send(.toggleSaved($0)) }
+                    )
+                ) {
+                    ForEach(
+                        store.scope(state: \.savedBanners, action: \.savedBanners)
+                    ) { bannerStore in
+                        StopBannerView(store: bannerStore)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowSeparator(.hidden)
+                    }
+                } label: {
+                    Text("Saved").font(.headline)
                 }
-            } label: {
-                Text("Saved").font(.headline)
             }
             
             DisclosureGroup(

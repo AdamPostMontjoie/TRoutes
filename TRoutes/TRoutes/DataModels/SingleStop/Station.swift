@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Lightweight view model representing a station and all routes serving it.
+/// Lightweight view model representing a station and all stops serving it.
 /// Used for search results and the station detail view.
 struct Station: Equatable, Identifiable {
     var id: String { stationId }
@@ -15,11 +15,11 @@ struct Station: Equatable, Identifiable {
     var stationName: String
     var latitude: Double
     var longitude: Double
-    var routes: [StationRoute]
+    var stops: [StationStop]
 }
 
-/// A single route serving a station, with platform and direction info.
-struct StationRoute: Equatable, Identifiable {
+/// A single stop serving a station, with platform and direction info.
+struct StationStop: Equatable, Identifiable {
     var id: String { routeId }
     var routeId: String
     var routeName: String

@@ -39,9 +39,14 @@ struct StopBannerView: View {
                 Spacer()
                 
                 if store.target.isDirectionLocked {
-                    Image(systemName: "pin.fill")
-                        .font(.caption)
-                        .foregroundStyle(store.transitColor)
+                    Button {
+                        store.send(.pinTapped, animation: .default)
+                    } label: {
+                        Image(systemName: "pin.fill")
+                            .font(.title3)
+                            .foregroundStyle(store.transitColor)
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     HStack(spacing: 16) {
                         Button {

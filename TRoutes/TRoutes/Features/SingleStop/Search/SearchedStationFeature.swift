@@ -17,7 +17,7 @@ struct SearchedStationFeature {
 
         init(station: Station) {
             self.station = station
-            let sortedRoutes = station.routes.sorted {
+            let sortedRoutes = station.stops.sorted {
                 if $0.transitType.sortOrder != $1.transitType.sortOrder {
                     return $0.transitType.sortOrder < $1.transitType.sortOrder
                 }
