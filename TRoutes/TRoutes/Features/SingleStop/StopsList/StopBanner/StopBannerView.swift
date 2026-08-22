@@ -26,8 +26,12 @@ struct StopBannerView: View {
                     HStack(spacing: 4) {
                         if store.activeDirectionId < store.target.directionDestinations.count {
                             let destination = store.target.directionDestinations[store.activeDirectionId]
-                            Image(systemName: "arrow.right")
-                            Text(destination)
+                            if !destination.isEmpty {
+                                Image(systemName: "arrow.right")
+                                Text(destination)
+                            } else {
+                                Text(store.activeDirectionId == 0 ? "Outbound" : "Inbound")
+                            }
                         } else {
                             Text(store.activeDirectionId == 0 ? "Outbound" : "Inbound")
                         }
@@ -86,8 +90,8 @@ struct StopBannerView: View {
                 }
             }
             
-            // Swipe Indicator Dots — only shown for non-pinned (swipeable) stops
-            if !store.target.isDirectionLocked {
+            // Swipe Indicator Dots — only shown for swipeable stops
+            if store.isSwipeable {
                 HStack(spacing: 6) {
                     Spacer()
                     Circle()

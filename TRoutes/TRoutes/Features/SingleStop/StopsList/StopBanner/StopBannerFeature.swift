@@ -21,8 +21,23 @@ struct StopBannerFeature {
         
         init(target: BannerTarget) {
             self.target = target
-            // Pinned stops lock to their direction; saved stops start at 0
-            self.activeDirectionId = target.lockedDirectionId ?? 0
+            if let lockedId = target.lockedDirectionId {
+                self.activeDirectionId = lockedId
+            } else {
+                if target.directionDestinations.count > 1, 
+                   target.directionDestinations[0].isEmpty, 
+                   !target.directionDestinations[1].isEmpty {
+                    self.activeDirectionId = 1
+                } else {
+                    self.activeDirectionId = 0
+                }
+            }
+        }
+        
+        var isSwipeable: Bool {
+            if target.isDirectionLocked { return false }
+            if target.directionDestinations.count < 2 { return false }
+            return !target.directionDestinations[0].isEmpty && !target.directionDestinations[1].isEmpty
         }
         
         var transitColor: SwiftUI.Color {
@@ -78,8 +93,7 @@ struct StopBannerFeature {
                 return .none
                 
             case .switchDirectionTapped:
-                // Only allow direction switching for non-pinned (saved) stops
-                guard !state.target.isDirectionLocked else { return .none }
+                guard state.isSwipeable else { return .none }
                 state.activeDirectionId = state.activeDirectionId == 0 ? 1 : 0
                 state.predictions = []
                 return .send(.fetchPredictions)

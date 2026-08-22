@@ -382,9 +382,10 @@ extension DatabaseClient: DependencyKey {
                 var lonDelta = 0.008
                 
                 var results: [Station] = []
+                var totalStops = 0
                 
-                // Expand until we find at least one station, up to ~50km
-                while results.isEmpty && latDelta <= 0.5 {
+                // Expand until we find enough stops (equilibrium), up to ~50km
+                while totalStops < limit && latDelta <= 0.5 {
                     let minLat = latitude - latDelta
                     let maxLat = latitude + latDelta
                     let minLon = longitude - lonDelta
@@ -408,7 +409,9 @@ extension DatabaseClient: DependencyKey {
                             return loc1.distance(from: userLocation) < loc2.distance(from: userLocation)
                         }
                         
-                        var totalStops = 0
+                        // Reset our counters for this expanded radius
+                        results = []
+                        totalStops = 0
                         
                         for station in sortedDbStations {
                             let stationRoutes = resolveStationRoutes(for: station)
@@ -434,8 +437,10 @@ extension DatabaseClient: DependencyKey {
                         }
                     }
                     
-                    latDelta *= 2
-                    lonDelta *= 2
+                    if totalStops < limit {
+                        latDelta *= 2
+                        lonDelta *= 2
+                    }
                 }
                 
                 return results
