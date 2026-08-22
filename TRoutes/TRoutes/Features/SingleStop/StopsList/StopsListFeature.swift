@@ -12,11 +12,7 @@ struct StopsListFeature {
     struct State: Equatable {
         var pinnedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var savedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
-        var nearbyBanners: IdentifiedArrayOf<StopBannerFeature.State> = [
-            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-dwnxg", platformId: "70077", routeId: "Red", stopName: "Downtown Crossing", transitType: .redLine, directionDestinations: ["Ashmont/Braintree", "Alewife"]))),
-            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-pktrm", platformId: "70196", routeId: "Green-B", stopName: "Park Street", transitType: .greenLine, directionDestinations: ["Boston College", "Government Center"]))),
-            StopBannerFeature.State(target: .saved(SingleStop(stationId: "place-gover", platformId: "70041", routeId: "Blue", stopName: "Government Center", transitType: .blueLine, directionDestinations: ["Bowdoin", "Wonderland"])))
-        ]
+        var nearbyBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         
         var isPinnedExpanded: Bool = true
         var isSavedExpanded: Bool = true
@@ -28,6 +24,9 @@ struct StopsListFeature {
         case fetchSavedAndPinned
         case savedStopsResponse(Result<[SingleStop], Never>)
         case pinnedStopsResponse(Result<[PinnedStop], Never>)
+        
+        case fetchNearby(latitude: Double, longitude: Double)
+        case nearbyStopsResponse(Result<[Station], Never>)
         
         case togglePinned(Bool)
         case toggleSaved(Bool)
@@ -92,6 +91,47 @@ struct StopsListFeature {
                     }
                 }
                 state.pinnedBanners = updatedBanners
+                return .none
+                
+            case let .fetchNearby(latitude, longitude):
+                return .run { send in
+                    do {
+                        let stations = try await databaseClient.findNearbyStations(latitude, longitude, 100)
+                        await send(.nearbyStopsResponse(.success(stations)))
+                    } catch {
+                        await send(.nearbyStopsResponse(.success([])))
+                    }
+                }
+                
+            case let .nearbyStopsResponse(.success(stations)):
+                var newBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
+                for station in stations {
+                    for stop in station.stops {
+                        let singleStop = SingleStop(
+                            stationId: station.stationId,
+                            platformId: stop.platformId,
+                            routeId: stop.routeId,
+                            stopName: station.stationName,
+                            transitType: stop.transitType,
+                            directionDestinations: stop.directionDestinations
+                        )
+                        var banner = StopBannerFeature.State(target: .saved(singleStop))
+                        
+                        // Sync with existing saved state
+                        if state.savedBanners.contains(where: { $0.target.stationId == singleStop.stationId && $0.target.routeId == singleStop.routeId }) {
+                            banner.isSaved = true
+                        }
+                        // Sync with existing pinned state
+                        for pinnedBanner in state.pinnedBanners {
+                            if pinnedBanner.target.stationId == singleStop.stationId && pinnedBanner.target.routeId == singleStop.routeId {
+                                banner.pinnedDirections.formUnion(pinnedBanner.pinnedDirections)
+                            }
+                        }
+                        
+                        newBanners.append(banner)
+                    }
+                }
+                state.nearbyBanners = newBanners
                 return .none
                 
             case let .togglePinned(expanded):

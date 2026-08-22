@@ -7,6 +7,8 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<NearbyStopsUpdate>.Continuation?
     
+    private var lastSentLocation: CLLocation?
+    
     static let shared = NearbyStopsManager()
     
     var authorizationStatus: CLAuthorizationStatus {
@@ -36,6 +38,7 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
                 
                 // If we already have a location, yield it immediately
                 if let location = locationManager.location {
+                    self.lastSentLocation = location
                     continuation.yield(.coordinates(location.coordinate))
                 }
             } else if status == .denied || status == .restricted {
@@ -51,6 +54,7 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     
     func stopFunction() {
         locationManager.stopUpdatingLocation()
+        lastSentLocation = nil
         continuation?.finish()
         continuation = nil
     }
@@ -71,7 +75,16 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        continuation?.yield(.coordinates(location.coordinate))
+        
+        if let last = lastSentLocation {
+            if location.distance(from: last) >= 200 {
+                lastSentLocation = location
+                continuation?.yield(.coordinates(location.coordinate))
+            }
+        } else {
+            lastSentLocation = location
+            continuation?.yield(.coordinates(location.coordinate))
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

@@ -8,6 +8,7 @@
 import ComposableArchitecture
 import Foundation
 import SwiftData
+import CoreLocation
 
 struct DatabaseClient {
     // Journey Engine
@@ -340,37 +341,7 @@ extension DatabaseClient: DependencyKey {
                 let stations = try context.fetch(descriptor)
                 
                 let mappedStations = stations.map { station in
-                    var routesDict: [String: StationStop] = [:]
-                    for platform in station.platforms {
-                        for edge in platform.sequenceEdges {
-                            guard let pattern = edge.pattern, pattern.isCanonical else { continue }
-                            let routeId = pattern.routeId
-                            let directionId = pattern.directionId
-                            let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
-                            
-                            if routesDict[routeId] == nil {
-                                routesDict[routeId] = StationStop(
-                                    routeId: routeId,
-                                    routeName: routeId,
-                                    transitType: transitType(for: routeId),
-                                    platformId: platform.platformId,
-                                    directionDestinations: ["", ""]
-                                )
-                            }
-                            if directionId == 0 {
-                                let existing = routesDict[routeId]?.directionDestinations[0] ?? ""
-                                var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                                if !dests.contains(dest) { dests.append(dest) }
-                                routesDict[routeId]?.directionDestinations[0] = dests.sorted().joined(separator: "/")
-                            } else if directionId == 1 {
-                                let existing = routesDict[routeId]?.directionDestinations[1] ?? ""
-                                var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                                if !dests.contains(dest) { dests.append(dest) }
-                                routesDict[routeId]?.directionDestinations[1] = dests.sorted().joined(separator: "/")
-                            }
-                        }
-                    }
-                    let stationRoutes = routesDict.values.sorted { $0.routeId < $1.routeId }
+                    let stationRoutes = resolveStationRoutes(for: station)
                     return Station(
                         stationId: station.stationId,
                         stationName: station.name,
@@ -395,37 +366,7 @@ extension DatabaseClient: DependencyKey {
                 guard let station = try context.fetch(descriptor).first else {
                     throw DatabaseError.emptyRoute // or some missing station error
                 }
-                var routesDict: [String: StationStop] = [:]
-                for platform in station.platforms {
-                    for edge in platform.sequenceEdges {
-                        guard let pattern = edge.pattern, pattern.isCanonical else { continue }
-                        let routeId = pattern.routeId
-                        let directionId = pattern.directionId
-                        let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
-                        
-                        if routesDict[routeId] == nil {
-                            routesDict[routeId] = StationStop(
-                                routeId: routeId,
-                                routeName: routeId,
-                                transitType: transitType(for: routeId),
-                                platformId: platform.platformId,
-                                directionDestinations: ["", ""]
-                            )
-                        }
-                        if directionId == 0 {
-                            let existing = routesDict[routeId]?.directionDestinations[0] ?? ""
-                            var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                            if !dests.contains(dest) { dests.append(dest) }
-                            routesDict[routeId]?.directionDestinations[0] = dests.sorted().joined(separator: "/")
-                        } else if directionId == 1 {
-                            let existing = routesDict[routeId]?.directionDestinations[1] ?? ""
-                            var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                            if !dests.contains(dest) { dests.append(dest) }
-                            routesDict[routeId]?.directionDestinations[1] = dests.sorted().joined(separator: "/")
-                        }
-                    }
-                }
-                let stationRoutes = routesDict.values.sorted { $0.routeId < $1.routeId }
+                let stationRoutes = resolveStationRoutes(for: station)
                 return Station(
                     stationId: station.stationId,
                     stationName: station.name,
@@ -436,12 +377,14 @@ extension DatabaseClient: DependencyKey {
             },
             findNearbyStations: { latitude, longitude, limit in
                 let context = ModelContext(sharedContainer)
-                // Start with approx 2km radius
-                var latDelta = 0.02
-                var lonDelta = 0.02
+                // Start with approx 800m radius (~0.008 degrees)
+                var latDelta = 0.008
+                var lonDelta = 0.008
                 
                 var results: [Station] = []
-                while results.count < limit && latDelta <= 0.5 { // Max ~50km
+                
+                // Expand until we find at least one station, up to ~50km
+                while results.isEmpty && latDelta <= 0.5 {
                     let minLat = latitude - latDelta
                     let maxLat = latitude + latDelta
                     let minLon = longitude - lonDelta
@@ -456,55 +399,39 @@ extension DatabaseClient: DependencyKey {
                     
                     let dbStations = try context.fetch(descriptor)
                     
-                    let sortedDbStations = dbStations.sorted { s1, s2 in
-                        let lat1 = s1.latitude - latitude
-                        let lon1 = s1.longitude - longitude
-                        let dist1 = lat1 * lat1 + lon1 * lon1
-                        let lat2 = s2.latitude - latitude
-                        let lon2 = s2.longitude - longitude
-                        let dist2 = lat2 * lat2 + lon2 * lon2
-                        return dist1 < dist2
-                    }
-                    
-                    results = sortedDbStations.prefix(limit).map { station in
-                        var routesDict: [String: StationStop] = [:]
-                        for platform in station.platforms {
-                            for edge in platform.sequenceEdges {
-                                guard let pattern = edge.pattern, pattern.isCanonical else { continue }
-                                let routeId = pattern.routeId
-                                let directionId = pattern.directionId
-                                let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
-                                
-                                if routesDict[routeId] == nil {
-                                    routesDict[routeId] = StationStop(
-                                        routeId: routeId,
-                                        routeName: routeId,
-                                        transitType: transitType(for: routeId),
-                                        platformId: platform.platformId,
-                                        directionDestinations: ["", ""]
-                                    )
-                                }
-                                if directionId == 0 {
-                                    let existing = routesDict[routeId]?.directionDestinations[0] ?? ""
-                                    var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                                    if !dests.contains(dest) { dests.append(dest) }
-                                    routesDict[routeId]?.directionDestinations[0] = dests.sorted().joined(separator: "/")
-                                } else if directionId == 1 {
-                                    let existing = routesDict[routeId]?.directionDestinations[1] ?? ""
-                                    var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
-                                    if !dests.contains(dest) { dests.append(dest) }
-                                    routesDict[routeId]?.directionDestinations[1] = dests.sorted().joined(separator: "/")
-                                }
+                    if !dbStations.isEmpty {
+                        // Sort by distance using CLLocation for accuracy
+                        let userLocation = CLLocation(latitude: latitude, longitude: longitude)
+                        let sortedDbStations = dbStations.sorted { s1, s2 in
+                            let loc1 = CLLocation(latitude: s1.latitude, longitude: s1.longitude)
+                            let loc2 = CLLocation(latitude: s2.latitude, longitude: s2.longitude)
+                            return loc1.distance(from: userLocation) < loc2.distance(from: userLocation)
+                        }
+                        
+                        var totalStops = 0
+                        
+                        for station in sortedDbStations {
+                            let stationRoutes = resolveStationRoutes(for: station)
+                            
+                            // If a station has no stops, skip it
+                            guard !stationRoutes.isEmpty else { continue }
+                            
+                            let resolvedStation = Station(
+                                stationId: station.stationId,
+                                stationName: station.name,
+                                latitude: station.latitude,
+                                longitude: station.longitude,
+                                stops: stationRoutes
+                            )
+                            
+                            results.append(resolvedStation)
+                            totalStops += stationRoutes.count
+                            
+                            // Enforce equilibrium: stop adding stations if we've reached our stop count limit
+                            if totalStops >= limit {
+                                break
                             }
                         }
-                        let stationRoutes = routesDict.values.sorted { $0.routeId < $1.routeId }
-                        return Station(
-                            stationId: station.stationId,
-                            stationName: station.name,
-                            latitude: station.latitude,
-                            longitude: station.longitude,
-                            stops: stationRoutes
-                        )
                     }
                     
                     latDelta *= 2
@@ -1064,6 +991,48 @@ extension DependencyValues {
         get { self[DatabaseClient.self] }
         set { self[DatabaseClient.self] = newValue }
     }
+}
+
+private func resolveStationRoutes(for station: TransitStation) -> [StationStop] {
+    func mapEdges(requireCanonical: Bool) -> [String: StationStop] {
+        var routesDict: [String: StationStop] = [:]
+        for platform in station.platforms {
+            for edge in platform.sequenceEdges {
+                guard let pattern = edge.pattern else { continue }
+                if requireCanonical && !pattern.isCanonical { continue }
+                
+                let routeId = pattern.routeId
+                let directionId = pattern.directionId
+                let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
+                
+                if routesDict[routeId] == nil {
+                    routesDict[routeId] = StationStop(
+                        routeId: routeId,
+                        routeName: routeId,
+                        transitType: transitType(for: routeId),
+                        platformId: platform.platformId,
+                        directionDestinations: ["", ""]
+                    )
+                }
+                
+                if directionId == 0 || directionId == 1 {
+                    let existing = routesDict[routeId]?.directionDestinations[directionId] ?? ""
+                    var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
+                    if !dests.contains(dest) { dests.append(dest) }
+                    routesDict[routeId]?.directionDestinations[directionId] = dests.sorted().joined(separator: "/")
+                }
+            }
+        }
+        return routesDict
+    }
+    
+    var routesDict = mapEdges(requireCanonical: true)
+    // Fallback: If no canonical patterns were found, use non-canonical patterns
+    // to prevent valid stops (like 84 Mass Ave) from being empty
+    if routesDict.isEmpty {
+        routesDict = mapEdges(requireCanonical: false)
+    }
+    return routesDict.values.sorted { $0.routeId < $1.routeId }
 }
 
 private func transitType(for routeId: String) -> TransitType {

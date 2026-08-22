@@ -91,7 +91,7 @@ struct SingleStopFeature {
                     print("📍 User coords updated: \(coords.latitude), \(coords.longitude)")
                     state.locationPermissionDenied = false
                     state.userCoordinates = coords
-                    // Later: trigger nearby stops fetch
+                    return .send(.stopsList(.fetchNearby(latitude: coords.latitude, longitude: coords.longitude)))
                 case .authorizationGranted:
                     state.locationPermissionDenied = false
                 case .authorizationDenied:
