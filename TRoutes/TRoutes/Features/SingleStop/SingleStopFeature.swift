@@ -6,6 +6,7 @@
 //
 
 import ComposableArchitecture
+import CoreLocation
 
 @Reducer
 struct SingleStopFeature {
@@ -17,20 +18,103 @@ struct SingleStopFeature {
         var stopsList = StopsListFeature.State()
         var search = StopSearchFeature.State()
         var path = StackState<SearchedStationFeature.State>()
+        
+        var locationPermissionDenied = false
+        var userCoordinates: CLLocationCoordinate2D?
     }
     
     enum Action: Equatable {
+        case onAppear
         case apiKeyLinkTapped
         case onSettingsButtonTapped
+        case requestLocationTapped
+        
+        case startListeningToLocation
+        case locationAuthorizationStatusReceived(CLAuthorizationStatus)
+        case locationPermissionRequestFinished(CLAuthorizationStatus)
+        case locationUpdateReceived(NearbyStopsUpdate)
+        
         case stopsList(StopsListFeature.Action)
         case search(StopSearchFeature.Action)
         case destination(PresentationAction<Destination.Action>)
         case path(StackActionOf<SearchedStationFeature>)
     }
     
+    @Dependency(\.nearbyStopsClient) var nearbyStopsClient
+    
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .onAppear:
+                let getAuth = nearbyStopsClient.getCurrentAuthorization
+                return .run { send in
+                    let status = await getAuth()
+                    await send(.locationAuthorizationStatusReceived(status))
+                    await send(.startListeningToLocation)
+                }
+                
+            case .requestLocationTapped:
+                let getAuth = nearbyStopsClient.getCurrentAuthorization
+                let requestAuth = nearbyStopsClient.requestLocationAuthorization
+                let openSettings = nearbyStopsClient.openSettings
+                return .run { _ in
+                    let status = await getAuth()
+                    if status == .notDetermined {
+                        await requestAuth()
+                    } else if status == .denied || status == .restricted {
+                        openSettings()
+                    }
+                }
+                
+            case let .locationAuthorizationStatusReceived(status):
+                switch status {
+                case .authorizedWhenInUse, .authorizedAlways:
+                    state.locationPermissionDenied = false
+                case .notDetermined, .denied, .restricted:
+                    state.locationPermissionDenied = true
+                @unknown default:
+                    break
+                }
+                return .none
+                
+            case .startListeningToLocation:
+                let makeStream = nearbyStopsClient.makeUpdateStream
+                return .run { send in
+                    for await update in await makeStream() {
+                        await send(.locationUpdateReceived(update))
+                    }
+                }
+                
+            case let .locationUpdateReceived(update):
+                switch update {
+                case .coordinates(let coords):
+                    print("📍 User coords updated: \(coords.latitude), \(coords.longitude)")
+                    state.locationPermissionDenied = false
+                    state.userCoordinates = coords
+                    // Later: trigger nearby stops fetch
+                case .authorizationGranted:
+                    state.locationPermissionDenied = false
+                case .authorizationDenied:
+                    state.locationPermissionDenied = true
+                case .error:
+                    break
+                }
+                return .none
+                
+            case let .locationPermissionRequestFinished(status):
+                switch status {
+                case .authorizedWhenInUse, .authorizedAlways:
+                    state.locationPermissionDenied = false
+                    return .send(.startListeningToLocation)
+                case .denied, .restricted:
+                    state.locationPermissionDenied = true
+                    return .none
+                case .notDetermined:
+                    return .none
+                @unknown default:
+                    return .none
+                }
+                
             case .apiKeyLinkTapped:
                 state.destination = .apiKeyAlert(ApiKeyAlertFeature.State())
                 return .none

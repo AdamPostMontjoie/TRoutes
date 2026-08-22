@@ -8,6 +8,7 @@
 import SwiftUI
 import ComposableArchitecture
 
+
 struct SingleStopView: View {
     @Bindable var store: StoreOf<SingleStopFeature>
     
@@ -42,8 +43,12 @@ struct SingleStopView: View {
                 ) { userSettingsStore in
                     UserSettingsView(store: userSettingsStore)
                 }
+
         } destination: { store in
             SearchedStationView(store: store)
+        }
+        .task {
+            store.send(.onAppear)
         }
     }
     
@@ -53,7 +58,20 @@ struct SingleStopView: View {
             if store.hasValidApiKey {
                 Group {
                     if store.search.query.isEmpty {
-                        StopsListView(store: store.scope(state: \.stopsList, action: \.stopsList))
+                        if store.locationPermissionDenied {
+                            Spacer()
+                            VStack(spacing: 12) {
+                                Text("Location needed to find nearby stops")
+                                    .foregroundColor(.secondary)
+                                Button("Enable Location") {
+                                    store.send(.requestLocationTapped)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                            Spacer()
+                        } else {
+                            StopsListView(store: store.scope(state: \.stopsList, action: \.stopsList))
+                        }
                     } else {
                         StopSearchView(store: store.scope(state: \.search, action: \.search))
                     }
