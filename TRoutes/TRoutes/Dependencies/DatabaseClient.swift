@@ -340,8 +340,9 @@ extension DatabaseClient: DependencyKey {
                 )
                 let stations = try context.fetch(descriptor)
                 
-                let mappedStations = stations.map { station in
+                let mappedStations = stations.compactMap { station -> Station? in
                     let stationRoutes = resolveStationRoutes(for: station)
+                    guard !stationRoutes.isEmpty else { return nil }
                     return Station(
                         stationId: station.stationId,
                         stationName: station.name,
@@ -367,6 +368,9 @@ extension DatabaseClient: DependencyKey {
                     throw DatabaseError.emptyRoute // or some missing station error
                 }
                 let stationRoutes = resolveStationRoutes(for: station)
+                guard !stationRoutes.isEmpty else {
+                    throw DatabaseError.emptyRoute
+                }
                 return Station(
                     stationId: station.stationId,
                     stationName: station.name,
@@ -1007,6 +1011,7 @@ private func resolveStationRoutes(for station: TransitStation) -> [StationStop] 
                 if requireCanonical && !pattern.isCanonical { continue }
                 
                 let routeId = pattern.routeId
+                guard !routeId.hasPrefix("Shuttle-") else { continue }
                 let directionId = pattern.directionId
                 let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
                 

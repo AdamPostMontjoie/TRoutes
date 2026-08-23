@@ -58,11 +58,15 @@ actor StopPredictionCache {
                 predictionStopIds: [key.stationId],
                 predictionDirectionId: key.directionId
             )
-            let predictions = try await mbtaClient.fetchTransitTimes(
+            var predictions = try await mbtaClient.fetchTransitTimes(
                 target,
                 [key.routeId],
                 .predictionRefresh
             )
+            if predictions.isEmpty {
+                let schedules = try await mbtaClient.fetchSchedule(target, .predictionRefresh)
+                predictions = schedules.map(\.asPrediction)
+            }
             return StopPredictionSnapshot(predictions: predictions, fetchedAt: Date())
         }
         inFlightRequests[key] = request

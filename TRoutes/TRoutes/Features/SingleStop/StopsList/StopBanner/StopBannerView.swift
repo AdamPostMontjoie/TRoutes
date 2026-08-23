@@ -204,7 +204,7 @@ struct StopBannerView: View {
                     .font(.subheadline)
                     .opacity(0.8)
             } else if predictions.isEmpty {
-                Text("No upcoming departures")
+                Text("No more departures scheduled today")
                     .font(.subheadline)
                     .opacity(0.8)
             } else {

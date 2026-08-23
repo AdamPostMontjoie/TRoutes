@@ -11,7 +11,7 @@ import Foundation
 struct MBTAClient {
     //predictions and schedules
     var fetchTransitTimes: @Sendable (any PredictionTarget, [String], MBTARequestType) async throws -> [TransitPrediction]
-    var fetchSchedule: @Sendable (ResolvedStop, MBTARequestType) async throws -> [TransitSchedule]
+    var fetchSchedule: @Sendable (any PredictionTarget, MBTARequestType) async throws -> [TransitSchedule]
     //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
@@ -168,7 +168,7 @@ extension MBTAClient:DependencyKey {
                 throw MBTAError.decodingError
             }
         },
-        fetchSchedule: { stop, requestType in
+        fetchSchedule: { target, requestType in
             do {
                 try await RateLimitQueue.shared.acquireToken(for: requestType)
             } catch {
@@ -180,9 +180,14 @@ extension MBTAClient:DependencyKey {
             dateFormatter.dateFormat = "HH:mm"
             dateFormatter.timeZone = TimeZone(identifier: "America/New_York")
             let minTime = dateFormatter.string(from: Date())
+
+            let serviceDateFormatter = DateFormatter()
+            serviceDateFormatter.dateFormat = "yyyy-MM-dd"
+            serviceDateFormatter.timeZone = TimeZone(identifier: "America/New_York")
+            let serviceDate = serviceDateFormatter.string(from: Date())
             
-            let stopFilter = stop.acceptableStopIds.isEmpty ? stop.mbtaStopId : stop.acceptableStopIds.joined(separator: ",")
-            guard let url = URL(string: "\(header)schedules?filter[stop]=\(stopFilter)&filter[direction_id]=\(stop.mbtaDirectionId)&filter[route]=\(stop.mbtaRouteId)&filter[min_time]=\(minTime)&sort=time&page[limit]=3") else {
+            let stopFilter = target.predictionStopIds.joined(separator: ",")
+            guard let url = URL(string: "\(header)schedules?filter[stop]=\(stopFilter)&filter[direction_id]=\(target.predictionDirectionId)&filter[route]=\(target.predictionRouteId)&filter[date]=\(serviceDate)&filter[min_time]=\(minTime)&sort=time&page[limit]=3") else {
                 throw MBTAError.networkError
             }
             

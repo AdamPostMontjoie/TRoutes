@@ -61,7 +61,7 @@ struct StopLiveActivity: Widget {
 	private func predictionRow(_ predictions: [String], attributes: StopActivityAttributes) -> some View {
 		HStack(spacing: 8) {
 			if predictions.isEmpty {
-				Text("No upcoming departures")
+				Text("No more departures scheduled today")
 					.font(.subheadline)
 					.foregroundStyle(.secondary)
 			} else {
@@ -167,7 +167,7 @@ private struct StopLockScreenView: View {
 
 			HStack(spacing: 8) {
 				if context.state.predictions.isEmpty {
-					Text("No upcoming departures")
+					Text("No more departures scheduled today")
 						.font(.subheadline)
 						.foregroundStyle(.secondary)
 				} else {
