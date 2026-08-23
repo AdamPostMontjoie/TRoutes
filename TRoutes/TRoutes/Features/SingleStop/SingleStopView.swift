@@ -102,11 +102,19 @@ struct SingleStopView: View {
                 )
             } else {
                 Spacer()
-                Button {
-                    store.send(.apiKeyLinkTapped)
-                } label: {
-                    Text("Add an API Key to get started")
+                VStack(spacing: 12) {
+                    Text("Set Up Stops Tab")
+                        .font(.headline)
+                    Text("Add a free MBTA API key to view live arrivals for nearby, saved, and pinned stops.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("Add API Key") {
+                        store.send(.apiKeyLinkTapped)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
+                .padding(.horizontal)
                 Spacer()
             }
         }

@@ -11,14 +11,7 @@ import SwiftUI
 struct LegFormView: View {
     @Bindable var store: StoreOf<LegFormFeature>
 
-    @Environment(\.dismiss) private var dismiss //wat dis
-
-    //we might want some kind of display on how many stops are previous on the top
-    //with dots? numbers? "Stop 3"?
-
-    //this whole form needs to be modularized so we can reuse it to edit a single stop in a route.
-    //some things will be creation specific "add stop", and "save route" will be "save stop", etc.
-    //do later, unimportant until we have real saving mechanism
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {

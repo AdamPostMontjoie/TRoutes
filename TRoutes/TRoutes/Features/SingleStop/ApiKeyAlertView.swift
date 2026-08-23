@@ -13,21 +13,36 @@ struct ApiKeyAlertView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            Text("API Key Required")
-                .font(.headline)
+            Image("APIKeyAlertImage")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .accessibilityHidden(true)
+
+            Text("MBTA API Key Required")
+                .font(.title2.bold())
                 .multilineTextAlignment(.center)
             
-            Text("To monitor individual stops in real time, you need a free MBTA API key. Tap the \(Image(systemName: "gear")) icon in the top left of the Routes tab to open Settings and add your key.")
+            Text("The Stops tab checks arrivals for many stops and requires the MBTA's higher request limit.")
+                .multilineTextAlignment(.center)
             
-            Text("You can create a free developer account and get a key in seconds from the MBTA website. A link is provided in Settings.")
+            Text("The Routes tab still works without a key. You can create a key for free from the link in Settings.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
-            Button("Got It") {
-                store.send(.dismissButtonTapped)
+
+            HStack(spacing: 16) {
+                Button("Not Now", role: .cancel) {
+                    store.send(.dismissButtonTapped)
+                }
+                .buttonStyle(.bordered)
+
+                Button("Open Settings") {
+                    store.send(.openSettingsButtonTapped)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding()
     }

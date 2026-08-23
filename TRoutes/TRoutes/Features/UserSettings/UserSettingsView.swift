@@ -27,16 +27,24 @@ struct UserSettingsView: View {
                             }
                         }
                     } else {
-                        TextField(
-                            "Paste your API key",
-                            text: $store.apiKeyInput.sending(\.apiKeyInputChanged)
-                        )
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .submitLabel(.done)
-                        .disabled(store.isVerifyingKey)
-                        .onSubmit {
-                            store.send(.apiKeySubmitted)
+                        HStack {
+                            TextField(
+                                "Paste your API key",
+                                text: $store.apiKeyInput.sending(\.apiKeyInputChanged)
+                            )
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .submitLabel(.done)
+                            .disabled(store.isVerifyingKey)
+                            .onSubmit {
+                                store.send(.apiKeySubmitted)
+                            }
+
+                            PasteButton(payloadType: String.self) { values in
+                                guard let apiKey = values.first else { return }
+                                store.send(.apiKeyInputChanged(apiKey))
+                            }
+                            .disabled(store.isVerifyingKey)
                         }
                         
                         if store.keyVerificationFailed {
@@ -65,7 +73,7 @@ struct UserSettingsView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                     }
                 } header: {
-                    Text("MBTA Developer Key")
+                    Text("MBTA API Developer Key")
                 } footer: {
                     if !store.hasValidApiKey{
                         HStack(spacing: 4) {

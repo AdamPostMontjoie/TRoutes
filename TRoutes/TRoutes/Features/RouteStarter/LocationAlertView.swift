@@ -13,13 +13,20 @@ struct LocationAlertView: View {
     
     var body: some View {
         VStack(spacing: 24) {
+            Image("LocationAlertImage")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .accessibilityHidden(true)
+
             switch store.mode {
             case .firstTime:
-                Text("Location Services Required")
-                    .font(.headline)
+                Text("Allow Location Access")
+                    .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 
-                Text("We need location permissions to track your journey and provide live updates.")
+                Text("T Routes uses your location to find nearby stops and provide live progress during active journeys.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -30,10 +37,10 @@ struct LocationAlertView: View {
                 .buttonStyle(.borderedProminent)
             case .changeSettings:
                 Text("Location Services Are Disabled")
-                    .font(.headline)
+                    .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 
-                Text("Please enable location access in Settings to use navigation and track your route.")
+                Text("Enable location access in Settings to find nearby stops and use journey tracking.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -44,14 +51,14 @@ struct LocationAlertView: View {
                     }
                     .buttonStyle(.bordered)
                     
-                    Button("Settings") {
+                    Button("Open Settings") {
                         store.send(.settingsButtonTapped)
                     }
                     .buttonStyle(.borderedProminent)
                 }
             case .routeInterrupted:
                 Text("Location Services Were Interrupted")
-                    .font(.headline)
+                    .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 
                 Text("You disabled location access while a route was active. The route has been ended. Please enable location access in Settings to use navigation.")
@@ -65,7 +72,7 @@ struct LocationAlertView: View {
                     }
                     .buttonStyle(.bordered)
                     
-                    Button("Settings") {
+                    Button("Open Settings") {
                         store.send(.settingsButtonTapped)
                     }
                     .buttonStyle(.borderedProminent)

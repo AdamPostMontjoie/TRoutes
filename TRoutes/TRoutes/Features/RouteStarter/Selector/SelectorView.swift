@@ -23,6 +23,17 @@ struct SelectorView<Header: View>: View {
             header //supports debug dashboard
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
+
+            if store.hasLoadedRoutes && store.userRoutes.isEmpty {
+                ContentUnavailableView {
+                    Label("No Routes", systemImage: "plus.circle")
+                } description: {
+                    Text("Tap the plus button to add your first route.")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 48)
+                .listRowSeparator(.hidden)
+            }
             
             ForEach(store.userRoutes) { userRoute in
                 NavigationLink(state: RouteReviewFeature.State(

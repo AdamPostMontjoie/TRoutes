@@ -15,6 +15,7 @@ struct SelectorFeature {
     @ObservableState
     struct State: Equatable {
         var userRoutes: IdentifiedArrayOf<ResolvedUserRoute> = []
+        var hasLoadedRoutes = false
         var path = StackState<RouteReviewFeature.State>()
         @Presents var destination: Destination.State? // Added
     }
@@ -91,6 +92,7 @@ struct SelectorFeature {
 
             case let .routesFetched(routes):
                 state.userRoutes = IdentifiedArray(uniqueElements: routes)
+                state.hasLoadedRoutes = true
                 return .none
 
             case .fetchRoutesFailed:
