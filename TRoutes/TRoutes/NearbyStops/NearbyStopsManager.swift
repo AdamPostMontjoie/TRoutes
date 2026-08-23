@@ -7,7 +7,8 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private var continuation: AsyncStream<NearbyStopsUpdate>.Continuation?
     
-    private var lastSentLocation: CLLocation?
+    private var lastDisplayLocation: CLLocation?
+    private var lastRefreshLocation: CLLocation?
     
     static let shared = NearbyStopsManager()
     
@@ -19,8 +20,8 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
         super.init()
         locationManager.delegate = self
         locationManager.allowsBackgroundLocationUpdates = false
-        locationManager.distanceFilter = 200 // Update every 200m
-        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.distanceFilter = 10
+        locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
     }
     
     func makeUpdateStream() -> AsyncStream<NearbyStopsUpdate> {
@@ -38,8 +39,10 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
                 
                 // If we already have a location, yield it immediately
                 if let location = locationManager.location {
-                    self.lastSentLocation = location
-                    continuation.yield(.coordinates(location.coordinate))
+                    self.lastDisplayLocation = location
+                    self.lastRefreshLocation = location
+                    continuation.yield(.displayCoordinates(location.coordinate))
+                    continuation.yield(.refreshCoordinates(location.coordinate))
                 }
             } else if status == .denied || status == .restricted {
                 continuation.yield(.authorizationDenied)
@@ -51,10 +54,18 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     func requestLocationAuthorization() {
         locationManager.requestWhenInUseAuthorization()
     }
+
+    func setRefreshOrigin(_ coordinates: CLLocationCoordinate2D) {
+        lastRefreshLocation = CLLocation(
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude
+        )
+    }
     
     func stopFunction() {
         locationManager.stopUpdatingLocation()
-        lastSentLocation = nil
+        lastDisplayLocation = nil
+        lastRefreshLocation = nil
         continuation?.finish()
         continuation = nil
     }
@@ -75,15 +86,25 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        
-        if let last = lastSentLocation {
-            if location.distance(from: last) >= 200 {
-                lastSentLocation = location
-                continuation?.yield(.coordinates(location.coordinate))
+
+        if let lastDisplayLocation {
+            if location.distance(from: lastDisplayLocation) >= 10 {
+                self.lastDisplayLocation = location
+                continuation?.yield(.displayCoordinates(location.coordinate))
             }
         } else {
-            lastSentLocation = location
-            continuation?.yield(.coordinates(location.coordinate))
+            lastDisplayLocation = location
+            continuation?.yield(.displayCoordinates(location.coordinate))
+        }
+
+        if let lastRefreshLocation {
+            if location.distance(from: lastRefreshLocation) >= 200 {
+                self.lastRefreshLocation = location
+                continuation?.yield(.refreshCoordinates(location.coordinate))
+            }
+        } else {
+            lastRefreshLocation = location
+            continuation?.yield(.refreshCoordinates(location.coordinate))
         }
     }
     

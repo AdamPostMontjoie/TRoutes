@@ -39,12 +39,39 @@ struct SearchedStationFeature {
     }
 
     enum Action: Equatable {
+        case onAppear
+        case onDisappear
+        case refreshTick
         case banner(IdentifiedActionOf<StopBannerFeature>)
     }
+
+    @Dependency(\.continuousClock) var clock
+
+    private enum CancelID { case refreshTimer }
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .onAppear:
+                return .run { send in
+                    while !Task.isCancelled {
+                        try await clock.sleep(for: .seconds(1))
+                        await send(.refreshTick)
+                    }
+                }
+                .cancellable(id: CancelID.refreshTimer, cancelInFlight: true)
+
+            case .onDisappear:
+                return .cancel(id: CancelID.refreshTimer)
+
+            case .refreshTick:
+                let visibleIds = state.banners.filter(\.isVisible).map(\.id)
+                return .run { send in
+                    for id in visibleIds {
+                        await send(.banner(.element(id: id, action: .fetchPredictions)))
+                    }
+                }
+
             case .banner:
                 return .none
             }

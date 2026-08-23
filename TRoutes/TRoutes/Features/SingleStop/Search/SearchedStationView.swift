@@ -22,5 +22,11 @@ struct SearchedStationView: View {
         }
         .navigationTitle(store.station.stationName)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            store.send(.onAppear)
+        }
+        .onDisappear {
+            store.send(.onDisappear)
+        }
     }
 }

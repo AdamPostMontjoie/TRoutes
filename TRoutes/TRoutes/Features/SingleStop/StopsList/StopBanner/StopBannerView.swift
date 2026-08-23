@@ -38,6 +38,16 @@ struct StopBannerView: View {
                     }
                     .font(.caption)
                     .opacity(0.8)
+
+                    if let distance = store.distance {
+                        Label(
+                            Measurement(value: distance, unit: UnitLength.meters)
+                                .formatted(.measurement(width: .abbreviated, usage: .road)),
+                            systemImage: "location.fill"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
                 }
                 
                 Spacer()

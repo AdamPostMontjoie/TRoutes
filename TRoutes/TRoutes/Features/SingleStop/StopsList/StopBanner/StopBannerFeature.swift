@@ -5,6 +5,7 @@
 //  Created by Adam Post on 8/17/26.
 //
 import ComposableArchitecture
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -12,12 +13,46 @@ import SwiftUI
 struct StopBannerFeature {
     @ObservableState
     struct State: Equatable, Identifiable {
+        struct ID: Equatable, Hashable, Sendable {
+            let stationId: String
+            let routeId: String
+            let lockedDirectionId: Int?
+
+            init(target: BannerTarget) {
+                self.stationId = target.stationId
+                self.routeId = target.routeId
+                self.lockedDirectionId = target.lockedDirectionId
+            }
+        }
+
         var target: BannerTarget
-        var id: UUID { target.id }
+        var id: ID { ID(target: target) }
         var activeDirectionId: Int
         var isVisible: Bool = false
-        var predictions: [TransitPrediction] = []
-        var isFetching: Bool = false
+        var predictionSnapshots: [Int: StopPredictionSnapshot] = [:]
+        var fetchingDirections: Set<Int> = []
+        var lastFetchAttemptDates: [Int: Date] = [:]
+        var stopCoordinates: CLLocationCoordinate2D?
+        var userCoordinates: CLLocationCoordinate2D?
+
+        var predictions: [TransitPrediction] {
+            predictionSnapshots[activeDirectionId]?.predictions ?? []
+        }
+
+        var isFetching: Bool {
+            fetchingDirections.contains(activeDirectionId)
+        }
+
+        var distance: CLLocationDistance? {
+            guard let stopCoordinates, let userCoordinates else { return nil }
+            return CLLocation(
+                latitude: stopCoordinates.latitude,
+                longitude: stopCoordinates.longitude
+            ).distance(from: CLLocation(
+                latitude: userCoordinates.latitude,
+                longitude: userCoordinates.longitude
+            ))
+        }
         
         init(target: BannerTarget) {
             self.target = target
@@ -61,7 +96,8 @@ struct StopBannerFeature {
         case onAppear
         case onDisappear
         case fetchPredictions
-        case predictionsResponse(Result<[TransitPrediction], Never>)
+        case predictionsResponse(StopPredictionKey, StopPredictionSnapshot)
+        case predictionsFailed(StopPredictionKey, Date)
         case switchDirectionTapped
         case saveTapped
         case pinTapped
@@ -78,7 +114,6 @@ struct StopBannerFeature {
         }
     }
 
-    @Dependency(\.mbtaClient) var mbtaClient
     @Dependency(\.databaseClient) var databaseClient
 
     var body: some ReducerOf<Self> {
@@ -95,31 +130,46 @@ struct StopBannerFeature {
             case .switchDirectionTapped:
                 guard state.isSwipeable else { return .none }
                 state.activeDirectionId = state.activeDirectionId == 0 ? 1 : 0
-                state.predictions = []
                 return .send(.fetchPredictions)
                 
             case .fetchPredictions:
                 guard state.isVisible else { return .none }
-                state.isFetching = true
-                
-                let request = BannerPredictionRequest(
-                    predictionRouteId: state.target.routeId,
-                    predictionStopIds: [state.target.stationId],
-                    predictionDirectionId: state.activeDirectionId
+                let now = Date()
+                let key = StopPredictionKey(
+                    stationId: state.target.stationId,
+                    routeId: state.target.routeId,
+                    directionId: state.activeDirectionId
                 )
-                let routeIds = [state.target.routeId]
+                if let snapshot = state.predictionSnapshots[key.directionId],
+                   snapshot.isFresh(at: now, maxAge: 15) {
+                    return .none
+                }
+                if let lastAttemptDate = state.lastFetchAttemptDates[key.directionId],
+                   now.timeIntervalSince(lastAttemptDate) < 15 {
+                    return .none
+                }
+                guard !state.fetchingDirections.contains(key.directionId) else { return .none }
+                state.fetchingDirections.insert(key.directionId)
+                state.lastFetchAttemptDates[key.directionId] = now
+
                 return .run { send in
                     do {
-                        let predictions = try await mbtaClient.fetchTransitTimes(request, routeIds, .predictionRefresh)
-                        await send(.predictionsResponse(.success(predictions)))
+                        let snapshot = try await StopPredictionCache.shared.predictions(for: key)
+                        await send(.predictionsResponse(key, snapshot))
                     } catch {
-                        await send(.predictionsResponse(.success([])))
+                        await send(.predictionsFailed(key, Date()))
                     }
                 }
                 
-            case let .predictionsResponse(.success(predictions)):
-                state.isFetching = false
-                state.predictions = predictions
+            case let .predictionsResponse(key, snapshot):
+                state.fetchingDirections.remove(key.directionId)
+                state.lastFetchAttemptDates[key.directionId] = snapshot.fetchedAt
+                state.predictionSnapshots[key.directionId] = snapshot
+                return .none
+
+            case let .predictionsFailed(key, failedAt):
+                state.fetchingDirections.remove(key.directionId)
+                state.lastFetchAttemptDates[key.directionId] = failedAt
                 return .none
                 
             case .saveTapped:
@@ -222,12 +272,4 @@ struct StopBannerFeature {
         }
         .ifLet(\.$alert, action: \.alert)
     }
-}
-
-/// Lightweight PredictionTarget for banner API calls.
-/// Constructed from the banner's target + active direction state.
-private struct BannerPredictionRequest: PredictionTarget {
-    var predictionRouteId: String
-    var predictionStopIds: [String]
-    var predictionDirectionId: Int
 }

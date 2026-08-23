@@ -70,5 +70,8 @@ struct StopsListView: View {
         .onAppear {
             store.send(.onAppear)
         }
+        .onDisappear {
+            store.send(.onDisappear)
+        }
     }
 }

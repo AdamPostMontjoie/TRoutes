@@ -20,7 +20,8 @@ struct SingleStopFeature {
         var path = StackState<SearchedStationFeature.State>()
         
         var locationPermissionDenied = false
-        var userCoordinates: CLLocationCoordinate2D?
+        var displayCoordinates: CLLocationCoordinate2D?
+        var nearbySearchCoordinates: CLLocationCoordinate2D?
     }
     
     enum Action: Equatable {
@@ -28,6 +29,7 @@ struct SingleStopFeature {
         case apiKeyLinkTapped
         case onSettingsButtonTapped
         case requestLocationTapped
+        case refreshNearbyTapped
         
         case startListeningToLocation
         case locationAuthorizationStatusReceived(CLAuthorizationStatus)
@@ -65,6 +67,18 @@ struct SingleStopFeature {
                         openSettings()
                     }
                 }
+
+            case .refreshNearbyTapped:
+                guard let coordinates = state.displayCoordinates else { return .none }
+                state.nearbySearchCoordinates = coordinates
+                let setRefreshOrigin = nearbyStopsClient.setRefreshOrigin
+                return .run { send in
+                    await setRefreshOrigin(coordinates)
+                    await send(.stopsList(.fetchNearby(
+                        latitude: coordinates.latitude,
+                        longitude: coordinates.longitude
+                    )))
+                }
                 
             case let .locationAuthorizationStatusReceived(status):
                 switch status {
@@ -87,11 +101,21 @@ struct SingleStopFeature {
                 
             case let .locationUpdateReceived(update):
                 switch update {
-                case .coordinates(let coords):
-                    print("📍 User coords updated: \(coords.latitude), \(coords.longitude)")
+                case .displayCoordinates(let coordinates):
                     state.locationPermissionDenied = false
-                    state.userCoordinates = coords
-                    return .send(.stopsList(.fetchNearby(latitude: coords.latitude, longitude: coords.longitude)))
+                    state.displayCoordinates = coordinates
+                    return .send(.stopsList(.displayCoordinatesUpdated(coordinates)))
+                case .refreshCoordinates(let coordinates):
+                    state.locationPermissionDenied = false
+                    state.displayCoordinates = coordinates
+                    state.nearbySearchCoordinates = coordinates
+                    return .concatenate(
+                        .send(.stopsList(.displayCoordinatesUpdated(coordinates))),
+                        .send(.stopsList(.fetchNearby(
+                            latitude: coordinates.latitude,
+                            longitude: coordinates.longitude
+                        )))
+                    )
                 case .authorizationGranted:
                     state.locationPermissionDenied = false
                 case .authorizationDenied:
