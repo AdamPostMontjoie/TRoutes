@@ -75,6 +75,15 @@ struct StopsListFeature {
                     }
                 }
                 state.savedBanners = updatedBanners
+                
+                for id in state.nearbyBanners.ids {
+                    if let nearbyBanner = state.nearbyBanners[id: id] {
+                        var updatedNearby = nearbyBanner
+                        updatedNearby.isSaved = state.savedBanners.contains(where: { $0.target.stationId == nearbyBanner.target.stationId && $0.target.routeId == nearbyBanner.target.routeId })
+                        state.nearbyBanners[id: id] = updatedNearby
+                    }
+                }
+                
                 return .none
                 
             case let .pinnedStopsResponse(.success(stops)):
@@ -91,6 +100,33 @@ struct StopsListFeature {
                     }
                 }
                 state.pinnedBanners = updatedBanners
+                
+                for id in state.savedBanners.ids {
+                    if let savedBanner = state.savedBanners[id: id] {
+                        var updatedSaved = savedBanner
+                        updatedSaved.pinnedDirections.removeAll()
+                        for pinnedBanner in state.pinnedBanners {
+                            if pinnedBanner.target.stationId == savedBanner.target.stationId && pinnedBanner.target.routeId == savedBanner.target.routeId {
+                                updatedSaved.pinnedDirections.formUnion(pinnedBanner.pinnedDirections)
+                            }
+                        }
+                        state.savedBanners[id: id] = updatedSaved
+                    }
+                }
+                
+                for id in state.nearbyBanners.ids {
+                    if let nearbyBanner = state.nearbyBanners[id: id] {
+                        var updatedNearby = nearbyBanner
+                        updatedNearby.pinnedDirections.removeAll()
+                        for pinnedBanner in state.pinnedBanners {
+                            if pinnedBanner.target.stationId == nearbyBanner.target.stationId && pinnedBanner.target.routeId == nearbyBanner.target.routeId {
+                                updatedNearby.pinnedDirections.formUnion(pinnedBanner.pinnedDirections)
+                            }
+                        }
+                        state.nearbyBanners[id: id] = updatedNearby
+                    }
+                }
+                
                 return .none
                 
             case let .fetchNearby(latitude, longitude):
@@ -146,6 +182,7 @@ struct StopsListFeature {
                 
             case .pinnedBanners(.element(id: _, action: .delegate(.didChangePinnedStatus))),
                  .savedBanners(.element(id: _, action: .delegate(.didChangeSaveStatus))),
+                 .savedBanners(.element(id: _, action: .delegate(.didChangePinnedStatus))),
                  .nearbyBanners(.element(id: _, action: .delegate(.didChangeSaveStatus))),
                  .nearbyBanners(.element(id: _, action: .delegate(.didChangePinnedStatus))):
                 return .send(.fetchSavedAndPinned)
