@@ -77,6 +77,11 @@ struct StopsListFeature {
         case pinnedBanners(IdentifiedActionOf<StopBannerFeature>)
         case savedBanners(IdentifiedActionOf<StopBannerFeature>)
         case nearbyBanners(IdentifiedActionOf<StopBannerFeature>)
+        case delegate(Delegate)
+
+        enum Delegate: Equatable {
+            case liveActivityRequested(StopLiveActivityRequest)
+        }
     }
     
     @Dependency(\.databaseClient) var databaseClient
@@ -284,8 +289,16 @@ struct StopsListFeature {
                  .nearbyBanners(.element(id: _, action: .delegate(.didChangeSaveStatus))),
                  .nearbyBanners(.element(id: _, action: .delegate(.didChangePinnedStatus))):
                 return .send(.fetchSavedAndPinned)
+
+            case let .pinnedBanners(.element(id: _, action: .delegate(.liveActivityRequested(request)))),
+                 let .savedBanners(.element(id: _, action: .delegate(.liveActivityRequested(request)))),
+                 let .nearbyBanners(.element(id: _, action: .delegate(.liveActivityRequested(request)))):
+                return .send(.delegate(.liveActivityRequested(request)))
                 
             case .pinnedBanners, .savedBanners, .nearbyBanners:
+                return .none
+
+            case .delegate:
                 return .none
             }
         }

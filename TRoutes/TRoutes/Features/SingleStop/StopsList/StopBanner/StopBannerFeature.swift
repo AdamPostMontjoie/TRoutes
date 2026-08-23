@@ -48,6 +48,29 @@ struct StopBannerFeature {
             RoutePresentation(routeId: target.routeId, transitType: target.transitType)
         }
 
+        var liveActivityRequest: StopLiveActivityRequest {
+            let destination: String
+            if target.directionDestinations.indices.contains(activeDirectionId),
+               !target.directionDestinations[activeDirectionId].isEmpty {
+                destination = target.directionDestinations[activeDirectionId]
+            } else {
+                destination = activeDirectionId == 0 ? "Outbound" : "Inbound"
+            }
+
+            return StopLiveActivityRequest(
+                key: StopPredictionKey(
+                    stationId: target.stationId,
+                    routeId: target.routeId,
+                    directionId: activeDirectionId
+                ),
+                stopName: target.stopName,
+                routePresentation: routePresentation,
+                destination: destination,
+                transitType: target.transitType,
+                initialPredictions: predictions.map(\.display)
+            )
+        }
+
         var distance: CLLocationDistance? {
             guard let stopCoordinates, let userCoordinates else { return nil }
             return CLLocation(
@@ -123,6 +146,7 @@ struct StopBannerFeature {
         case predictionsResponse(StopPredictionKey, StopPredictionSnapshot)
         case predictionsFailed(StopPredictionKey, Date)
         case directionSelected(Int)
+        case liveActivityTapped
         case saveTapped
         case pinTapped
         case toggleSavedResponse(Result<Bool, DatabaseError>)
@@ -135,6 +159,7 @@ struct StopBannerFeature {
         enum Delegate: Equatable {
             case didChangeSaveStatus
             case didChangePinnedStatus
+            case liveActivityRequested(StopLiveActivityRequest)
         }
     }
 
@@ -159,6 +184,9 @@ struct StopBannerFeature {
                 else { return .none }
                 state.activeDirectionId = directionId
                 return .send(.fetchPredictions)
+
+            case .liveActivityTapped:
+                return .send(.delegate(.liveActivityRequested(state.liveActivityRequest)))
                 
             case .fetchPredictions:
                 guard state.isVisible else { return .none }

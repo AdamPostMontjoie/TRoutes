@@ -43,6 +43,11 @@ struct SearchedStationFeature {
         case onDisappear
         case refreshTick
         case banner(IdentifiedActionOf<StopBannerFeature>)
+        case delegate(Delegate)
+
+        enum Delegate: Equatable {
+            case liveActivityRequested(StopLiveActivityRequest)
+        }
     }
 
     @Dependency(\.continuousClock) var clock
@@ -72,7 +77,13 @@ struct SearchedStationFeature {
                     }
                 }
 
+            case let .banner(.element(id: _, action: .delegate(.liveActivityRequested(request)))):
+                return .send(.delegate(.liveActivityRequested(request)))
+
             case .banner:
+                return .none
+
+            case .delegate:
                 return .none
             }
         }

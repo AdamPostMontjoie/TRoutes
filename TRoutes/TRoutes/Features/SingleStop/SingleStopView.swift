@@ -43,6 +43,7 @@ struct SingleStopView: View {
                 ) { userSettingsStore in
                     UserSettingsView(store: userSettingsStore)
                 }
+                .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
 
         } destination: { store in
             SearchedStationView(store: store)

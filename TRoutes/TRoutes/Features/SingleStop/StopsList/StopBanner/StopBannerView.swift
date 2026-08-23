@@ -42,16 +42,22 @@ struct StopBannerView: View {
                 .layoutPriority(1)
                 
                 if store.target.isDirectionLocked {
-                    Button {
-                        store.send(.pinTapped, animation: .default)
-                    } label: {
-                        Image(systemName: "pin.fill")
-                            .font(.title3)
-                            .foregroundStyle(store.transitColor)
+                    HStack(spacing: 12) {
+                        liveActivityButton
+
+                        Button {
+                            store.send(.pinTapped, animation: .default)
+                        } label: {
+                            Image(systemName: "pin.fill")
+                                .font(.title3)
+                                .foregroundStyle(store.transitColor)
+                        }
                     }
                     .buttonStyle(.plain)
                 } else {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
+                        liveActivityButton
+
                         Button {
                             store.send(.pinTapped, animation: .default)
                         } label: {
@@ -114,6 +120,26 @@ struct StopBannerView: View {
             store.send(.onDisappear)
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+    }
+
+    private var liveActivityButton: some View {
+        Button {
+            store.send(.liveActivityTapped)
+        } label: {
+            Image(systemName: "play.circle")
+                .font(.title3)
+                .foregroundStyle(store.transitColor)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Launch Live Activity")
+        .help("Launch Live Activity")
+        .contextMenu {
+            Button {
+                store.send(.liveActivityTapped)
+            } label: {
+                Label("Launch Live Activity", systemImage: "play.fill")
+            }
+        }
     }
 
     private var directionSelection: Binding<Int> {

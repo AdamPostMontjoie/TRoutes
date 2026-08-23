@@ -9,6 +9,8 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     
     private var lastDisplayLocation: CLLocation?
     private var lastSearchLocation: CLLocation?
+    private var backgroundActivitySession: CLBackgroundActivitySession?
+    private var isLiveActivityBackgroundSessionActive = false
     
     static let shared = NearbyStopsManager()
     
@@ -54,13 +56,45 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     func requestLocationAuthorization() {
         locationManager.requestWhenInUseAuthorization()
     }
+
+    func startLiveActivityBackgroundSession() -> Bool {
+        let status = locationManager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+            return false
+        }
+
+        isLiveActivityBackgroundSessionActive = true
+        backgroundActivitySession?.invalidate()
+        backgroundActivitySession = CLBackgroundActivitySession()
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.pausesLocationUpdatesAutomatically = false
+        locationManager.activityType = .other
+        locationManager.startUpdatingLocation()
+        return true
+    }
+
+    func stopLiveActivityBackgroundSession() {
+        isLiveActivityBackgroundSessionActive = false
+        backgroundActivitySession?.invalidate()
+        backgroundActivitySession = nil
+        locationManager.allowsBackgroundLocationUpdates = false
+        locationManager.pausesLocationUpdatesAutomatically = true
+
+        if continuation == nil {
+            locationManager.stopUpdatingLocation()
+        } else {
+            locationManager.startUpdatingLocation()
+        }
+    }
     
     func stopFunction() {
+        continuation?.finish()
+        continuation = nil
+
+        guard !isLiveActivityBackgroundSessionActive else { return }
         locationManager.stopUpdatingLocation()
         lastDisplayLocation = nil
         lastSearchLocation = nil
-        continuation?.finish()
-        continuation = nil
     }
     
     // MARK: - CLLocationManagerDelegate
@@ -69,6 +103,11 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
         let status = manager.authorizationStatus
         if status == .denied || status == .restricted {
             continuation?.yield(.authorizationDenied)
+            if isLiveActivityBackgroundSessionActive {
+                Task {
+                    await StopLiveActivityManager.shared.end()
+                }
+            }
         } else if status == .authorizedWhenInUse || status == .authorizedAlways {
             if continuation != nil {
                 continuation?.yield(.authorizationGranted)
