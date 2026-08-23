@@ -51,6 +51,25 @@ struct SingleStopView: View {
         .task {
             store.send(.onAppear)
         }
+        .overlay(alignment: .bottom) {
+            if store.isLiveActivityConfirmationPresented {
+                Label("Launched Live Activity", systemImage: "checkmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(.secondary.opacity(0.2), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.snappy, value: store.isLiveActivityConfirmationPresented)
     }
     
     @ViewBuilder

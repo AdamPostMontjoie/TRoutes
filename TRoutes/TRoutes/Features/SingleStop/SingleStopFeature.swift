@@ -21,6 +21,7 @@ struct SingleStopFeature {
         
         var locationPermissionDenied = false
         var hasActiveJourney = false
+        var isLiveActivityConfirmationPresented = false
         var displayCoordinates: CLLocationCoordinate2D?
         var nearbySearchCoordinates: CLLocationCoordinate2D?
     }
@@ -41,6 +42,7 @@ struct SingleStopFeature {
         case stopLiveActivityRequested(StopLiveActivityRequest)
         case stopLiveActivityAuthorizationReceived(StopLiveActivityRequest, CLAuthorizationStatus)
         case stopLiveActivityResponse(StopLiveActivityError?)
+        case dismissLiveActivityConfirmation
         
         case stopsList(StopsListFeature.Action)
         case search(StopSearchFeature.Action)
@@ -55,8 +57,12 @@ struct SingleStopFeature {
     @Dependency(\.nearbyStopsClient) var nearbyStopsClient
     @Dependency(\.journeyClient) var journeyClient
     @Dependency(\.stopLiveActivityClient) var stopLiveActivityClient
+    @Dependency(\.continuousClock) var clock
 
-    private enum CancelID { case journeyUpdates }
+    private enum CancelID {
+        case journeyUpdates
+        case liveActivityConfirmation
+    }
     
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -203,8 +209,17 @@ struct SingleStopFeature {
                 case .requestFailed:
                     state.destination = .alert(.requestFailed)
                 case nil:
-                    break
+                    state.isLiveActivityConfirmationPresented = true
+                    return .run { send in
+                        try await clock.sleep(for: .milliseconds(1500))
+                        await send(.dismissLiveActivityConfirmation)
+                    }
+                    .cancellable(id: CancelID.liveActivityConfirmation, cancelInFlight: true)
                 }
+                return .none
+
+            case .dismissLiveActivityConfirmation:
+                state.isLiveActivityConfirmationPresented = false
                 return .none
                 
             case .apiKeyLinkTapped:

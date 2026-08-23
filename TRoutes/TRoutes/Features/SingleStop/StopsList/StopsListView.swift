@@ -8,75 +8,88 @@ import ComposableArchitecture
 
 struct StopsListView: View {
     @Bindable var store: StoreOf<StopsListFeature>
+
+    private enum ScrollAnchor: Hashable {
+        case nearbyHeader
+    }
     
     var body: some View {
-        List {
-            if !store.pinnedBanners.isEmpty {
+        ScrollViewReader { proxy in
+            List {
+                if !store.pinnedBanners.isEmpty {
+                    Section {
+                        if store.isPinnedExpanded {
+                            ForEach(
+                                store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
+                            ) { bannerStore in
+                                StopBannerView(store: bannerStore)
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                            }
+                        }
+                    } header: {
+                        collapsibleHeader(
+                            title: "Pinned",
+                            systemImage: "pin.fill",
+                            isExpanded: store.isPinnedExpanded
+                        ) {
+                            store.send(.togglePinned(!store.isPinnedExpanded))
+                        }
+                    }
+                }
+
+                if !store.savedBanners.isEmpty {
+                    Section {
+                        if store.isSavedExpanded {
+                            ForEach(
+                                store.scope(state: \.savedBanners, action: \.savedBanners)
+                            ) { bannerStore in
+                                StopBannerView(store: bannerStore)
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                            }
+                        }
+                    } header: {
+                        collapsibleHeader(
+                            title: "Saved",
+                            systemImage: "bookmark.fill",
+                            isExpanded: store.isSavedExpanded
+                        ) {
+                            store.send(.toggleSaved(!store.isSavedExpanded))
+                        }
+                    }
+                }
+
                 Section {
-                    if store.isPinnedExpanded {
+                    if store.isNearbyExpanded {
                         ForEach(
-                            store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
+                            store.scope(state: \.nearbyBanners, action: \.nearbyBanners)
                         ) { bannerStore in
-                            StopBannerView(store: bannerStore)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowSeparator(.hidden)
+                            if store.nearbyFilter.includes(bannerStore.target.transitType) {
+                                StopBannerView(store: bannerStore)
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                            }
                         }
                     }
                 } header: {
-                    collapsibleHeader(
-                        title: "Pinned",
-                        systemImage: "pin.fill",
-                        isExpanded: store.isPinnedExpanded
-                    ) {
-                        store.send(.togglePinned(!store.isPinnedExpanded))
-                    }
+                    nearbyHeader
+                        .id(ScrollAnchor.nearbyHeader)
                 }
             }
-            
-            if !store.savedBanners.isEmpty {
-                Section {
-                    if store.isSavedExpanded {
-                        ForEach(
-                            store.scope(state: \.savedBanners, action: \.savedBanners)
-                        ) { bannerStore in
-                            StopBannerView(store: bannerStore)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowSeparator(.hidden)
-                        }
-                    }
-                } header: {
-                    collapsibleHeader(
-                        title: "Saved",
-                        systemImage: "bookmark.fill",
-                        isExpanded: store.isSavedExpanded
-                    ) {
-                        store.send(.toggleSaved(!store.isSavedExpanded))
-                    }
+
+            .listStyle(.plain)
+            .onChange(of: store.nearbyFilter) { _, _ in
+                withAnimation(.snappy) {
+                    proxy.scrollTo(ScrollAnchor.nearbyHeader, anchor: .top)
                 }
             }
-            
-            Section {
-                if store.isNearbyExpanded {
-                    ForEach(
-                        store.scope(state: \.nearbyBanners, action: \.nearbyBanners)
-                    ) { bannerStore in
-                        if store.nearbyFilter.includes(bannerStore.target.transitType) {
-                            StopBannerView(store: bannerStore)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowSeparator(.hidden)
-                        }
-                    }
-                }
-            } header: {
-                nearbyHeader
+            .onAppear {
+                store.send(.onAppear)
             }
-        }
-        .listStyle(.plain)
-        .onAppear {
-            store.send(.onAppear)
-        }
-        .onDisappear {
-            store.send(.onDisappear)
+            .onDisappear {
+                store.send(.onDisappear)
+            }
         }
     }
 
@@ -98,11 +111,11 @@ struct StopsListView: View {
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .padding(.vertical, 6)
         .textCase(nil)
         .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
     }
@@ -124,6 +137,7 @@ struct StopsListView: View {
                             .rotationEffect(.degrees(store.isNearbyExpanded ? 90 : 0))
                             .foregroundStyle(.secondary)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -12,7 +12,7 @@ import WidgetKit
 struct StopLiveActivity: Widget {
 	var body: some WidgetConfiguration {
 		ActivityConfiguration(for: StopActivityAttributes.self) { context in
-			StopLockScreenView(context: context)
+			StopLockScreenOrWatchView(context: context)
 				.activityBackgroundTint(.clear)
 		} dynamicIsland: { context in
 			DynamicIsland {
@@ -45,6 +45,7 @@ struct StopLiveActivity: Widget {
 					.foregroundStyle(Color(hex: context.attributes.colorHex))
 			}
 		}
+		.supplementalActivityFamilies([.small])
 	}
 
 	private func routeBadge(_ attributes: StopActivityAttributes) -> some View {
@@ -86,6 +87,52 @@ struct StopLiveActivity: Widget {
 		case "boarding": return "BRD"
 		default: return time.replacingOccurrences(of: " min", with: "m")
 		}
+	}
+}
+
+private struct StopLockScreenOrWatchView: View {
+	@Environment(\.activityFamily) private var activityFamily
+	let context: ActivityViewContext<StopActivityAttributes>
+
+	var body: some View {
+		if activityFamily == .small {
+			StopWatchView(context: context)
+		} else {
+			StopLockScreenView(context: context)
+		}
+	}
+}
+
+private struct StopWatchView: View {
+	let context: ActivityViewContext<StopActivityAttributes>
+
+	var body: some View {
+		HStack(spacing: 8) {
+			Text(context.attributes.routeBadge)
+				.font(.headline.bold())
+				.lineLimit(1)
+				.minimumScaleFactor(0.5)
+				.foregroundStyle(Color(hex: context.attributes.foregroundColorHex))
+				.frame(minWidth: 36, minHeight: 32)
+				.padding(.horizontal, 6)
+				.background(Color(hex: context.attributes.colorHex).gradient.opacity(0.8))
+				.clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+			if let prediction = context.state.predictions.first {
+				Text(prediction)
+					.font(.subheadline.bold())
+					.lineLimit(1)
+					.minimumScaleFactor(0.6)
+					.frame(maxWidth: .infinity)
+			} else {
+				Text(context.attributes.stopName)
+					.font(.footnote.weight(.semibold))
+					.lineLimit(2)
+					.minimumScaleFactor(0.7)
+					.frame(maxWidth: .infinity)
+			}
+		}
+		.padding()
 	}
 }
 
@@ -139,6 +186,15 @@ private struct StopLockScreenView: View {
 			}
 		}
 		.padding(16)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.foregroundStyle(.primary)
+		.background(.ultraThinMaterial)
+		.clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+		.overlay {
+			RoundedRectangle(cornerRadius: 24, style: .continuous)
+				.stroke(.secondary.opacity(0.2), lineWidth: 1)
+		}
+		.shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
 	}
 }
 
