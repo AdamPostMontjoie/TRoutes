@@ -12,44 +12,34 @@ struct StopBannerView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                let transitType = store.target.transitType
-                Image(systemName: transitType.iconName)
-                    .font(.title2)
-                    .foregroundStyle(store.transitColor)
+            HStack(alignment: .top, spacing: 12) {
+                Text(store.routePresentation.badgeText)
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .foregroundStyle(store.transitForegroundColor)
+                    .frame(minWidth: 28, minHeight: 24)
+                    .padding(.horizontal, 6)
+                    .background(store.transitColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(store.target.stopName)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                    
-                    HStack(spacing: 4) {
-                        if store.activeDirectionId < store.target.directionDestinations.count {
-                            let destination = store.target.directionDestinations[store.activeDirectionId]
-                            if !destination.isEmpty {
-                                Image(systemName: "arrow.right")
-                                Text(destination)
-                            } else {
-                                Text(store.activeDirectionId == 0 ? "Outbound" : "Inbound")
-                            }
-                        } else {
-                            Text(store.activeDirectionId == 0 ? "Outbound" : "Inbound")
-                        }
-                    }
-                    .font(.caption)
-                    .opacity(0.8)
+                        .font(.headline.weight(.semibold))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
 
-                    if let formattedDistance = store.formattedDistance {
-                        Label(
-                            formattedDistance,
-                            systemImage: "location.fill"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    if let routeName = store.routePresentation.detailText {
+                        Text(routeName)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
                 
                 if store.target.isDirectionLocked {
                     Button {
@@ -82,37 +72,30 @@ struct StopBannerView: View {
                     .buttonStyle(.plain)
                 }
             }
-            
-            // Predictions Block
-            HStack {
-                if store.isFetching && store.predictions.isEmpty {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading predictions...")
-                        .font(.subheadline)
-                        .opacity(0.8)
-                } else if store.predictions.isEmpty {
-                    Text("No upcoming departures")
-                        .font(.subheadline)
-                        .opacity(0.8)
-                } else {
-                    timesRow(times: store.predictions, color: store.transitColor, foregroundColor: store.transitForegroundColor)
-                }
+
+            if let formattedDistance = store.formattedDistance {
+                Label(
+                    formattedDistance,
+                    systemImage: "location.fill"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            
-            // Swipe Indicator Dots — only shown for swipeable stops
+
             if store.isSwipeable {
-                HStack(spacing: 6) {
-                    Spacer()
-                    Circle()
-                        .fill(store.transitColor.opacity(store.activeDirectionId == 0 ? 1.0 : 0.4))
-                        .frame(width: 6, height: 6)
-                    Circle()
-                        .fill(store.transitColor.opacity(store.activeDirectionId == 1 ? 1.0 : 0.4))
-                        .frame(width: 6, height: 6)
-                    Spacer()
+                TabView(selection: directionSelection) {
+                    directionPage(directionId: 0)
+                        .tag(0)
+
+                    directionPage(directionId: 1)
+                        .tag(1)
                 }
-                .padding(.top, 4)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 92)
+                .sensoryFeedback(.selection, trigger: store.activeDirectionId)
+            } else {
+                directionPage(directionId: store.activeDirectionId)
             }
         }
         .foregroundStyle(.primary)
@@ -124,15 +107,6 @@ struct StopBannerView: View {
                 .stroke(.secondary.opacity(0.2), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { value in
-                    if abs(value.translation.width) > 20 {
-                        store.send(.switchDirectionTapped, animation: .spring(response: 0.4, dampingFraction: 0.8))
-                    }
-                }
-        )
         .onAppear {
             store.send(.onAppear)
         }
@@ -140,6 +114,81 @@ struct StopBannerView: View {
             store.send(.onDisappear)
         }
         .alert($store.scope(state: \.alert, action: \.alert))
+    }
+
+    private var directionSelection: Binding<Int> {
+        Binding(
+            get: { store.activeDirectionId },
+            set: { store.send(.directionSelected($0), animation: .snappy) }
+        )
+    }
+
+    private func directionPage(directionId: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 4) {
+                let destination = destinationText(for: directionId)
+                if !destination.isEmpty {
+                    Image(systemName: "arrow.right")
+                    Text(destination)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            predictionsBlock(directionId: directionId)
+
+            if store.isSwipeable {
+                HStack(spacing: 6) {
+                    Spacer()
+                    Circle()
+                        .fill(store.transitColor.opacity(store.activeDirectionId == 0 ? 1.0 : 0.4))
+                        .frame(width: 6, height: 6)
+                    Circle()
+                        .fill(store.transitColor.opacity(store.activeDirectionId == 1 ? 1.0 : 0.4))
+                        .frame(width: 6, height: 6)
+                    Spacer()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func destinationText(for directionId: Int) -> String {
+        guard store.target.directionDestinations.indices.contains(directionId) else {
+            return directionId == 0 ? "Outbound" : "Inbound"
+        }
+        let destination = store.target.directionDestinations[directionId]
+        return destination.isEmpty
+            ? (directionId == 0 ? "Outbound" : "Inbound")
+            : destination
+    }
+
+    @ViewBuilder
+    private func predictionsBlock(directionId: Int) -> some View {
+        let predictions = store.predictionSnapshots[directionId]?.predictions ?? []
+        let isFetching = store.fetchingDirections.contains(directionId)
+
+        HStack {
+            if isFetching && predictions.isEmpty {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading predictions...")
+                    .font(.subheadline)
+                    .opacity(0.8)
+            } else if predictions.isEmpty {
+                Text("No upcoming departures")
+                    .font(.subheadline)
+                    .opacity(0.8)
+            } else {
+                timesRow(
+                    times: predictions,
+                    color: store.transitColor,
+                    foregroundColor: store.transitForegroundColor
+                )
+            }
+        }
     }
     
     @ViewBuilder

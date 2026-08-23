@@ -1042,7 +1042,8 @@ private func resolveStationRoutes(for station: TransitStation) -> [StationStop] 
 
 private func transitType(for routeId: String) -> TransitType {
     switch routeId {
-    case "Red", "Mattapan": return .redLine
+    case "Red": return .redLine
+    case "Mattapan": return .mattapan
     case "Orange": return .orangeLine
     case "Blue": return .blueLine
     case let id where id.hasPrefix("Green-"): return .greenLine

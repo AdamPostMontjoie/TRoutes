@@ -44,6 +44,10 @@ struct StopBannerFeature {
             fetchingDirections.contains(activeDirectionId)
         }
 
+        var routePresentation: RoutePresentation {
+            RoutePresentation(routeId: target.routeId, transitType: target.transitType)
+        }
+
         var distance: CLLocationDistance? {
             guard let stopCoordinates, let userCoordinates else { return nil }
             return CLLocation(
@@ -118,7 +122,7 @@ struct StopBannerFeature {
         case fetchPredictions
         case predictionsResponse(StopPredictionKey, StopPredictionSnapshot)
         case predictionsFailed(StopPredictionKey, Date)
-        case switchDirectionTapped
+        case directionSelected(Int)
         case saveTapped
         case pinTapped
         case toggleSavedResponse(Result<Bool, DatabaseError>)
@@ -147,9 +151,13 @@ struct StopBannerFeature {
                 state.isVisible = false
                 return .none
                 
-            case .switchDirectionTapped:
-                guard state.isSwipeable else { return .none }
-                state.activeDirectionId = state.activeDirectionId == 0 ? 1 : 0
+            case let .directionSelected(directionId):
+                guard state.isSwipeable,
+                      directionId != state.activeDirectionId,
+                      state.target.directionDestinations.indices.contains(directionId),
+                      !state.target.directionDestinations[directionId].isEmpty
+                else { return .none }
+                state.activeDirectionId = directionId
                 return .send(.fetchPredictions)
                 
             case .fetchPredictions:
