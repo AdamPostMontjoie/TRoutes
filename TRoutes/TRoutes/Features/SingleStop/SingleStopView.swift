@@ -16,7 +16,7 @@ struct SingleStopView: View {
         NavigationStack(path: $store.scope(state: \.path, action: \.path)) {
             mainContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("Single Stop")
+                .navigationTitle("Stops")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {

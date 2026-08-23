@@ -1,14 +1,17 @@
 {
   "images" : [
     {
+      "filename" : "APIKeyAlertImage.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "APIKeyAlertImage@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "APIKeyAlertImage@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
