@@ -8,7 +8,7 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     private var continuation: AsyncStream<NearbyStopsUpdate>.Continuation?
     
     private var lastDisplayLocation: CLLocation?
-    private var lastRefreshLocation: CLLocation?
+    private var lastSearchLocation: CLLocation?
     
     static let shared = NearbyStopsManager()
     
@@ -40,9 +40,9 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
                 // If we already have a location, yield it immediately
                 if let location = locationManager.location {
                     self.lastDisplayLocation = location
-                    self.lastRefreshLocation = location
+                    self.lastSearchLocation = location
                     continuation.yield(.displayCoordinates(location.coordinate))
-                    continuation.yield(.refreshCoordinates(location.coordinate))
+                    continuation.yield(.searchCoordinates(location.coordinate))
                 }
             } else if status == .denied || status == .restricted {
                 continuation.yield(.authorizationDenied)
@@ -54,18 +54,11 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
     func requestLocationAuthorization() {
         locationManager.requestWhenInUseAuthorization()
     }
-
-    func setRefreshOrigin(_ coordinates: CLLocationCoordinate2D) {
-        lastRefreshLocation = CLLocation(
-            latitude: coordinates.latitude,
-            longitude: coordinates.longitude
-        )
-    }
     
     func stopFunction() {
         locationManager.stopUpdatingLocation()
         lastDisplayLocation = nil
-        lastRefreshLocation = nil
+        lastSearchLocation = nil
         continuation?.finish()
         continuation = nil
     }
@@ -97,14 +90,14 @@ class NearbyStopsManager: NSObject, CLLocationManagerDelegate {
             continuation?.yield(.displayCoordinates(location.coordinate))
         }
 
-        if let lastRefreshLocation {
-            if location.distance(from: lastRefreshLocation) >= 200 {
-                self.lastRefreshLocation = location
-                continuation?.yield(.refreshCoordinates(location.coordinate))
+        if let lastSearchLocation {
+            if location.distance(from: lastSearchLocation) >= 200 {
+                self.lastSearchLocation = location
+                continuation?.yield(.searchCoordinates(location.coordinate))
             }
         } else {
-            lastRefreshLocation = location
-            continuation?.yield(.refreshCoordinates(location.coordinate))
+            lastSearchLocation = location
+            continuation?.yield(.searchCoordinates(location.coordinate))
         }
     }
     

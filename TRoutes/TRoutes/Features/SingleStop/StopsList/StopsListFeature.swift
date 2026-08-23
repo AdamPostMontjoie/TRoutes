@@ -9,12 +9,49 @@ import Foundation
 
 @Reducer
 struct StopsListFeature {
+    enum NearbyFilter: String, CaseIterable, Equatable {
+        case all
+        case subway
+        case bus
+        case commuterRail
+
+        var title: String {
+            switch self {
+            case .all: return "All"
+            case .subway: return "Subway"
+            case .bus: return "Bus"
+            case .commuterRail: return "CR"
+            }
+        }
+
+        func includes(_ transitType: TransitType) -> Bool {
+            switch self {
+            case .all:
+                return true
+            case .subway:
+                switch transitType {
+                case .redLine, .orangeLine, .blueLine, .greenLine, .mattapan:
+                    return true
+                case .bus, .commuterRail, .ferry:
+                    return false
+                }
+            case .bus:
+                if case .bus = transitType { return true }
+                return false
+            case .commuterRail:
+                if case .commuterRail = transitType { return true }
+                return false
+            }
+        }
+    }
+
     @ObservableState
     struct State: Equatable {
         var pinnedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var savedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var nearbyBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var displayCoordinates: CLLocationCoordinate2D?
+        var nearbyFilter: NearbyFilter = .all
         
         var isPinnedExpanded: Bool = true
         var isSavedExpanded: Bool = true
@@ -32,6 +69,7 @@ struct StopsListFeature {
         case fetchNearby(latitude: Double, longitude: Double)
         case nearbyStopsResponse(Result<[Station], Never>)
         case displayCoordinatesUpdated(CLLocationCoordinate2D)
+        case nearbyFilterChanged(NearbyFilter)
         
         case togglePinned(Bool)
         case toggleSaved(Bool)
@@ -184,6 +222,10 @@ struct StopsListFeature {
                 for id in state.nearbyBanners.ids {
                     state.nearbyBanners[id: id]?.userCoordinates = coordinates
                 }
+                return .none
+
+            case let .nearbyFilterChanged(filter):
+                state.nearbyFilter = filter
                 return .none
                 
             case let .nearbyStopsResponse(.success(stations)):

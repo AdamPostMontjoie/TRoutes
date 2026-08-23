@@ -29,7 +29,6 @@ struct SingleStopFeature {
         case apiKeyLinkTapped
         case onSettingsButtonTapped
         case requestLocationTapped
-        case refreshNearbyTapped
         
         case startListeningToLocation
         case locationAuthorizationStatusReceived(CLAuthorizationStatus)
@@ -68,18 +67,6 @@ struct SingleStopFeature {
                     }
                 }
 
-            case .refreshNearbyTapped:
-                guard let coordinates = state.displayCoordinates else { return .none }
-                state.nearbySearchCoordinates = coordinates
-                let setRefreshOrigin = nearbyStopsClient.setRefreshOrigin
-                return .run { send in
-                    await setRefreshOrigin(coordinates)
-                    await send(.stopsList(.fetchNearby(
-                        latitude: coordinates.latitude,
-                        longitude: coordinates.longitude
-                    )))
-                }
-                
             case let .locationAuthorizationStatusReceived(status):
                 switch status {
                 case .authorizedWhenInUse, .authorizedAlways:
@@ -105,17 +92,13 @@ struct SingleStopFeature {
                     state.locationPermissionDenied = false
                     state.displayCoordinates = coordinates
                     return .send(.stopsList(.displayCoordinatesUpdated(coordinates)))
-                case .refreshCoordinates(let coordinates):
+                case .searchCoordinates(let coordinates):
                     state.locationPermissionDenied = false
-                    state.displayCoordinates = coordinates
                     state.nearbySearchCoordinates = coordinates
-                    return .concatenate(
-                        .send(.stopsList(.displayCoordinatesUpdated(coordinates))),
-                        .send(.stopsList(.fetchNearby(
-                            latitude: coordinates.latitude,
-                            longitude: coordinates.longitude
-                        )))
-                    )
+                    return .send(.stopsList(.fetchNearby(
+                        latitude: coordinates.latitude,
+                        longitude: coordinates.longitude
+                    )))
                 case .authorizationGranted:
                     state.locationPermissionDenied = false
                 case .authorizationDenied:

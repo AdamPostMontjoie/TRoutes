@@ -12,58 +12,63 @@ struct StopsListView: View {
     var body: some View {
         List {
             if !store.pinnedBanners.isEmpty {
-                DisclosureGroup(
-                    isExpanded: Binding(
-                        get: { store.isPinnedExpanded },
-                        set: { store.send(.togglePinned($0)) }
-                    )
-                ) {
-                    ForEach(
-                        store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
-                    ) { bannerStore in
-                        StopBannerView(store: bannerStore)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                            .listRowSeparator(.hidden)
+                Section {
+                    if store.isPinnedExpanded {
+                        ForEach(
+                            store.scope(state: \.pinnedBanners, action: \.pinnedBanners)
+                        ) { bannerStore in
+                            StopBannerView(store: bannerStore)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                        }
                     }
-                } label: {
-                    Text("Pinned").font(.headline)
+                } header: {
+                    collapsibleHeader(
+                        title: "Pinned",
+                        systemImage: "pin.fill",
+                        isExpanded: store.isPinnedExpanded
+                    ) {
+                        store.send(.togglePinned(!store.isPinnedExpanded))
+                    }
                 }
             }
             
             if !store.savedBanners.isEmpty {
-                DisclosureGroup(
-                    isExpanded: Binding(
-                        get: { store.isSavedExpanded },
-                        set: { store.send(.toggleSaved($0)) }
-                    )
-                ) {
-                    ForEach(
-                        store.scope(state: \.savedBanners, action: \.savedBanners)
-                    ) { bannerStore in
-                        StopBannerView(store: bannerStore)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                            .listRowSeparator(.hidden)
+                Section {
+                    if store.isSavedExpanded {
+                        ForEach(
+                            store.scope(state: \.savedBanners, action: \.savedBanners)
+                        ) { bannerStore in
+                            StopBannerView(store: bannerStore)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                        }
                     }
-                } label: {
-                    Text("Saved").font(.headline)
+                } header: {
+                    collapsibleHeader(
+                        title: "Saved",
+                        systemImage: "bookmark.fill",
+                        isExpanded: store.isSavedExpanded
+                    ) {
+                        store.send(.toggleSaved(!store.isSavedExpanded))
+                    }
                 }
             }
             
-            DisclosureGroup(
-                isExpanded: Binding(
-                    get: { store.isNearbyExpanded },
-                    set: { store.send(.toggleNearby($0)) }
-                )
-            ) {
-                ForEach(
-                    store.scope(state: \.nearbyBanners, action: \.nearbyBanners)
-                ) { bannerStore in
-                    StopBannerView(store: bannerStore)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
+            Section {
+                if store.isNearbyExpanded {
+                    ForEach(
+                        store.scope(state: \.nearbyBanners, action: \.nearbyBanners)
+                    ) { bannerStore in
+                        if store.nearbyFilter.includes(bannerStore.target.transitType) {
+                            StopBannerView(store: bannerStore)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                        }
+                    }
                 }
-            } label: {
-                Text("Nearby").font(.headline)
+            } header: {
+                nearbyHeader
             }
         }
         .listStyle(.plain)
@@ -73,5 +78,76 @@ struct StopsListView: View {
         .onDisappear {
             store.send(.onDisappear)
         }
+    }
+
+    private func collapsibleHeader(
+        title: String,
+        systemImage: String,
+        isExpanded: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.headline)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .padding(.vertical, 6)
+        .textCase(nil)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+    }
+
+    private var nearbyHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    store.send(.toggleNearby(!store.isNearbyExpanded))
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("Nearby", systemImage: "location.fill")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(store.isNearbyExpanded ? 90 : 0))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(store.isNearbyExpanded ? "Expanded" : "Collapsed")
+            }
+
+            if store.isNearbyExpanded {
+                Picker(
+                    "Nearby transit filter",
+                    selection: Binding(
+                        get: { store.nearbyFilter },
+                        set: { store.send(.nearbyFilterChanged($0)) }
+                    )
+                ) {
+                    ForEach(StopsListFeature.NearbyFilter.allCases, id: \.self) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+        }
+        .foregroundStyle(.primary)
+        .padding(.vertical, 8)
+        .textCase(nil)
     }
 }

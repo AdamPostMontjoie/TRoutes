@@ -3,7 +3,7 @@ import CoreLocation
 import UIKit
 
 enum NearbyStopsUpdate: Equatable {
-    case refreshCoordinates(CLLocationCoordinate2D)
+    case searchCoordinates(CLLocationCoordinate2D)
     case displayCoordinates(CLLocationCoordinate2D)
     case error(NearbyStopsError)
     case authorizationDenied
@@ -26,7 +26,6 @@ struct NearbyStopsClient {
     var makeUpdateStream: @Sendable () async -> AsyncStream<NearbyStopsUpdate>
     var getCurrentAuthorization: @Sendable () async -> CLAuthorizationStatus
     var requestLocationAuthorization: @Sendable () async -> Void
-    var setRefreshOrigin: @Sendable (CLLocationCoordinate2D) async -> Void
     var openSettings: @Sendable () -> Void
     var stopUpdates: @Sendable () async -> Void
 }
@@ -36,7 +35,6 @@ extension NearbyStopsClient: DependencyKey {
         makeUpdateStream: { await NearbyStopsManager.shared.makeUpdateStream() },
         getCurrentAuthorization: { await NearbyStopsManager.shared.authorizationStatus },
         requestLocationAuthorization: { await NearbyStopsManager.shared.requestLocationAuthorization() },
-        setRefreshOrigin: { await NearbyStopsManager.shared.setRefreshOrigin($0) },
         openSettings: {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             Task { @MainActor in

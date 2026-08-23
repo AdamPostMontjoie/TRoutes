@@ -73,10 +73,11 @@ struct StopBannerView: View {
                         Button {
                             store.send(.saveTapped, animation: .default)
                         } label: {
-                            Image(systemName: store.isSaved ? "star.fill" : "star")
+                            Image(systemName: store.isSaved ? "bookmark.fill" : "bookmark")
                                 .font(.title3)
                                 .foregroundStyle(store.transitColor)
                         }
+                        .accessibilityLabel(store.isSaved ? "Remove saved stop" : "Save stop")
                     }
                     .buttonStyle(.plain)
                 }

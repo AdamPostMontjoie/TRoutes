@@ -26,17 +26,6 @@ struct SingleStopView: View {
                             Image(systemName: "gear")
                         }
                     }
-                    if store.hasValidApiKey && store.search.query.isEmpty {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                store.send(.refreshNearbyTapped)
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            .disabled(store.displayCoordinates == nil)
-                            .accessibilityLabel("Refresh nearby stops")
-                        }
-                    }
                 }
                 .sheet(
                     item: $store.scope(

@@ -1,0 +1,54 @@
+//
+//  stuff.txt
+//  TRoutes
+//
+//  Created by Adam Post on 8/23/26.
+//
+
+1. Top bar on  nearby stops tab. This would filter the list of nearby stops.
+
+All | Subway | Bus | Rail | (Refresh Icon)
+
+- All: All stops sorted by distance
+- Subway: Subway stops sorted by distance (RL, GL, BL, OL, Mattapan line)
+- Bus: Bus stops sorted by distance (Regular Bus, silver line)
+- Rail: Rail stops sorted by distance (Commuter Rail)
+
+Refresh Icon would just request current coordinates and use those to refresh the List
+
+2. Timer
+
+Right now, the time refreshes on appear, never any other time. we need to fix this to avoid scrolling destroying API limit
+
+What should happen (I think)
+- We need a 15 second timer tracker for every single banner on our screen (2 on stops in both directions)
+- The only time we need to call the API is if 
+A. The banner is on screen
+B. The timer is at or past 15 seconds
+
+All stops will initially be in need of an API call
+When we swipe directions, we want to make a call, but if we swipe and swipe back within before 15 seconds, we will have the cached times and just display those
+
+So for each banner
+- a timer for each directions
+- a place for cached times for each direction
+
+3. Live Activity
+
+Each stop banner will have an option to launch a live Activity
+I imagine this would be simple since app has live activities already setup, but would require nearbystopsmanager to start keeping app alive in background
+
+4. Banner improvements
+
+This is something I need actual advice on
+
+Issues
+- Many stop names are cutoff with ...
+- Unsure if stops have shortnames readily available
+- Should use route (1, GL, CR) badges instead of the Icons, like ActiveDisplayJourneyView
+- Commuter Rail routes need special treatment to show the actual route names (Newburyport/Rockport) 
+- The UI needs to be more like ActiveDisplayJourneyView
+- Display distance from the Stop. This would require changing NearbyStopManager to update coordinates more frequently, and have a different update type (when 200m from starting) that forced us to refresh the nearbystops entirely
+
+
+
