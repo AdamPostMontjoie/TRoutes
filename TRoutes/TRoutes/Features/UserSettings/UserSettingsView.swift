@@ -82,6 +82,24 @@ struct UserSettingsView: View {
                         .padding(.top, 4)
                     }
                 }
+
+                Section {
+                    Picker(
+                        "Distance Units",
+                        selection: Binding(
+                            get: { store.displayUnits },
+                            set: { store.send(.displayUnitsChanged($0)) }
+                        )
+                    ) {
+                        ForEach(DisplayUnits.allCases, id: \.rawValue) { units in
+                            Text(units.title).tag(units.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                } header: {
+                    Text("Distance Units")
+                }
                 
                 if store.isDebugAvailable {
                     Toggle(

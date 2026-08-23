@@ -34,6 +34,7 @@ struct StopBannerFeature {
         var lastFetchAttemptDates: [Int: Date] = [:]
         var stopCoordinates: CLLocationCoordinate2D?
         var userCoordinates: CLLocationCoordinate2D?
+        @Shared(.displayUnits) var displayUnits = DisplayUnits.imperial.rawValue
 
         var predictions: [TransitPrediction] {
             predictionSnapshots[activeDirectionId]?.predictions ?? []
@@ -52,6 +53,25 @@ struct StopBannerFeature {
                 latitude: userCoordinates.latitude,
                 longitude: userCoordinates.longitude
             ))
+        }
+
+        var formattedDistance: String? {
+            guard let distance else { return nil }
+
+            if displayUnits == DisplayUnits.metric.rawValue {
+                if distance >= 1_000 {
+                    return "\((distance / 1_000).formatted(.number.precision(.fractionLength(0...1)))) km"
+                }
+                return "\(distance.formatted(.number.precision(.fractionLength(0)))) m"
+            }
+
+            let feet = Measurement(value: distance, unit: UnitLength.meters)
+                .converted(to: .feet)
+                .value
+            if feet >= 5_280 {
+                return "\((feet / 5_280).formatted(.number.precision(.fractionLength(0...1)))) mi"
+            }
+            return "\(feet.formatted(.number.precision(.fractionLength(0)))) ft"
         }
         
         init(target: BannerTarget) {

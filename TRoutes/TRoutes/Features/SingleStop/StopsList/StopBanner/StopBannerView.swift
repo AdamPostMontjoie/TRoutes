@@ -39,10 +39,9 @@ struct StopBannerView: View {
                     .font(.caption)
                     .opacity(0.8)
 
-                    if let distance = store.distance {
+                    if let formattedDistance = store.formattedDistance {
                         Label(
-                            Measurement(value: distance, unit: UnitLength.meters)
-                                .formatted(.measurement(width: .abbreviated, usage: .road)),
+                            formattedDistance,
                             systemImage: "location.fill"
                         )
                         .font(.caption2)
