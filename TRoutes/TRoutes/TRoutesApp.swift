@@ -32,6 +32,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     func applicationWillTerminate(_ application: UIApplication) {
         LiveActivityManager.shared.stopSessionTimeoutAsync()
+        StopLiveActivityManager.shared.stopSessionTimeoutAsync()
     }
 }
 //application wide state

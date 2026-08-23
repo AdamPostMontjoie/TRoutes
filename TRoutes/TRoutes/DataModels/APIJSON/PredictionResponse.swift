@@ -11,7 +11,7 @@ struct PredictionResponse: Codable {
     let data: [PredictionData]
 }
 
-struct TransitPrediction: Codable, Equatable, Hashable {
+struct TransitPrediction: Codable, Equatable, Hashable, Sendable {
     let display: String
     let vehicleId: String?
     let predictionId: String

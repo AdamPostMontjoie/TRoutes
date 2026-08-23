@@ -8,17 +8,34 @@
 import ComposableArchitecture
 import Foundation
 import SwiftData
+import CoreLocation
 
 struct DatabaseClient {
+    // Journey Engine
     var saveRoute: @Sendable ([Leg]) async throws -> Void
     var updateRoute: @Sendable (UserRoute) async throws -> Void
     var deleteRoute: @Sendable (UUID) async throws -> Void
     var fetchSavedRoutes: @Sendable () async throws -> [ResolvedUserRoute]
+    var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
+    
+    // Reference Data Import
     var saveImportedStations: @Sendable ([JsonBuilderStation]) async throws -> Void
     var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
     var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
     var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
+    
+    // Single Stop Search
+    var searchStations: @Sendable (String) async throws -> [Station]
+    var fetchStationDetail: @Sendable (String) async throws -> Station
+    var findNearbyStations: @Sendable (Double, Double, Int) async throws -> [Station]
+    
+    // Single Stop Saved & Pinned
+    var fetchSavedStops: @Sendable () async throws -> [SingleStop]
+    var fetchPinnedStops: @Sendable () async throws -> [PinnedStop]
+    var addSavedStop: @Sendable (SingleStop) async throws -> Void
+    var removeSavedStop: @Sendable (SingleStop) async throws -> Void
+    var addPinnedStop: @Sendable (PinnedStop) async throws -> Void
+    var removePinnedStop: @Sendable (PinnedStop) async throws -> Void
 }
 
 extension DatabaseClient {
@@ -29,6 +46,8 @@ extension DatabaseClient {
 
 enum DatabaseError: Error, Equatable {
     case emptyRoute
+    case savedLimitReached
+    case pinnedLimitReached
 }
 
 enum DatabaseImportError: Error, Equatable {
@@ -83,6 +102,8 @@ extension DatabaseClient: DependencyKey {
                     TransitPattern.self,
                     TransitSequenceEdge.self,
                     TransitReferenceImportMetadata.self,
+                    UserSavedStop.self,
+                    UserPinnedStop.self,
                     configurations: configuration
                 )
             } catch {
@@ -90,6 +111,7 @@ extension DatabaseClient: DependencyKey {
             }
         
         return Self(
+            // MARK: - Journey Engine
             saveRoute: { legs in
                 guard let firstLeg = legs.first,
                       let lastLeg = legs.last else {
@@ -165,6 +187,12 @@ extension DatabaseClient: DependencyKey {
                     )
                 }
             },
+            resolveUserRoute: { userRoute in
+                let context = ModelContext(sharedContainer)
+                return try resolveUserRouteStruct(userRoute, context: context)
+            },
+            
+            // MARK: - Reference Data Import
             saveImportedStations: { stations in
                 let context = ModelContext(sharedContainer)
                 let metadataDescriptor = FetchDescriptor<TransitReferenceImportMetadata>(
@@ -301,9 +329,189 @@ extension DatabaseClient: DependencyKey {
 
                 try context.save()
             },
-            resolveUserRoute: { userRoute in
+
+            
+            // MARK: - Single Stop Search
+            searchStations: { query in
                 let context = ModelContext(sharedContainer)
-                return try resolveUserRouteStruct(userRoute, context: context)
+                let descriptor = FetchDescriptor<TransitStation>(
+                    predicate: #Predicate { $0.name.localizedStandardContains(query) },
+                    sortBy: [SortDescriptor(\.name)]
+                )
+                let stations = try context.fetch(descriptor)
+                
+                let mappedStations = stations.compactMap { station -> Station? in
+                    let stationRoutes = resolveStationRoutes(for: station)
+                    guard !stationRoutes.isEmpty else { return nil }
+                    return Station(
+                        stationId: station.stationId,
+                        stationName: station.name,
+                        latitude: station.latitude,
+                        longitude: station.longitude,
+                        stops: stationRoutes
+                    )
+                }
+                
+                return mappedStations.sorted {
+                    if $0.stops.count != $1.stops.count {
+                        return $0.stops.count > $1.stops.count
+                    }
+                    return $0.stationName < $1.stationName
+                }
+            },
+            fetchStationDetail: { stationId in
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<TransitStation>(
+                    predicate: #Predicate { $0.stationId == stationId }
+                )
+                guard let station = try context.fetch(descriptor).first else {
+                    throw DatabaseError.emptyRoute // or some missing station error
+                }
+                let stationRoutes = resolveStationRoutes(for: station)
+                guard !stationRoutes.isEmpty else {
+                    throw DatabaseError.emptyRoute
+                }
+                return Station(
+                    stationId: station.stationId,
+                    stationName: station.name,
+                    latitude: station.latitude,
+                    longitude: station.longitude,
+                    stops: stationRoutes
+                )
+            },
+            findNearbyStations: { latitude, longitude, limit in
+                let context = ModelContext(sharedContainer)
+                // Start with approx 800m radius (~0.008 degrees)
+                var latDelta = 0.008
+                var lonDelta = 0.008
+                
+                var results: [Station] = []
+                var totalStops = 0
+                
+                // Expand until we find enough stops (equilibrium), up to ~50km
+                while totalStops < limit && latDelta <= 0.5 {
+                    let minLat = latitude - latDelta
+                    let maxLat = latitude + latDelta
+                    let minLon = longitude - lonDelta
+                    let maxLon = longitude + lonDelta
+                    
+                    let descriptor = FetchDescriptor<TransitStation>(
+                        predicate: #Predicate {
+                            $0.latitude >= minLat && $0.latitude <= maxLat &&
+                            $0.longitude >= minLon && $0.longitude <= maxLon
+                        }
+                    )
+                    
+                    let dbStations = try context.fetch(descriptor)
+                    
+                    if !dbStations.isEmpty {
+                        // Sort by distance using CLLocation for accuracy
+                        let userLocation = CLLocation(latitude: latitude, longitude: longitude)
+                        let sortedDbStations = dbStations.sorted { s1, s2 in
+                            let loc1 = CLLocation(latitude: s1.latitude, longitude: s1.longitude)
+                            let loc2 = CLLocation(latitude: s2.latitude, longitude: s2.longitude)
+                            return loc1.distance(from: userLocation) < loc2.distance(from: userLocation)
+                        }
+                        
+                        // Reset our counters for this expanded radius
+                        results = []
+                        totalStops = 0
+                        
+                        for station in sortedDbStations {
+                            let stationRoutes = resolveStationRoutes(for: station)
+                            
+                            // If a station has no stops, skip it
+                            guard !stationRoutes.isEmpty else { continue }
+                            
+                            let resolvedStation = Station(
+                                stationId: station.stationId,
+                                stationName: station.name,
+                                latitude: station.latitude,
+                                longitude: station.longitude,
+                                stops: stationRoutes
+                            )
+                            
+                            results.append(resolvedStation)
+                            totalStops += stationRoutes.count
+                            
+                            // Enforce equilibrium: stop adding stations if we've reached our stop count limit
+                            if totalStops >= limit {
+                                break
+                            }
+                        }
+                    }
+                    
+                    if totalStops < limit {
+                        latDelta *= 2
+                        lonDelta *= 2
+                    }
+                }
+                
+                return results
+            },
+            // MARK: - Single Stop Saved & Pinned
+            fetchSavedStops: {
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserSavedStop>(
+                    sortBy: [SortDescriptor(\.addedAt)]
+                )
+                return try context.fetch(descriptor).map { $0.toSingleStop() }
+            },
+            fetchPinnedStops: {
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserPinnedStop>(
+                    sortBy: [SortDescriptor(\.addedAt)]
+                )
+                return try context.fetch(descriptor).map { $0.toPinnedStop() }
+            },
+            addSavedStop: { stop in
+                print("addSavedStop called for \(stop.stopName) - \(stop.routeId)")
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserSavedStop>()
+                let count = try context.fetchCount(descriptor)
+                if count >= 20 { throw DatabaseError.savedLimitReached }
+                
+                let userStop = UserSavedStop(from: stop)
+                context.insert(userStop)
+                try context.save()
+            },
+            removeSavedStop: { stop in
+                print("removeSavedStop called for \(stop.stopName) - \(stop.routeId)")
+                let context = ModelContext(sharedContainer)
+                let stationId = stop.stationId
+                let routeId = stop.routeId
+                let descriptor = FetchDescriptor<UserSavedStop>(
+                    predicate: #Predicate { $0.stationId == stationId && $0.routeId == routeId }
+                )
+                if let saved = try context.fetch(descriptor).first {
+                    context.delete(saved)
+                    try context.save()
+                }
+            },
+            addPinnedStop: { stop in
+                print("addPinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
+                let context = ModelContext(sharedContainer)
+                let descriptor = FetchDescriptor<UserPinnedStop>()
+                let count = try context.fetchCount(descriptor)
+                if count >= 3 { throw DatabaseError.pinnedLimitReached }
+                
+                let userStop = UserPinnedStop(from: stop)
+                context.insert(userStop)
+                try context.save()
+            },
+            removePinnedStop: { stop in
+                print("removePinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
+                let context = ModelContext(sharedContainer)
+                let stationId = stop.stationId
+                let routeId = stop.routeId
+                let directionId = stop.directionId
+                let descriptor = FetchDescriptor<UserPinnedStop>(
+                    predicate: #Predicate { $0.stationId == stationId && $0.routeId == routeId && $0.pinnedDirectionId == directionId }
+                )
+                if let saved = try context.fetch(descriptor).first {
+                    context.delete(saved)
+                    try context.save()
+                }
             }
         )
     }()
@@ -791,5 +999,61 @@ extension DependencyValues {
     var databaseClient: DatabaseClient {
         get { self[DatabaseClient.self] }
         set { self[DatabaseClient.self] = newValue }
+    }
+}
+
+private func resolveStationRoutes(for station: TransitStation) -> [StationStop] {
+    func mapEdges(requireCanonical: Bool) -> [String: StationStop] {
+        var routesDict: [String: StationStop] = [:]
+        for platform in station.platforms {
+            for edge in platform.sequenceEdges {
+                guard let pattern = edge.pattern else { continue }
+                if requireCanonical && !pattern.isCanonical { continue }
+                
+                let routeId = pattern.routeId
+                guard !routeId.hasPrefix("Shuttle-") else { continue }
+                let directionId = pattern.directionId
+                let dest = pattern.name.components(separatedBy: " - ").last ?? pattern.name
+                
+                if routesDict[routeId] == nil {
+                    routesDict[routeId] = StationStop(
+                        routeId: routeId,
+                        routeName: routeId,
+                        transitType: transitType(for: routeId),
+                        platformId: platform.platformId,
+                        directionDestinations: ["", ""]
+                    )
+                }
+                
+                if directionId == 0 || directionId == 1 {
+                    let existing = routesDict[routeId]?.directionDestinations[directionId] ?? ""
+                    var dests = existing.isEmpty ? [] : existing.components(separatedBy: "/")
+                    if !dests.contains(dest) { dests.append(dest) }
+                    routesDict[routeId]?.directionDestinations[directionId] = dests.sorted().joined(separator: "/")
+                }
+            }
+        }
+        return routesDict
+    }
+    
+    var routesDict = mapEdges(requireCanonical: true)
+    // Fallback: If no canonical patterns were found, use non-canonical patterns
+    // to prevent valid stops (like 84 Mass Ave) from being empty
+    if routesDict.isEmpty {
+        routesDict = mapEdges(requireCanonical: false)
+    }
+    return routesDict.values.sorted { $0.routeId < $1.routeId }
+}
+
+private func transitType(for routeId: String) -> TransitType {
+    switch routeId {
+    case "Red": return .redLine
+    case "Mattapan": return .mattapan
+    case "Orange": return .orangeLine
+    case "Blue": return .blueLine
+    case let id where id.hasPrefix("Green-"): return .greenLine
+    case let id where id.hasPrefix("CR-"): return .commuterRail
+    case let id where id.hasPrefix("Boat-"): return .ferry
+    default: return .bus
     }
 }

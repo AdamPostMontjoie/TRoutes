@@ -32,6 +32,15 @@ struct DebugState: Equatable {
     var isDebugActive = false
 }
 
+enum DisplayUnits: String, CaseIterable {
+    case imperial
+    case metric
+
+    var title: String {
+        rawValue.capitalized
+    }
+}
+
 enum DebugAvailability {
     static let isDebugEnabledStorageKey = "debugIsEnabled"
     static let isMotionEventsEnabledStorageKey = "motionEventsIsEnabled"
@@ -66,6 +75,9 @@ extension SharedReaderKey where Self == AppStorageKey<Bool> {
 }
 
 extension SharedReaderKey where Self == AppStorageKey<String> {
+    static var displayUnits: Self {
+        appStorage("displayUnits")
+    }
     static var importedFeedVersion: Self {
         appStorage("importedFeedVersion")
     }

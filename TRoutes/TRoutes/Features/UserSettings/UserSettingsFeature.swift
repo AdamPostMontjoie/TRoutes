@@ -15,6 +15,7 @@ struct UserSettingsFeature {
         @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
         @Shared(.mbtaApiKey) var mbtaApiKey = ""
         @Shared(.hasValidApiKey) var hasValidApiKey = false
+        @Shared(.displayUnits) var displayUnits = DisplayUnits.imperial.rawValue
         var apiKeyInput: String = ""
         var isVerifyingKey = false
         var keyVerificationFailed = false
@@ -27,6 +28,7 @@ struct UserSettingsFeature {
     enum Action: Equatable {
         case debugEnabledChanged(Bool)
         case motionEventsEnabledChanged(Bool)
+        case displayUnitsChanged(String)
         case apiKeyInputChanged(String)
         case apiKeySubmitted
         case removeKeyButtonTapped
@@ -49,6 +51,10 @@ struct UserSettingsFeature {
                 state.$isMotionEventsEnabled.withLock {
                     $0 = enabled
                 }
+                return .none
+            case let .displayUnitsChanged(units):
+                guard DisplayUnits(rawValue: units) != nil else { return .none }
+                state.$displayUnits.withLock { $0 = units }
                 return .none
             case let .apiKeyInputChanged(value):
                 state.apiKeyInput = value

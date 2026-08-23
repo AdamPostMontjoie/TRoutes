@@ -61,6 +61,8 @@ actor JourneyEngine {
         guard let journey = userDefaultsClient.loadActiveJourney(),
               journey.currentStop != nil
         else { return }
+
+        await StopLiveActivityManager.shared.end()
         
         // Restore in-memory caching variables
         self.trackedVehicleId = journey.trackedVehicleId
@@ -210,6 +212,7 @@ actor JourneyEngine {
     
     ///Starts the route
     func beginRoute(route:ResolvedUserRoute) async {
+        await StopLiveActivityManager.shared.end()
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
         let destinationName = route.legs.last?.endStop.stopName ?? "your destination"

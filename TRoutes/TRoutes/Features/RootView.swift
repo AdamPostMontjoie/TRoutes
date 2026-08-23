@@ -28,7 +28,7 @@ struct RootView: View {
                 store: store.scope(state: \.singleStop, action: \.singleStopTab)
             )
             .tabItem {
-                Label("Single Stop", systemImage: "bus")
+                Label("Stops", systemImage: "mappin")
             }
             .tag(RootFeature.Tab.singleStop)
         }

@@ -25,30 +25,7 @@ struct JourneyPresentationState: Equatable, Codable {
     let nextLegShortRouteName: String?
     
     private static func getShortRouteName(for leg: ResolvedLeg) -> String {
-        switch leg.transitType {
-        case .redLine: return "RL"
-        case .orangeLine: return "OL"
-        case .blueLine: return "BL"
-        case .greenLine: return "GL"
-        case .mattapan: return "M"
-        case .commuterRail: return "CR"
-        case .bus:
-            switch leg.mbtaRouteId {
-            case "741": return "SL1"
-            case "742": return "SL2"
-            case "743": return "SL3"
-            case "751": return "SL4"
-            case "749": return "SL5"
-            case "746": return "SLW"
-            default: return leg.mbtaRouteId
-            }
-        case .ferry:
-            if leg.mbtaRouteId.hasPrefix("Boat-") {
-                return leg.mbtaRouteId.replacingOccurrences(of: "Boat-", with: "")
-            } else {
-                return leg.mbtaRouteId
-            }
-        }
+        RoutePresentation(routeId: leg.mbtaRouteId, transitType: leg.transitType).badgeText
     }
     
     init(journey: JourneyState?) {
