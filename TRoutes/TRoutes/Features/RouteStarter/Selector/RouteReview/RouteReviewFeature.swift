@@ -54,6 +54,10 @@ struct RouteReviewFeature {
         case legRows(IdentifiedActionOf<LegRowFeature>)
         case destination(PresentationAction<Destination.Action>)
 
+        enum Alert: Equatable {
+            case confirmDeleteRoute
+        }
+
         enum Delegate: Equatable {
             case deleteRoute(UUID)
             case updateRoute(UserRoute)
@@ -83,11 +87,23 @@ struct RouteReviewFeature {
             
             //if this is the last leg, should we delete the entire route?
             case let .legRows(.element(id: _, action: .delegate(.deleteLeg(id)))):
+                guard state.route.legs.contains(where: { $0.id == id }) else {
+                    return .none
+                }
+
+                guard state.route.legs.count > 1 else {
+                    state.destination = .alert(.confirmDeleteRoute())
+                    return .none
+                }
+
                 let previousRoute = state.route
                 state.route.legs.removeAll() { $0.id == id }
                 state.route = routeWithUpdatedDefaultName(previousRoute: previousRoute, updatedRoute: state.route)
                 state.legRows.removeAll() { $0.id == id }
                 return .send(.delegate(.updateRoute(state.route)))
+
+            case .destination(.presented(.alert(.confirmDeleteRoute))):
+                return .send(.delegate(.deleteRoute(state.route.id)))
 
             case let .destination(.presented(.editLeg(.delegate(.saveEditedLeg(updatedLeg))))):
                 guard let index = state.route.legs.firstIndex(where: { $0.id == updatedLeg.id }) else {
@@ -129,6 +145,7 @@ struct RouteReviewFeature {
 extension RouteReviewFeature {
     @Reducer
     enum Destination {
+        case alert(AlertState<RouteReviewFeature.Action.Alert>)
         case editLeg(EditLegFeature)
         case addLegs(AddLegsToRouteFeature)
     }
@@ -136,3 +153,20 @@ extension RouteReviewFeature {
 
 extension RouteReviewFeature.Destination.State: Equatable {}
 extension RouteReviewFeature.Destination.Action: Equatable {}
+
+extension AlertState where Action == RouteReviewFeature.Action.Alert {
+    static func confirmDeleteRoute() -> Self {
+        Self {
+            TextState("Delete Route?")
+        } actions: {
+            ButtonState(role: .destructive, action: .confirmDeleteRoute) {
+                TextState("Delete Route")
+            }
+            ButtonState(role: .cancel) {
+                TextState("Cancel")
+            }
+        } message: {
+            TextState("A route must contain at least one leg. Delete this entire route?")
+        }
+    }
+}

@@ -244,6 +244,10 @@ struct SingleStopFeature {
                 state.destination = nil
                 return .none
 
+            case .destination(.presented(.apiKeyAlert(.delegate(.openSettings)))):
+                state.destination = .userSettings(UserSettingsFeature.State())
+                return .none
+
             case .destination(.presented(.alert(.openSettings))):
                 let openSettings = nearbyStopsClient.openSettings
                 return .run { _ in openSettings() }

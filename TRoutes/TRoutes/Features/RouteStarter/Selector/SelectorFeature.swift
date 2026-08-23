@@ -15,6 +15,7 @@ struct SelectorFeature {
     @ObservableState
     struct State: Equatable {
         var userRoutes: IdentifiedArrayOf<ResolvedUserRoute> = []
+        var hasLoadedRoutes = false
         var path = StackState<RouteReviewFeature.State>()
         @Presents var destination: Destination.State? // Added
     }
@@ -51,6 +52,10 @@ struct SelectorFeature {
             switch action {
             case .selected:
                 return .none
+
+            case let .path(.element(id: _, action: .delegate(.deleteRoute(routeId)))):
+                state.path = StackState()
+                return .send(.deleteRouteFromDisk(routeId))
             
             case let .path(.element(id: _, action: .delegate(.updateRoute(route)))):
                 let updateRoute = databaseClient.updateRoute
@@ -87,6 +92,7 @@ struct SelectorFeature {
 
             case let .routesFetched(routes):
                 state.userRoutes = IdentifiedArray(uniqueElements: routes)
+                state.hasLoadedRoutes = true
                 return .none
 
             case .fetchRoutesFailed:
