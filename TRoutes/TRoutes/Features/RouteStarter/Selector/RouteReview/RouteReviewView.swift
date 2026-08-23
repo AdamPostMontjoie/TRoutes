@@ -76,6 +76,7 @@ struct RouteReviewView: View {
         }
         }
         .navigationTitle("Review Route")
+        .alert($store.scope(state: \.destination?.alert, action: \.destination.alert))
         .sheet(
             item: $store.scope(state: \.destination?.editLeg, action: \.destination.editLeg)
         ) { editLegStore in

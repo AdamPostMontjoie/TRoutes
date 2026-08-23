@@ -50,29 +50,20 @@ struct LegFormView: View {
     
     @ViewBuilder
     private var transitTypeSection: some View {
-        Section(header: resetHeader(
-            title: "Mode of Transit",
-            isResetVisible: store.selectedType != nil,
-            action: .resetTypeSelection
-        )) {
+        Section("Mode of Transit") {
             Picker("Transit Type", selection: transitTypeSelection) {
                 Text("Select a mode").tag(TransitType?.none)
                 ForEach(store.typeOptions, id: \.self) { type in
                     Text(type.rawValue).tag(TransitType?.some(type))
                 }
             }
-            .disabled(store.selectedType != nil)
         }
     }
 
     @ViewBuilder
     private var branchSection: some View {
         if store.currentFormStep == .selectBranch || store.selectedBranch != nil || !store.selectedBranches.isEmpty {
-            Section(header: resetHeader(
-                title: store.isMultiBranchMode ? "Branches" : (store.selectedType == .bus ? "Bus Route" : "Branch"),
-                isResetVisible: store.selectedBranch != nil || !store.selectedBranches.isEmpty,
-                action: .resetBranchSelection
-            )) {
+            Section(store.isMultiBranchMode ? "Branches" : (store.selectedType == .bus ? "Bus Route" : "Branch")) {
                 if store.isMultiBranchMode {
                     ForEach(store.branchOptions ?? [], id: \.self) { branch in
                         let isSelected = store.selectedBranches.contains(where: { $0.id == branch.id })
@@ -87,7 +78,6 @@ struct LegFormView: View {
                                     .foregroundStyle(isSelected ? .blue : .secondary)
                             }
                         }
-                        .disabled(!store.selectedBranches.isEmpty && store.currentFormStep != .selectBranch)
                     }
                     if store.currentFormStep == .selectBranch && !store.selectedBranches.isEmpty {
                         Button("Continue") {
@@ -125,11 +115,7 @@ struct LegFormView: View {
     @ViewBuilder
     private var directionSection: some View {
         if store.currentFormStep == .selectDirection || store.selectedDirection != nil {
-            Section(header: resetHeader(
-                title: "Direction",
-                isResetVisible: store.selectedDirection != nil,
-                action: .resetDirectionSelection
-            )) {
+            Section("Direction") {
                 Picker("Direction", selection: directionSelection) {
                     Text("Select a direction").tag(TransitDirection?.none)
                     ForEach(store.directionOptions ?? [], id: \.self) { direction in
@@ -137,7 +123,6 @@ struct LegFormView: View {
                             .tag(TransitDirection?.some(direction))
                     }
                 }
-                .disabled(store.selectedDirection != nil)
             }
         }
     }
@@ -145,18 +130,13 @@ struct LegFormView: View {
     @ViewBuilder
     private var startStopSection: some View {
         if store.currentFormStep == .selectStartStop || store.selectedStartStop != nil {
-            Section(header: resetHeader(
-                title: "Origin",
-                isResetVisible: store.selectedStartStop != nil,
-                action: .resetStartStopSelection
-            )) {
+            Section("Origin") {
                 Picker("Stop", selection: startStopSelection) {
                     Text("Select an origin").tag(UUID?.none)
                     ForEach(store.stopOptions.dropLast(), id: \.id) { stop in
                         Text(stop.stopName).tag(UUID?.some(stop.id))
                     }
                 }
-                .disabled(store.selectedStartStop != nil)
             }
         }
     }
@@ -164,11 +144,7 @@ struct LegFormView: View {
     @ViewBuilder
     private var endStopSection: some View {
         if store.currentFormStep == .selectEndStop || store.selectedEndStop != nil {
-            Section(header: resetHeader(
-                title: "Destination",
-                isResetVisible: store.selectedEndStop != nil,
-                action: .resetEndStopSelection
-            )) {
+            Section("Destination") {
                 Picker("Stop", selection: endStopSelection) {
                     Text("Select a destination").tag(UUID?.none)
                     let validEndStops = Array(
@@ -180,7 +156,6 @@ struct LegFormView: View {
                         Text(stop.stopName).tag(UUID?.some(stop.id))
                     }
                 }
-                .disabled(store.selectedEndStop != nil)
             }
         }
     }
@@ -191,7 +166,7 @@ struct LegFormView: View {
             Section {
                 if store.mode == .create || store.mode == .addToExisting {
                     HStack {
-                        Button("Add Another Leg") {
+                        Button("Add a Transfer") {
                             store.send(.primaryButtonTapped)
                         }
                         .buttonStyle(.bordered)
@@ -219,34 +194,14 @@ struct LegFormView: View {
         }
     }
 
-    private func resetHeader(
-        title: String,
-        isResetVisible: Bool,
-        action: LegFormFeature.Action
-    ) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-
-            if isResetVisible {
-                Button {
-                    store.send(action)
-                } label: {
-                    Image(systemName: "arrow.uturn.backward.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.blue)
-                }
-                .textCase(nil)
-            }
-        }
-    }
-
     private var transitTypeSelection: Binding<TransitType?> {
         Binding(
             get: { store.selectedType },
             set: { newValue in
                 if let newValue {
                     store.send(.transitTypeSelected(newValue))
+                } else {
+                    store.send(.resetTypeSelection)
                 }
             }
         )
@@ -269,6 +224,8 @@ struct LegFormView: View {
             set: { newValue in
                 if let newValue {
                     store.send(.directionSelected(newValue, store.mbtaRouteId ?? ""))
+                } else {
+                    store.send(.resetDirectionSelection)
                 }
             }
         )
@@ -281,6 +238,8 @@ struct LegFormView: View {
                 if let newValue,
                    let stop = store.stopOptions.first(where: { $0.id == newValue }) {
                     store.send(.startStopSelected(stop))
+                } else {
+                    store.send(.resetStartStopSelection)
                 }
             }
         )
@@ -293,6 +252,8 @@ struct LegFormView: View {
                 if let newValue,
                    let stop = store.stopOptions.first(where: { $0.id == newValue }) {
                     store.send(.endStopSelected(stop))
+                } else {
+                    store.send(.resetEndStopSelection)
                 }
             }
         )
@@ -311,7 +272,7 @@ struct LegFormView: View {
     private var navigationTitle: String {
         switch store.mode {
         case .create, .addToExisting:
-            return "Add Leg to Route"
+            return "Add Leg"
         case .edit:
             return "Edit Leg"
         }

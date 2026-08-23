@@ -51,6 +51,10 @@ struct SelectorFeature {
             switch action {
             case .selected:
                 return .none
+
+            case let .path(.element(id: _, action: .delegate(.deleteRoute(routeId)))):
+                state.path = StackState()
+                return .send(.deleteRouteFromDisk(routeId))
             
             case let .path(.element(id: _, action: .delegate(.updateRoute(route)))):
                 let updateRoute = databaseClient.updateRoute
