@@ -18,12 +18,6 @@ struct DatabaseClient {
     var fetchSavedRoutes: @Sendable () async throws -> [ResolvedUserRoute]
     var resolveUserRoute: @Sendable (UserRoute) async throws -> ResolvedUserRoute
     
-    // Reference Data Import
-    var saveImportedStations: @Sendable ([JsonBuilderStation]) async throws -> Void
-    var saveImportedPlatforms: @Sendable ([JsonBuilderPlatform]) async throws -> Void
-    var saveImportedPatterns: @Sendable ([JsonBuilderPattern]) async throws -> Void
-    var saveImportedSequenceEdges: @Sendable ([JsonBuilderSequenceEdge]) async throws -> Void
-    
     // Single Stop Search
     var searchStations: @Sendable (String) async throws -> [Station]
     var fetchStationDetail: @Sendable (String) async throws -> Station
@@ -38,77 +32,44 @@ struct DatabaseClient {
     var removePinnedStop: @Sendable (PinnedStop) async throws -> Void
 }
 
-extension DatabaseClient {
-    //When this changes, it triggers importing
-    public static let currentSchemaVersion = 4
-    public static let currentFeedVersion = "jsonbuilder-v4"
-}
-
 enum DatabaseError: Error, Equatable {
     case emptyRoute
     case savedLimitReached
     case pinnedLimitReached
 }
 
-enum DatabaseImportError: Error, Equatable {
-    case alreadyImported
-    case missingCoordinate(entityId: String)
-    case missingStation(stationId: String)
-    case missingPlatform(platformId: String)
-    case missingPattern(patternId: String)
-}
-
-@Model
-final class TransitReferenceImportMetadata {
-    @Attribute(.unique) var metadataId: String
-    var schemaVersion: Int
-    var feedVersion: String
-    var importedAt: Date
-
-    init(
-        metadataId: String,
-        schemaVersion: Int,
-        feedVersion: String,
-        importedAt: Date
-    ) {
-        self.metadataId = metadataId
-        self.schemaVersion = schemaVersion
-        self.feedVersion = feedVersion
-        self.importedAt = importedAt
-    }
-}
-
 extension DatabaseClient: DependencyKey {
     static let liveValue:Self  = {
-        let metadataId = "transit-reference-data"
-        let schemaVersion = DatabaseClient.currentSchemaVersion
-        let feedVersion = DatabaseClient.currentFeedVersion
-        let sharedContainer: ModelContainer
-            do {
-                let appSupport = try FileManager.default.url(
-                    for: .applicationSupportDirectory,
-                    in: .userDomainMask,
-                    appropriateFor: nil,
-                    create: true
-                )
-                //change this to the app group folder later
-                let storeURL = appSupport.appending(path: "TRoutes.store")
-                let configuration = ModelConfiguration(url: storeURL)
-                
-                sharedContainer = try ModelContainer(
-                    for: Route.self,
-                    TransitStation.self,
-                    TransitPlatform.self,
-                    TransitPattern.self,
-                    TransitSequenceEdge.self,
-                    TransitReferenceImportMetadata.self,
-                    UserSavedStop.self,
-                    UserPinnedStop.self,
-                    configurations: configuration
-                )
-            } catch {
-                fatalError("Failed to initialize SwiftData container: \(error)")
-            }
+        let referenceContainer: ModelContainer
+        let userContainer: ModelContainer
+        do {
+            let locations = try TransitStoreBootstrap.prepareStores()
+            referenceContainer = try ModelContainer(
+                for: TransitStation.self,
+                TransitPlatform.self,
+                TransitPattern.self,
+                TransitSequenceEdge.self,
+                TransitReferenceImportMetadata.self,
+                configurations: ModelConfiguration(url: locations.referenceStoreURL)
+            )
+            try TransitStoreBootstrap.validateReferenceStore(
+                referenceContainer,
+                locations: locations
+            )
+
+            userContainer = try ModelContainer(
+                for: Route.self,
+                UserSavedStop.self,
+                UserPinnedStop.self,
+                configurations: ModelConfiguration(url: locations.userStoreURL)
+            )
+            try TransitStoreBootstrap.removeObsoleteReferenceStores(
+                keeping: locations.referenceStoreURL
+            )
+            try TransitStoreBootstrap.removeLegacyCombinedStore()
+        } catch {
+            fatalError("Failed to initialize SwiftData containers: \(error)")
+        }
         
         return Self(
             // MARK: - Journey Engine
@@ -121,14 +82,17 @@ extension DatabaseClient: DependencyKey {
                 let routeId = UUID()
                 let routeName = "\(firstLeg.startStop.stopName) to \(lastLeg.endStop.stopName)"
                 let timeStamp = Date()
-                let context = ModelContext(sharedContainer)
+                let referenceContext = ModelContext(referenceContainer)
                 let userRoute = UserRoute(
                     legs: legs,
                     id: routeId,
                     name: routeName,
                     timeStamp: timeStamp
                 )
-                let resolvedRoute = try resolveUserRouteStruct(userRoute, context: context)
+                let resolvedRoute = try resolveUserRouteStruct(
+                    userRoute,
+                    context: referenceContext
+                )
                 let savedRoute = Route(
                     routeId: routeId,
                     name: routeName,
@@ -136,11 +100,12 @@ extension DatabaseClient: DependencyKey {
                     timeStamp: timeStamp
                 )
     
-                context.insert(savedRoute)
-                try context.save()
+                let userContext = ModelContext(userContainer)
+                userContext.insert(savedRoute)
+                try userContext.save()
             },
             updateRoute: { newRoute in
-                let context = ModelContext(sharedContainer)
+                let userContext = ModelContext(userContainer)
                 let routeId = newRoute.id
                 let descriptor = FetchDescriptor<Route>(
                     predicate: #Predicate { route in
@@ -148,18 +113,22 @@ extension DatabaseClient: DependencyKey {
                     }
                 )
 
-                guard let savedRoute = try context.fetch(descriptor).first else {
+                guard let savedRoute = try userContext.fetch(descriptor).first else {
                     return
                 }
 
-                let resolvedRoute = try resolveUserRouteStruct(newRoute, context: context)
+                let referenceContext = ModelContext(referenceContainer)
+                let resolvedRoute = try resolveUserRouteStruct(
+                    newRoute,
+                    context: referenceContext
+                )
                 savedRoute.name = newRoute.name
                 savedRoute.legs = resolvedRoute.legs
                 savedRoute.timeStamp = newRoute.timeStamp
-                try context.save()
+                try userContext.save()
             },
             deleteRoute: { localRouteId in
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<Route>(
                     predicate: #Predicate { route in
                         route.localRouteId == localRouteId
@@ -173,7 +142,7 @@ extension DatabaseClient: DependencyKey {
                 try context.save()
             },
             fetchSavedRoutes: {
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<Route>(
                     sortBy: [SortDescriptor(\.timeStamp, order: .reverse)]
                 )
@@ -188,152 +157,13 @@ extension DatabaseClient: DependencyKey {
                 }
             },
             resolveUserRoute: { userRoute in
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(referenceContainer)
                 return try resolveUserRouteStruct(userRoute, context: context)
             },
             
-            // MARK: - Reference Data Import
-            saveImportedStations: { stations in
-                let context = ModelContext(sharedContainer)
-                let metadataDescriptor = FetchDescriptor<TransitReferenceImportMetadata>(
-                    predicate: #Predicate { metadata in
-                        metadata.metadataId == metadataId
-                    }
-                )
-
-                if let metadata = try context.fetch(metadataDescriptor).first,
-                   metadata.schemaVersion == schemaVersion,
-                   metadata.feedVersion == feedVersion {
-                    throw DatabaseImportError.alreadyImported
-                }
-
-                try context.fetch(FetchDescriptor<TransitSequenceEdge>()).forEach(context.delete)
-                try context.fetch(FetchDescriptor<TransitPattern>()).forEach(context.delete)
-                try context.fetch(FetchDescriptor<TransitPlatform>()).forEach(context.delete)
-                try context.fetch(FetchDescriptor<TransitStation>()).forEach(context.delete)
-                try context.fetch(FetchDescriptor<TransitReferenceImportMetadata>()).forEach(context.delete)
-
-                for station in stations {
-                    guard let latitude = station.latitude,
-                          let longitude = station.longitude else {
-                        throw DatabaseImportError.missingCoordinate(entityId: station.stationId)
-                    }
-
-                    context.insert(
-                        TransitStation(
-                            stationId: station.stationId,
-                            name: station.name,
-                            latitude: latitude,
-                            longitude: longitude,
-                            municipality: station.municipality,
-                            monitoringMode: station.monitoringMode,
-                            platformIds: station.platformIds
-                        )
-                    )
-                }
-
-                try context.save()
-            },
-            saveImportedPlatforms: { platforms in
-                let context = ModelContext(sharedContainer)
-                let stations = try context.fetch(FetchDescriptor<TransitStation>())
-                let stationsById = Dictionary(uniqueKeysWithValues: stations.map { ($0.stationId, $0) })
-
-                for platform in platforms {
-                    guard let latitude = platform.latitude,
-                          let longitude = platform.longitude else {
-                        throw DatabaseImportError.missingCoordinate(entityId: platform.platformId)
-                    }
-                    guard let station = stationsById[platform.stationId] else {
-                        throw DatabaseImportError.missingStation(stationId: platform.stationId)
-                    }
-
-                    context.insert(
-                        TransitPlatform(
-                            platformId: platform.platformId,
-                            stationId: platform.stationId,
-                            name: platform.name,
-                            latitude: latitude,
-                            longitude: longitude,
-                            monitoringMode: platform.monitoringMode,
-                            transitType: platform.transitType.rawValue,
-                            patternIds: platform.patternIds,
-                            station: station
-                        )
-                    )
-                }
-
-                try context.save()
-            },
-            saveImportedPatterns: { patterns in
-                let context = ModelContext(sharedContainer)
-
-                for pattern in patterns {
-                    context.insert(
-                        TransitPattern(
-                            patternId: pattern.patternId,
-                            routeId: pattern.routeId,
-                            directionId: pattern.directionId,
-                            name: pattern.name,
-                            typicality: pattern.typicality,
-                            isCanonical: pattern.isCanonical,
-                            stopCount: pattern.stopCount,
-                            isDefaultCandidate: pattern.isDefaultCandidate,
-                            defaultReason: pattern.defaultReason,
-                            defaultRank: pattern.defaultRank,
-                            isBranched: pattern.isBranched
-                        )
-                    )
-                }
-
-                try context.save()
-            },
-            saveImportedSequenceEdges: { sequenceEdges in
-                let context = ModelContext(sharedContainer)
-                let patterns = try context.fetch(FetchDescriptor<TransitPattern>())
-                let platforms = try context.fetch(FetchDescriptor<TransitPlatform>())
-                let patternsById = Dictionary(uniqueKeysWithValues: patterns.map { ($0.patternId, $0) })
-                let platformsById = Dictionary(uniqueKeysWithValues: platforms.map { ($0.platformId, $0) })
-
-                for sequenceEdge in sequenceEdges {
-                    guard let pattern = patternsById[sequenceEdge.patternId] else {
-                        throw DatabaseImportError.missingPattern(patternId: sequenceEdge.patternId)
-                    }
-                    guard let platform = platformsById[sequenceEdge.platformId] else {
-                        throw DatabaseImportError.missingPlatform(platformId: sequenceEdge.platformId)
-                    }
-
-                    context.insert(
-                        TransitSequenceEdge(
-                            patternId: sequenceEdge.patternId,
-                            routeId: sequenceEdge.routeId,
-                            directionId: sequenceEdge.directionId,
-                            sequenceNumber: sequenceEdge.sequenceNumber,
-                            platformId: sequenceEdge.platformId,
-                            stationId: platform.stationId,
-                            sortIndex: sequenceEdge.sortIndex,
-                            pattern: pattern,
-                            platform: platform
-                        )
-                    )
-                }
-
-                context.insert(
-                    TransitReferenceImportMetadata(
-                        metadataId: metadataId,
-                        schemaVersion: schemaVersion,
-                        feedVersion: feedVersion,
-                        importedAt: Date()
-                    )
-                )
-
-                try context.save()
-            },
-
-            
             // MARK: - Single Stop Search
             searchStations: { query in
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(referenceContainer)
                 let descriptor = FetchDescriptor<TransitStation>(
                     predicate: #Predicate { $0.name.localizedStandardContains(query) },
                     sortBy: [SortDescriptor(\.name)]
@@ -360,7 +190,7 @@ extension DatabaseClient: DependencyKey {
                 }
             },
             fetchStationDetail: { stationId in
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(referenceContainer)
                 let descriptor = FetchDescriptor<TransitStation>(
                     predicate: #Predicate { $0.stationId == stationId }
                 )
@@ -380,7 +210,7 @@ extension DatabaseClient: DependencyKey {
                 )
             },
             findNearbyStations: { latitude, longitude, limit in
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(referenceContainer)
                 // Start with approx 800m radius (~0.008 degrees)
                 var latDelta = 0.008
                 var lonDelta = 0.008
@@ -451,14 +281,14 @@ extension DatabaseClient: DependencyKey {
             },
             // MARK: - Single Stop Saved & Pinned
             fetchSavedStops: {
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<UserSavedStop>(
                     sortBy: [SortDescriptor(\.addedAt)]
                 )
                 return try context.fetch(descriptor).map { $0.toSingleStop() }
             },
             fetchPinnedStops: {
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<UserPinnedStop>(
                     sortBy: [SortDescriptor(\.addedAt)]
                 )
@@ -466,7 +296,7 @@ extension DatabaseClient: DependencyKey {
             },
             addSavedStop: { stop in
                 print("addSavedStop called for \(stop.stopName) - \(stop.routeId)")
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<UserSavedStop>()
                 let count = try context.fetchCount(descriptor)
                 if count >= 20 { throw DatabaseError.savedLimitReached }
@@ -477,7 +307,7 @@ extension DatabaseClient: DependencyKey {
             },
             removeSavedStop: { stop in
                 print("removeSavedStop called for \(stop.stopName) - \(stop.routeId)")
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let stationId = stop.stationId
                 let routeId = stop.routeId
                 let descriptor = FetchDescriptor<UserSavedStop>(
@@ -490,7 +320,7 @@ extension DatabaseClient: DependencyKey {
             },
             addPinnedStop: { stop in
                 print("addPinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let descriptor = FetchDescriptor<UserPinnedStop>()
                 let count = try context.fetchCount(descriptor)
                 if count >= 3 { throw DatabaseError.pinnedLimitReached }
@@ -501,7 +331,7 @@ extension DatabaseClient: DependencyKey {
             },
             removePinnedStop: { stop in
                 print("removePinnedStop called for \(stop.stopName) - \(stop.routeId) dir \(stop.directionId)")
-                let context = ModelContext(sharedContainer)
+                let context = ModelContext(userContainer)
                 let stationId = stop.stationId
                 let routeId = stop.routeId
                 let directionId = stop.directionId
