@@ -16,7 +16,7 @@ struct StopsListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                if !store.pinnedBanners.isEmpty {
+                if FeatureFlags.stopPinningEnabled && !store.pinnedBanners.isEmpty {
                     Section {
                         if store.isPinnedExpanded {
                             ForEach(
