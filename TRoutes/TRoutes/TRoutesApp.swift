@@ -19,7 +19,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         //put this before or after the region manager creation?
         Task {
-            try await JsonImporter().importIfNeeded()
             await JourneyEngine.shared.restoreActiveJourneyIfNeeded()
         }
         

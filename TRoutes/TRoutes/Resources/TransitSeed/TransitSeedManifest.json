@@ -1,0 +1,9 @@
+{
+  "feedVersion" : "jsonbuilder-v4",
+  "patternCount" : 1213,
+  "platformCount" : 7643,
+  "schemaVersion" : 4,
+  "sequenceEdgeCount" : 24234,
+  "stationCount" : 7141,
+  "storeFileName" : "TransitReference.store"
+}

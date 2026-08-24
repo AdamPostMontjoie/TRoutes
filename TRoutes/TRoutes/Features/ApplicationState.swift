@@ -78,9 +78,6 @@ extension SharedReaderKey where Self == AppStorageKey<String> {
     static var displayUnits: Self {
         appStorage("displayUnits")
     }
-    static var importedFeedVersion: Self {
-        appStorage("importedFeedVersion")
-    }
     static var mbtaApiKey: Self {
         appStorage("mbtaApiKey")
     }

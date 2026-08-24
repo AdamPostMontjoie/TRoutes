@@ -46,7 +46,24 @@ While the Journey Engine handles complex, multi-leg tracking, the Stops tab is d
 * SwiftUI
 * Core Location (User location tracking)
 * ActivityKit (Live Activities)
-* SwiftData (Storage of user routes and downloaded GTFS data)
+* SwiftData (Storage of user routes and bundled GTFS data)
+
+### Updating Bundled Transit Data
+
+Transit reference data ships as a prebuilt SwiftData store, so a fresh install does not need to import JSON before the app becomes usable.
+
+1. Generate the JSON feed from an unpacked MBTA GTFS feed:
+  ```sh
+  python3 JsonBuilder/jsonbuilder.py --gtfs-dir /path/to/MBTA_GTFS
+  ```
+2. Update `TransitDataVersion.feedVersion`. Also update `schemaVersion` when the SwiftData reference models change.
+3. Generate and validate the bundled store:
+  ```sh
+  Scripts/generate-transit-seed.sh
+  ```
+4. Build and smoke-test a clean install before committing the generated seed.
+
+Source JSON is kept under `Tools/TransitSeedBuilder/Resources/JsonBuilder`. The generated store and manifest are packaged from `TRoutes/TRoutes/Resources/TransitSeed`.
 
 ### Journey Engine
 
@@ -66,8 +83,8 @@ graph TD
 
 - **Journey Engine Streaming:** When a journey is active, Journey Engine receives new commands via `AsyncStream` from either the Surface or Underground Manager, depending on which mode the state determines it needs. When it receives a new event, it validates it, mutates `JourneyState` based on what needs to happen, saves `JourneyState` to User Defaults, and then runs any effects that the command creates. When `JourneyState` is saved, the TCA UI and Live Activities are updated via `AsyncStream` subscribed to the Journey Engine.
 - **Core Motion Jolt Detection:** While underground, it is difficult to say if the user actually boarded the next train if GPS information is determined to be unreliable. To increase the speed of state evaluation, T Routes uses CMMotionManager accelerometer data at 50Hz to physically detect when a train departs a station. It utilizes a custom 1-second rolling low-pass vector averager to cancel out the noise of human walking, calculates variance to distinguish bouncing from smooth train acceleration, and tracks a "leaky bucket" confidence score over a 4-second window to prevent false positives.
-- **Serverless Setup:** T Routes is fully serverless in order to eliminate server costs and keep the app completely free. All GTFS data is stored locally in SwiftData when the user downloads the app. Since the app needs to track user position during a journey, we are able to keep the app alive in the background during tracking. This allows `JourneyState` to be updated seamlessly at all times during a journey, and for the Live Activities to remain accurate even with a locked phone.
-- **Rate Limit Queue:** The MBTA's API allows for 20 requests per minute without an API key, and the Rate Limit Queue is used to ensure we do not go over that limit. Requests are prioritized based on their type, and will be delayed or dropped entirely if the queue is reaching or is over that limit. This was a necessary choice, as while a custom MBTA API key is free (coming soon!), requiring users to get one before using the app would be bad design.
+- **Serverless Setup:** T Routes is fully serverless in order to eliminate server costs and keep the app completely free. A prebuilt SwiftData reference store is bundled with each release and copied locally on first launch. Since the app needs to track user position during a journey, we are able to keep the app alive in the background during tracking. This allows `JourneyState` to be updated seamlessly at all times during a journey, and for the Live Activities to remain accurate even with a locked phone.
+- **Rate Limit Queue:** The MBTA's API allows for 20 requests per minute without an API key, and the Rate Limit Queue is used to ensure we do not go over that limit. Requests are prioritized based on their type, and will be delayed or dropped entirely if the queue is reaching or is over that limit. Routes remain usable without a key, while users can add a free MBTA developer key for the higher-volume Stops feature.
 - **Position Reconciliation:** If the app is terminated while a journey is active, we attempt to restore or update their position on the journey if possible. We pull the last known `JourneyState` out of User Defaults, and compare it with their current position to resume the journey. If they're too far or too much time has passed, we kill the journey and stop the Journey Engine.
 - **Monitoring Switch Handoff:** When the Journey Engine detects that the next stop crosses a surface/underground boundary, it emits an effect to switch monitoring. The engine tears down the active manager and spins up the other. Both managers feed JourneyCommand events through their own AsyncStream, but the engine's Journey Command Validator processes them identically regardless of source. This means the handoff is invisible to the rest of the system, so state mutation, effect processing, and UI updates don't need to know or care which manager is currently active.
 
