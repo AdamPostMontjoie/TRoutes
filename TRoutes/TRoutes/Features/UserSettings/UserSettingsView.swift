@@ -108,6 +108,22 @@ struct UserSettingsView: View {
                 } header: {
                     Text("Distance Units")
                 }
+
+                Section("About") {
+                    Link(destination: URL(string: "https://adampostmontjoie.github.io/TRoutes/privacy.html")!) {
+                        settingsLinkLabel(
+                            title: "Privacy Policy",
+                            systemImage: "hand.raised.fill"
+                        )
+                    }
+
+                    Link(destination: URL(string: "https://adampostmontjoie.github.io/TRoutes/support.html")!) {
+                        settingsLinkLabel(
+                            title: "Support",
+                            systemImage: "questionmark.circle.fill"
+                        )
+                    }
+                }
                 
                 if store.isDebugAvailable {
                     Toggle(
@@ -127,6 +143,22 @@ struct UserSettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+        }
+    }
+
+    private func settingsLinkLabel(
+        title: String,
+        systemImage: String
+    ) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Image(systemName: "arrow.up.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
     }
 }

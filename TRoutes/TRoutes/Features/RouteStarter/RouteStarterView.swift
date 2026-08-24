@@ -65,14 +65,12 @@ struct RouteStarterView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(store.isActiveJourneyPresented ? .hidden : .visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if store.isDebugAvailable {
+                ToolbarItem(placement: .topBarLeading) {    
                         Button {
                             store.send(.onSettingsButtonTapped)
                         } label : {
                             Image(systemName: "gear")
                         }
-                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     
