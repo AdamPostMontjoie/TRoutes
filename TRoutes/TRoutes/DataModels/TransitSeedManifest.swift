@@ -2,6 +2,8 @@
 //  TransitSeedManifest.swift
 //  TRoutes
 //
+//  Created by Adam Post on 8/24/26.
+//
 
 struct TransitSeedManifest: Codable, Equatable {
     let schemaVersion: Int

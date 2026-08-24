@@ -105,7 +105,9 @@ struct SingleStopView: View {
                 VStack(spacing: 12) {
                     Text("Set Up Stops Tab")
                         .font(.headline)
-                    Text("Add a free MBTA API key to view live arrivals for nearby, saved, and pinned stops.")
+                    Text(FeatureFlags.stopPinningEnabled
+                        ? "Add a free MBTA API key to view live arrivals for nearby, saved, and pinned stops."
+                        : "Add a free MBTA API key to view live arrivals for nearby and saved stops.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

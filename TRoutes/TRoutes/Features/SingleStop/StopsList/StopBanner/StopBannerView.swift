@@ -45,12 +45,14 @@ struct StopBannerView: View {
                     HStack(spacing: 12) {
                         liveActivityButton
 
-                        Button {
-                            store.send(.pinTapped, animation: .default)
-                        } label: {
-                            Image(systemName: "pin.fill")
-                                .font(.title3)
-                                .foregroundStyle(store.transitColor)
+                        if FeatureFlags.stopPinningEnabled {
+                            Button {
+                                store.send(.pinTapped, animation: .default)
+                            } label: {
+                                Image(systemName: "pin.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(store.transitColor)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -58,12 +60,14 @@ struct StopBannerView: View {
                     HStack(spacing: 12) {
                         liveActivityButton
 
-                        Button {
-                            store.send(.pinTapped, animation: .default)
-                        } label: {
-                            Image(systemName: store.pinnedDirections.contains(store.activeDirectionId) ? "pin.fill" : "pin")
-                                .font(.title3)
-                                .foregroundStyle(store.transitColor)
+                        if FeatureFlags.stopPinningEnabled {
+                            Button {
+                                store.send(.pinTapped, animation: .default)
+                            } label: {
+                                Image(systemName: store.pinnedDirections.contains(store.activeDirectionId) ? "pin.fill" : "pin")
+                                    .font(.title3)
+                                    .foregroundStyle(store.transitColor)
+                            }
                         }
                         
                         Button {
