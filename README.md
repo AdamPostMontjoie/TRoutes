@@ -37,7 +37,6 @@ While the Journey Engine handles complex, multi-leg tracking, the Stops tab is d
 - **Nearby & Search:** Uses the device's location to instantly calculate and surface stations within walking distance, or allows users to instantly search the offline database for any stop in the network.
 - **Pinned & Saved:** Users can save their frequent stations to the top of the feed for zero-click access to live departure predictions.
 - **Single-Stop Live Activities:** Users can launch a Live Activity directly from a specific station. This allows commuters to track their incoming train from their Lock Screen without needing to engage the full Journey tracking engine.
-
   
 ### Built With
 
@@ -47,23 +46,6 @@ While the Journey Engine handles complex, multi-leg tracking, the Stops tab is d
 * Core Location (User location tracking)
 * ActivityKit (Live Activities)
 * SwiftData (Storage of user routes and bundled GTFS data)
-
-### Updating Bundled Transit Data
-
-Transit reference data ships as a prebuilt SwiftData store, so a fresh install does not need to import JSON before the app becomes usable.
-
-1. Generate the JSON feed from an unpacked MBTA GTFS feed:
-  ```sh
-  python3 JsonBuilder/jsonbuilder.py --gtfs-dir /path/to/MBTA_GTFS
-  ```
-2. Update `TransitDataVersion.feedVersion`. Also update `schemaVersion` when the SwiftData reference models change.
-3. Generate and validate the bundled store:
-  ```sh
-  Scripts/generate-transit-seed.sh
-  ```
-4. Build and smoke-test a clean install before committing the generated seed.
-
-Source JSON is kept under `Tools/TransitSeedBuilder/Resources/JsonBuilder`. The generated store and manifest are packaged from `TRoutes/TRoutes/Resources/TransitSeed`.
 
 ### Journey Engine
 
@@ -76,8 +58,6 @@ graph TD
     JE -->|"JourneyUpdate<br/>AsyncStream"| TCA["TCA UI"]
     JE -->|"JourneyUpdate<br/>AsyncStream"| LA["LiveActivityManager<br/>(Lock Screen / Dynamic Island)"]
 ```
-
-
 
 ## Technical Highlights
 
