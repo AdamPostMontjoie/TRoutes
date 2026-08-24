@@ -49,7 +49,7 @@ struct RouteStarterView: View {
                         .padding(.bottom, 8)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    if store.isMotionEventsEnabled {
+                    if store.isDebugAvailable && store.isMotionEventsEnabled {
                         MotionDashboardView(
                             store: store.scope(
                                 state: \.motionDashboardDisplay,
