@@ -73,6 +73,15 @@ func reviewHttpResponse(_ response: URLResponse, _ data: Data) throws {
     }
 }
 
+func isValidAPIKeyResponse(_ response: URLResponse) -> Bool {
+    guard let httpResponse = response as? HTTPURLResponse,
+          (200...299).contains(httpResponse.statusCode) else {
+        return false
+    }
+
+    return httpResponse.value(forHTTPHeaderField: "x-ratelimit-limit") == "1000"
+}
+
 extension MBTAClient:DependencyKey {
     static let liveValue = Self(
         fetchTransitTimes: { stop, routeIds, requestType in
@@ -404,21 +413,8 @@ extension MBTAClient:DependencyKey {
             request.setValue(key, forHTTPHeaderField: "x-api-key")
             
             let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return false
-            }
-            
-            if httpResponse.statusCode == 403 {
-                return false
-            }
-            
-            if let rateLimitHeader = httpResponse.value(forHTTPHeaderField: "x-ratelimit-limit"), rateLimitHeader == "1000" {
-                print("Rate limit is \(rateLimitHeader)")
-                return true
-            }
-            
-            return false
+
+            return isValidAPIKeyResponse(response)
         }
     )
 }
