@@ -50,7 +50,10 @@ extension DatabaseClient: DependencyKey {
                 TransitPattern.self,
                 TransitSequenceEdge.self,
                 TransitReferenceImportMetadata.self,
-                configurations: ModelConfiguration(url: locations.referenceStoreURL)
+                configurations: ModelConfiguration(
+                    url: locations.referenceStoreURL,
+                    allowsSave: false
+                )
             )
             try TransitStoreBootstrap.validateReferenceStore(
                 referenceContainer,
@@ -63,10 +66,6 @@ extension DatabaseClient: DependencyKey {
                 UserPinnedStop.self,
                 configurations: ModelConfiguration(url: locations.userStoreURL)
             )
-            try TransitStoreBootstrap.removeObsoleteReferenceStores(
-                keeping: locations.referenceStoreURL
-            )
-            try TransitStoreBootstrap.removeLegacyCombinedStore()
         } catch {
             fatalError("Failed to initialize SwiftData containers: \(error)")
         }

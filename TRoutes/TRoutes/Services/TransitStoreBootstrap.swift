@@ -5,6 +5,7 @@
 //  Created by Adam Post on 8/24/26.
 //
 
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -33,7 +34,9 @@ enum TransitStoreBootstrap {
             from: Data(contentsOf: manifestURL)
         )
         guard manifest.schemaVersion == TransitDataVersion.schemaVersion,
-              manifest.feedVersion == TransitDataVersion.feedVersion else {
+              manifest.feedVersion == TransitDataVersion.feedVersion,
+                            manifest.storeFingerprint.count == 64,
+                            manifest.storeFingerprint.allSatisfy(\.isHexDigit) else {
             throw TransitStoreBootstrapError.incompatibleManifest(
                 expectedSchema: TransitDataVersion.schemaVersion,
                 actualSchema: manifest.schemaVersion,
@@ -47,39 +50,19 @@ enum TransitStoreBootstrap {
             extension: (manifest.storeFileName as NSString).pathExtension,
             bundle: bundle
         )
-        let appDataDirectory = try applicationDataDirectory(fileManager: fileManager)
-        let referenceDataDirectory = appDataDirectory.appending(
-            path: "ReferenceData",
-            directoryHint: .isDirectory
-        )
-        try fileManager.createDirectory(
-            at: referenceDataDirectory,
-            withIntermediateDirectories: true
-        )
-        var resourceValues = URLResourceValues()
-        resourceValues.isExcludedFromBackup = true
-        var mutableReferenceDataDirectory = referenceDataDirectory
-        try mutableReferenceDataDirectory.setResourceValues(resourceValues)
-
-        let safeFeedVersion = manifest.feedVersion.replacingOccurrences(of: "/", with: "-")
-        let referenceStoreURL = referenceDataDirectory.appending(
-            path: "\(referenceStorePrefix)\(safeFeedVersion).store"
-        )
-        if !fileManager.fileExists(atPath: referenceStoreURL.path) {
-            let temporaryURL = appDataDirectory.appending(
-                path: ".\(referenceStoreURL.lastPathComponent).\(UUID().uuidString).tmp"
-            )
-            try fileManager.copyItem(at: bundledStoreURL, to: temporaryURL)
-            do {
-                try fileManager.moveItem(at: temporaryURL, to: referenceStoreURL)
-            } catch {
-                try? fileManager.removeItem(at: temporaryURL)
-                throw error
-            }
+        guard try sha256(of: bundledStoreURL) == manifest.storeFingerprint else {
+            throw TransitStoreBootstrapError.invalidBundledStoreFingerprint
         }
 
+        let appDataDirectory = try applicationDataDirectory(fileManager: fileManager)
+        try? removeCopiedReferenceStores(
+            from: appDataDirectory,
+            fileManager: fileManager
+        )
+        try? removeLegacyCombinedStore(fileManager: fileManager)
+
         return TransitStoreLocations(
-            referenceStoreURL: referenceStoreURL,
+            referenceStoreURL: bundledStoreURL,
             userStoreURL: appDataDirectory.appending(path: "UserData.store"),
             manifest: manifest
         )
@@ -103,17 +86,25 @@ enum TransitStoreBootstrap {
 
         guard try context.fetchCount(FetchDescriptor<TransitStation>())
                 == locations.manifest.stationCount,
-              try context.fetchCount(FetchDescriptor<TransitPlatform>())
-                == locations.manifest.platformCount,
-              try context.fetchCount(FetchDescriptor<TransitPattern>())
-                == locations.manifest.patternCount,
-              try context.fetchCount(FetchDescriptor<TransitSequenceEdge>())
-                == locations.manifest.sequenceEdgeCount else {
+                            try context.fetchCount(FetchDescriptor<TransitPlatform>())
+                                == locations.manifest.platformCount,
+                            try context.fetchCount(FetchDescriptor<TransitPattern>())
+                                == locations.manifest.patternCount,
+                            try context.fetchCount(FetchDescriptor<TransitSequenceEdge>())
+                                == locations.manifest.sequenceEdgeCount else {
             throw TransitStoreBootstrapError.invalidStoreCounts
+        }
+
+        var edgeDescriptor = FetchDescriptor<TransitSequenceEdge>()
+        edgeDescriptor.fetchLimit = 1
+        guard let edge = try context.fetch(edgeDescriptor).first,
+              edge.pattern != nil,
+              edge.platform?.station != nil else {
+            throw TransitStoreBootstrapError.invalidStoreRelationships
         }
     }
 
-    static func removeLegacyCombinedStore(
+    private static func removeLegacyCombinedStore(
         fileManager: FileManager = .default
     ) throws {
         let applicationSupport = try fileManager.url(
@@ -132,24 +123,23 @@ enum TransitStoreBootstrap {
         }
     }
 
-    static func removeObsoleteReferenceStores(
-        keeping currentStoreURL: URL,
-        fileManager: FileManager = .default
+    private static func removeCopiedReferenceStores(
+        from appDataDirectory: URL,
+        fileManager: FileManager
     ) throws {
-        let directory = currentStoreURL.deletingLastPathComponent()
-        let retainedURLs = [
-            currentStoreURL,
-            URL(fileURLWithPath: currentStoreURL.path + "-shm"),
-            URL(fileURLWithPath: currentStoreURL.path + "-wal")
-        ]
-        let candidateDirectories = [directory, directory.deletingLastPathComponent()]
+        let referenceDataDirectory = appDataDirectory.appending(
+            path: "ReferenceData",
+            directoryHint: .isDirectory
+        )
+        if fileManager.fileExists(atPath: referenceDataDirectory.path) {
+            try fileManager.removeItem(at: referenceDataDirectory)
+        }
 
-        for candidateDirectory in candidateDirectories {
-            for url in try fileManager.contentsOfDirectory(
-                at: candidateDirectory,
-                includingPropertiesForKeys: nil
-            ) where url.lastPathComponent.hasPrefix(referenceStorePrefix)
-                && !retainedURLs.contains(url) {
+        for url in try fileManager.contentsOfDirectory(
+            at: appDataDirectory,
+            includingPropertiesForKeys: nil
+        ) where url.lastPathComponent.hasPrefix(referenceStorePrefix) {
+            if fileManager.fileExists(atPath: url.path) {
                 try fileManager.removeItem(at: url)
             }
         }
@@ -191,6 +181,13 @@ enum TransitStoreBootstrap {
             "\(name).\(fileExtension)"
         )
     }
+
+    private static func sha256(of url: URL) throws -> String {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        return SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
 }
 
 enum TransitStoreBootstrapError: LocalizedError {
@@ -203,6 +200,8 @@ enum TransitStoreBootstrapError: LocalizedError {
     )
     case invalidStoreMetadata
     case invalidStoreCounts
+    case invalidBundledStoreFingerprint
+    case invalidStoreRelationships
 
     var errorDescription: String? {
         switch self {
@@ -214,6 +213,10 @@ enum TransitStoreBootstrapError: LocalizedError {
             return "The installed transit store metadata is invalid."
         case .invalidStoreCounts:
             return "The installed transit store is incomplete."
+        case .invalidStoreRelationships:
+            return "The bundled transit store relationships are invalid."
+        case .invalidBundledStoreFingerprint:
+            return "The bundled transit store does not match its manifest."
         }
     }
 }
