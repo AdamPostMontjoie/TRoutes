@@ -1,9 +1,10 @@
 {
-  "feedVersion" : "jsonbuilder-v4",
+  "feedVersion" : "jsonbuilder-v5",
   "patternCount" : 1213,
   "platformCount" : 7643,
-  "schemaVersion" : 4,
+  "schemaVersion" : 5,
   "sequenceEdgeCount" : 24234,
   "stationCount" : 7141,
-  "storeFileName" : "TransitReference.store"
+  "storeFileName" : "TransitReference.store",
+  "storeFingerprint" : "ea4933db44064b469cf080cf221457e2554b0c2a67af1a2a53a97706c16db3ea"
 }

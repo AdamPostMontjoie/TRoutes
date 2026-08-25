@@ -6,6 +6,6 @@
 //
 
 enum TransitDataVersion {
-    static let schemaVersion = 4
-    static let feedVersion = "jsonbuilder-v4"
+    static let schemaVersion = 5
+    static let feedVersion = "jsonbuilder-v5"
 }

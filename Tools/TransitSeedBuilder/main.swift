@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -26,11 +27,13 @@ enum TransitSeedBuilder {
             try buildStore(inputDirectory: inputDirectory, storeURL: storeURL)
         }
         try checkpointStore(at: storeURL)
+        let storeFingerprint = try sha256(of: storeURL)
 
         let manifest = TransitSeedManifest(
             schemaVersion: TransitDataVersion.schemaVersion,
             feedVersion: TransitDataVersion.feedVersion,
             storeFileName: storeURL.lastPathComponent,
+            storeFingerprint: storeFingerprint,
             stationCount: counts.stations,
             platformCount: counts.platforms,
             patternCount: counts.patterns,
@@ -41,6 +44,7 @@ enum TransitSeedBuilder {
         try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
 
         print("Generated \(storeURL.path)")
+        print("Fingerprint: \(storeFingerprint)")
         print(
             "Stations: \(counts.stations), platforms: \(counts.platforms), "
                 + "patterns: \(counts.patterns), edges: \(counts.sequenceEdges)"
@@ -227,6 +231,11 @@ enum TransitSeedBuilder {
 
         try removeIfPresent(URL(fileURLWithPath: storeURL.path + "-wal"))
         try removeIfPresent(URL(fileURLWithPath: storeURL.path + "-shm"))
+    }
+
+    private static func sha256(of url: URL) throws -> String {
+        let digest = SHA256.hash(data: try Data(contentsOf: url, options: .mappedIfSafe))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func removeStoreArtifacts(at storeURL: URL) throws {
