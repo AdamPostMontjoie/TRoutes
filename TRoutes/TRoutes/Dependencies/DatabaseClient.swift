@@ -379,20 +379,11 @@ private func resolveLeg(
 ) throws -> ResolvedLeg {
     let directionId = try resolvedDirectionId(for: leg)
 
-    // Determine which route IDs to search:
-    // 1. If user explicitly selected routes (multi-branch), use those
-    // 2. If it's a single-route type (CR/Bus), use the selected route
-    // 3. Otherwise fall back to all routes for the transit type
-    let routeIds: [String]
-    if let selectedIds = leg.selectedRouteIds, !selectedIds.isEmpty {
-        routeIds = selectedIds
-    } else if leg.transitType == .greenLine {
-        routeIds = leg.transitType.routeIds
-    } else if leg.transitType.requiresRouteSelection {
-        routeIds = [leg.mbtaRouteId]
-    } else {
-        routeIds = leg.transitType.routeIds
-    }
+    let routeIds = routeIdsForResolution(
+        selectedRouteIds: leg.selectedRouteIds,
+        selectedRouteId: leg.mbtaRouteId,
+        transitType: leg.transitType
+    )
 
     // Fetch edges for all relevant routes in this direction (targeted, not all edges)
     var routeDirectionEdges: [TransitSequenceEdge] = []
@@ -551,6 +542,20 @@ private func resolveLeg(
         stops: stops,
         patternStops: patternStops
     )
+}
+
+func routeIdsForResolution(
+    selectedRouteIds: [String]?,
+    selectedRouteId: String,
+    transitType: TransitType
+) -> [String] {
+    if let selectedRouteIds, !selectedRouteIds.isEmpty {
+        return selectedRouteIds
+    }
+    if transitType.requiresRouteSelection {
+        return [selectedRouteId]
+    }
+    return transitType.routeIds
 }
 
 private struct PatternResolutionCandidate {
