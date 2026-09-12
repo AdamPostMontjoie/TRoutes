@@ -554,6 +554,7 @@ actor JourneyEngine {
         await UndergroundManager.shared.killManager()
         await MotionManager.shared.stopCommands()
         await LiveActivityManager.shared.endActivity()
+        await PredictionManager.shared.clearScheduleCache()
     }
     
     // MARK: - Timers
