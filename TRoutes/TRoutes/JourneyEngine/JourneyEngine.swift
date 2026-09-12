@@ -225,7 +225,6 @@ actor JourneyEngine {
                 await startListeningToMotionEvents(stop: firstStop)
             }
             await monitorNextStop(stop: firstStop)
-            await self.fetchPredictions()
         }
         
         await LiveActivityManager.shared.startListening()
@@ -539,6 +538,7 @@ actor JourneyEngine {
         stopPredictionRefreshTimer()
         stopVehicleSearch()
         
+        lastPredictionFetchTime = nil
         routeEndTimerTask?.cancel()
         routeEndTimerTask = nil
         
@@ -562,11 +562,10 @@ actor JourneyEngine {
         stopPredictionRefreshTimer()
         predictionRefreshTask = Task {
             while !Task.isCancelled {
-                let now = Date()
-                let timeSinceLastFetch = now.timeIntervalSince(lastPredictionFetchTime ?? .distantPast)
-                let timeToWait = max(1.0, 15.0 - timeSinceLastFetch)
+                let timeSinceLastFetch = lastPredictionFetchTime.map { Date().timeIntervalSince($0) } ?? 15.0
+                let timeToWait = max(0, 15.0 - timeSinceLastFetch)
                 
-                try? await Task.sleep(for: .seconds(timeToWait))
+                try? await Task.sleep(nanoseconds: UInt64(timeToWait * 1_000_000_000))
                 
                 guard !Task.isCancelled else { break }
                 
