@@ -16,6 +16,9 @@ struct JourneyState: Equatable, Codable {
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
     
+    // Timing State
+    var timingState = JourneyTimingState()
+
     //Prediction State
     var activeLegPrediction: PredictionState? = nil
     var transferLegPrediction: PredictionState? = nil
@@ -105,6 +108,7 @@ struct JourneyState: Equatable, Codable {
         case stopIndex
         case legIndex
         case movementStatus
+        case timingState
         case activeLegPrediction
         case transferLegPrediction
         case monitoringMode
@@ -124,6 +128,7 @@ struct JourneyState: Equatable, Codable {
         stopIndex = try container.decode(Int.self, forKey: .stopIndex)
         legIndex = try container.decode(Int.self, forKey: .legIndex)
         movementStatus = try container.decode(MovementStatus.self, forKey: .movementStatus)
+        timingState = try container.decodeIfPresent(JourneyTimingState.self, forKey: .timingState) ?? JourneyTimingState()
         activeLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .activeLegPrediction)
         transferLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .transferLegPrediction)
         monitoringMode = try container.decode(MonitoringMode.self, forKey: .monitoringMode)
