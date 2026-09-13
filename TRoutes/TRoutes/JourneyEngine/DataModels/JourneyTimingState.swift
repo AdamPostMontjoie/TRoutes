@@ -19,6 +19,7 @@ enum JourneyTimingStatus: String, Codable, Sendable {
 /// Display strings are derived later by JourneyPresentationState.
 struct RecommendedDeparture: Equatable, Codable, Sendable {
     let departureTime: Date
+    let timeSource: TimingSource
     let destinationArrivalTime: Date
     let selectedTripIds: [String]
     let confidence: TimingConfidence

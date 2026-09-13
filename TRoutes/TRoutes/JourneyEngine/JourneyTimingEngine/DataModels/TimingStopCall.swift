@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum TimingSource: String, Codable, Sendable {
+    case prediction
+    case schedule
+}
+
 /// Arrival and departure remain separate because a leg boards using departure
 /// time and reaches its destination using arrival time.
 struct StopTimes: Equatable, Sendable {
@@ -64,5 +69,17 @@ struct StopCall: Equatable, Sendable {
             ?? predicted?.arrival
             ?? scheduled?.departure
             ?? scheduled?.arrival
+    }
+
+    /// Uses the same precedence as `effectiveDeparture`, allowing the selected
+    /// recommendation to preserve whether its time was live or scheduled.
+    var effectiveDepartureSource: TimingSource? {
+        if predicted?.departure != nil || predicted?.arrival != nil {
+            return .prediction
+        }
+        if scheduled?.departure != nil || scheduled?.arrival != nil {
+            return .schedule
+        }
+        return nil
     }
 }

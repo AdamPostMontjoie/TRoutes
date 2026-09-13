@@ -21,6 +21,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
     let destination: StopCall
     let departure: Date
     let arrival: Date
+    let departureTimeSource: TimingSource
     let confidence: TimingConfidence
 
     /// Rejects mismatched stop calls here so later journey solving can assume
@@ -34,6 +35,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
               origin.routeId == destination.routeId,
               origin.directionId == destination.directionId,
               let departure = origin.effectiveDeparture,
+              let departureTimeSource = origin.effectiveDepartureSource,
               let arrival = destination.effectiveArrival,
               arrival >= departure else {
             return nil
@@ -44,6 +46,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
         self.destination = destination
         self.departure = departure
         self.arrival = arrival
+        self.departureTimeSource = departureTimeSource
 
         switch (origin.predicted, destination.predicted) {
         case (.some, .some):
