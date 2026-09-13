@@ -12,6 +12,9 @@ struct MBTAClient {
     //predictions and schedules
     var fetchTransitTimes: @Sendable (any PredictionTarget, [String], MBTARequestType) async throws -> [TransitPrediction]
     var fetchSchedule: @Sendable (any PredictionTarget, MBTARequestType) async throws -> [TransitSchedule]
+    // Route-wide journey timing requests: stop IDs, route IDs, request priority
+    var fetchTimingPredictions: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [StopCall]
+    var fetchTimingSchedules: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [StopCall]
     //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
@@ -245,6 +248,115 @@ extension MBTAClient:DependencyKey {
                 return upcomingSchedules
             } catch {
                 throw MBTAError.decodingError
+            }
+        },
+        fetchTimingPredictions: { stopIds, routeIds, requestType in
+            try await RateLimitQueue.shared.acquireToken(for: requestType)
+            let stopFilter = stopIds.joined(separator: ",")
+            let routeFilter = routeIds.joined(separator: ",")
+            guard let url = URL(string: "\(header)predictions?filter[stop]=\(stopFilter)&filter[route]=\(routeFilter)&filter[revenue]=REVENUE&sort=time&page[limit]=1000") else {
+                throw MBTAError.networkError
+            }
+
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
+            try reviewHttpResponse(response, data)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let predictionResponse = try decoder.decode(PredictionResponse.self, from: data)
+            let isoFormatter = ISO8601DateFormatter()
+            let now = Date()
+            var calls: [StopCall] = []
+
+            for prediction in predictionResponse.data {
+                let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
+                let departureDate = prediction.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
+                guard let time = departureDate ?? arrivalDate, time >= now else { continue }
+                guard let tripId = prediction.relationships.trip?.data?.id,
+                      let stopId = prediction.relationships.stop?.data?.id,
+                      let routeId = prediction.relationships.route?.data?.id,
+                      let directionId = prediction.attributes.directionId else { continue }
+
+                calls.append(StopCall(
+                    key: TripStopKey(
+                        tripId: tripId,
+                        stopId: stopId,
+                        stopSequence: prediction.attributes.stopSequence
+                    ),
+                    routeId: routeId,
+                    directionId: directionId,
+                    vehicleId: prediction.relationships.vehicle?.data?.id,
+                    headsign: prediction.attributes.tripHeadsign,
+                    scheduleId: prediction.relationships.schedule?.data?.id,
+                    predictionId: prediction.id,
+                    scheduled: nil,
+                    predicted: StopTimes(arrival: arrivalDate, departure: departureDate),
+                    status: prediction.attributes.status,
+                    scheduleRelationship: prediction.attributes.scheduleRelationship,
+                    availability: .predicted
+                ))
+            }
+            return calls
+        },
+        fetchTimingSchedules: { stopIds, routeIds, requestType in
+            try await RateLimitQueue.shared.acquireToken(for: requestType)
+
+            let timeFormatter = DateFormatter()
+            timeFormatter.dateFormat = "HH:mm"
+            timeFormatter.timeZone = TimeZone(identifier: "America/New_York")
+
+            let serviceDateFormatter = DateFormatter()
+            serviceDateFormatter.dateFormat = "yyyy-MM-dd"
+            serviceDateFormatter.timeZone = TimeZone(identifier: "America/New_York")
+
+            let now = Date()
+            let stopFilter = stopIds.joined(separator: ",")
+            let routeFilter = routeIds.joined(separator: ",")
+            let minTime = timeFormatter.string(from: now)
+            let serviceDate = serviceDateFormatter.string(from: now)
+
+            guard let url = URL(string: "\(header)schedules?filter[stop]=\(stopFilter)&filter[route]=\(routeFilter)&filter[date]=\(serviceDate)&filter[min_time]=\(minTime)&sort=time&page[limit]=1000") else {
+                throw MBTAError.networkError
+            }
+
+            let (data, response) = try await URLSession.shared.data(for: createMBTAURLRequest(url: url))
+            try reviewHttpResponse(response, data)
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let scheduleResponse = try decoder.decode(ScheduleResponse.self, from: data)
+            let isoFormatter = ISO8601DateFormatter()
+
+            return scheduleResponse.data.compactMap { schedule in
+                let arrivalDate = schedule.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
+                let departureDate = schedule.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
+
+                guard let time = departureDate ?? arrivalDate, time >= now,
+                      let tripId = schedule.relationships.trip?.data?.id,
+                      let stopId = schedule.relationships.stop?.data?.id,
+                      let routeId = schedule.relationships.route?.data?.id,
+                      let directionId = schedule.attributes.directionId else {
+                    return nil
+                }
+
+                return StopCall(
+                    key: TripStopKey(
+                        tripId: tripId,
+                        stopId: stopId,
+                        stopSequence: schedule.attributes.stopSequence
+                    ),
+                    routeId: routeId,
+                    directionId: directionId,
+                    vehicleId: schedule.relationships.vehicle?.data?.id,
+                    headsign: schedule.attributes.tripHeadsign,
+                    scheduleId: schedule.id,
+                    predictionId: nil,
+                    scheduled: StopTimes(arrival: arrivalDate, departure: departureDate),
+                    predicted: nil,
+                    status: schedule.attributes.status,
+                    scheduleRelationship: schedule.attributes.scheduleRelationship,
+                    availability: .scheduledOnly
+                )
             }
         },
         fetchDirections: { routeId, requestType in

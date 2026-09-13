@@ -80,7 +80,6 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
 struct TransferRequirement: Equatable, Sendable {
     let minimumTransferTime: TimeInterval
     let safetyMargin: TimeInterval
-
     var requiredTime: TimeInterval {
         minimumTransferTime + safetyMargin
     }
@@ -187,7 +186,7 @@ struct LegTimingCoverage: Equatable, Sendable {
 
 /// Internal result of one route-wide timing refresh.
 struct RouteTimingSnapshot: Equatable, Sendable {
-    let routeId: UUID
+    let resolvedRouteId: UUID
     let generation: UInt64
     let fetchedAt: Date
     let calls: [TripStopKey: StopCall]

@@ -8,17 +8,17 @@
 import Foundation
 
 /// Predictions for one existing JourneyState prediction target, projected from
-/// the combined route-wide response.
+/// the combined route-wide response. Match this ID against
+/// `PredictionState.predictedStop.id` when applying the update.
 struct PredictionSlice: Equatable, Sendable {
-    let resolvedStopId: UUID
-    let targetType: PredictionTargetType
+    let predictedStopId: UUID
     let predictions: [TransitPrediction]
 }
 
 /// Transient output delivered to JourneyAction. This is not persisted directly;
 /// JourneyAction copies its durable timing fields into JourneyTimingState.
 struct JourneyTimingUpdate: Equatable, Sendable {
-    let routeId: UUID
+    let resolvedRouteId: UUID
     let generation: UInt64
     let fetchedAt: Date
     let predictionSlices: [PredictionSlice]

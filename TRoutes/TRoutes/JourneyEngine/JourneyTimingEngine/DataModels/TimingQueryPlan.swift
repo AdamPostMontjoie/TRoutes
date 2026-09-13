@@ -13,7 +13,7 @@ import Foundation
 /// route's individual legs. Request filters and the coalescing key are derived
 /// so they cannot disagree with those legs.
 struct TimingQueryPlan: Equatable, Sendable {
-    let routeId: UUID
+    let resolvedRouteId: UUID
     let legs: [TimingLegPlan]
 
     var queriedStopIds: Set<String> {
@@ -32,17 +32,17 @@ struct TimingQueryPlan: Equatable, Sendable {
 
     var key: TimingQueryKey {
         TimingQueryKey(
-            routeId: routeId,
+            resolvedRouteId: resolvedRouteId,
             stopIds: queriedStopIds.sorted(),
             services: services.sorted()
         )
     }
 }
 
-/// Stable identity for request coalescing and rejecting results from an old plan.
+/// Stable identity for route-timing request coalescing and schedule caching.
 /// Arrays are stored in sorted order when the key is constructed.
 struct TimingQueryKey: Hashable, Sendable {
-    let routeId: UUID
+    let resolvedRouteId: UUID
     let stopIds: [String]
     let services: [TimingRouteDirection]
 }

@@ -30,8 +30,9 @@ struct RecommendedDeparture: Equatable, Codable, Sendable {
     }
 }
 
-/// The small persisted timing summary owned by JourneyState. Raw API observations,
-/// query plans, and cached schedules remain inside JourneyTimingEngine.
+/// The small persisted timing summary owned by JourneyState. Raw API observations
+/// and query plans remain inside JourneyTimingEngine. PredictionManager owns
+/// the reusable schedule cache.
 struct JourneyTimingState: Equatable, Codable, Sendable {
     var status: JourneyTimingStatus = .idle
     var generation: UInt64 = 0

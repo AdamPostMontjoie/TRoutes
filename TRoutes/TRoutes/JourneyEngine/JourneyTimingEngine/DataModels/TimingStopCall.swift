@@ -35,6 +35,13 @@ enum StopCallAvailability: String, Sendable {
     case canceled
 }
 
+/// The two normalized API result sets before schedule/prediction overlay.
+/// Keeping them separate makes the merge boundary explicit.
+struct UnmergedTimingCalls: Equatable, Sendable {
+    let predictionCalls: [StopCall]
+    let scheduleCalls: [StopCall]
+}
+
 /// The merged scheduled and real-time facts for one trip at one stop.
 ///
 /// A prediction overlays the corresponding schedule when the MBTA supplies a
@@ -44,6 +51,7 @@ struct StopCall: Equatable, Sendable {
     let routeId: String
     let directionId: Int
     let vehicleId: String?
+    let headsign: String?
 
     let scheduleId: String?
     let predictionId: String?
