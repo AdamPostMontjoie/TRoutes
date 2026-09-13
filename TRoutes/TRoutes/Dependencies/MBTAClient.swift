@@ -125,14 +125,13 @@ extension MBTAClient:DependencyKey {
                 
                 for prediction in predictionResponse.data {
                     let display: String
+                    let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
+                    let departureDate = prediction.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
                     
                     // 1. Physical signs prioritize specific statuses over timestamps
                     if let status = prediction.attributes.status {
                         display = status
                     } else {
-                        let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
-                        let departureDate = prediction.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
-                        
                         // It is dwelling if arrival is in the past but departure is in the future
                         let isDwelling = (arrivalDate != nil && arrivalDate! < now) && (departureDate != nil && departureDate! >= now)
                         
@@ -156,6 +155,8 @@ extension MBTAClient:DependencyKey {
                     upcomingTimes.append(
                         TransitPrediction(
                             display: display,
+                            arrivalDate: arrivalDate,
+                            departureDate: departureDate,
                             vehicleId: vehicleId,
                             predictionId: prediction.id,
                             tripId: prediction.relationships.trip?.data?.id,
@@ -217,6 +218,9 @@ extension MBTAClient:DependencyKey {
                 var upcomingSchedules: [TransitSchedule] = []
                 
                 for schedule in scheduleResponse.data {
+                    let arrivalDate = schedule.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
+                    let departureDate = schedule.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
+                    
                     let dateStr = schedule.attributes.departureTime ?? schedule.attributes.arrivalTime
                     guard let dateStr = dateStr, let date = isoFormatter.date(from: dateStr) else { continue }
                     
@@ -224,6 +228,8 @@ extension MBTAClient:DependencyKey {
                     
                     let transitSchedule = TransitSchedule(
                         display: display,
+                        arrivalDate: arrivalDate,
+                        departureDate: departureDate,
                         vehicleId: schedule.relationships.vehicle?.data?.id,
                         ScheduleId: schedule.id,
                         tripId: schedule.relationships.trip?.data?.id,

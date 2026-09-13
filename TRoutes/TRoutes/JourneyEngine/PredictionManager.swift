@@ -33,14 +33,9 @@ actor PredictionManager {
             
             //Skip prediction request if next cached scheduled time is more than 10 minutes away
             if let cached = scheduleCache[targetKey], cached.expiration > now {
-                let formatter = DateFormatter()
-                formatter.timeStyle = .short
-                
                 if let firstSchedule = cached.schedules.first,
-                   let scheduledTime = formatter.date(from: firstSchedule.display),
-                   let currentTime = formatter.date(from: formatter.string(from: now)) {
-                    
-                    let minutesAway = Calendar.current.dateComponents([.minute], from: currentTime, to: scheduledTime).minute ?? 0
+                   let scheduledTime = firstSchedule.departureDate ?? firstSchedule.arrivalDate {
+                    let minutesAway = Calendar.current.dateComponents([.minute], from: now, to: scheduledTime).minute ?? 0
                     
                     if minutesAway > 10 {
                         return cached.schedules.map { $0.asPrediction }
