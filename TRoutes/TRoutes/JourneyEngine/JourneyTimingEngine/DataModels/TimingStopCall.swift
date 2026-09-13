@@ -52,6 +52,7 @@ struct StopCall: Equatable, Sendable {
     let directionId: Int
     let vehicleId: String?
     let headsign: String?
+    let isLastTrip: Bool?
 
     let scheduleId: String?
     let predictionId: String?

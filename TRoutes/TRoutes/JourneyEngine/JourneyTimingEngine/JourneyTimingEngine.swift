@@ -8,6 +8,27 @@
 import CoreLocation
 import Foundation
 
+private struct OptionConnectionKey: Hashable {
+    let arrivingOptionId: String
+    let departingOptionId: String
+}
+
+private struct TimingConnectionGraph {
+    let transfersByConnection: [OptionConnectionKey: TransferTiming]
+
+    func transfer(
+        from arrivingOption: LegTripOption,
+        to departingOption: LegTripOption
+    ) -> TransferTiming? {
+        transfersByConnection[
+            OptionConnectionKey(
+                arrivingOptionId: arrivingOption.id,
+                departingOptionId: departingOption.id
+            )
+        ]
+    }
+}
+
 actor JourneyTimingEngine {
     static let shared = JourneyTimingEngine()
     private init() {}
@@ -27,9 +48,13 @@ actor JourneyTimingEngine {
         let refreshGeneration = generation
 
         // Step 1: describe and fetch the two route-wide result sets.
-        let queryPlan = try makeQueryPlan(
+        let remainingLegs = try remainingLegs(
+            in: route,
+            startingAt: currentLegId
+        )
+        let queryPlan = makeQueryPlan(
             route: route,
-            currentLegId: currentLegId
+            remainingLegs: remainingLegs
         )
 
         let unmergedCalls = try await requestAllTimingCalls(queryPlan: queryPlan)
@@ -50,13 +75,33 @@ actor JourneyTimingEngine {
             optionsByLeg: optionsByLeg
         )
 
+        // Step 4: connect feasible trip options on adjacent legs.
+        let connectionGraph = connectAdjacentLegs(
+            remainingLegs: remainingLegs,
+            optionsByLeg: optionsByLeg
+        )
+
+        // Step 5: keep the best partial path reaching each option.
+        let completeJourneys = solveJourneys(
+            remainingLegs: remainingLegs,
+            optionsByLeg: optionsByLeg,
+            connectionGraph: connectionGraph
+        )
+
+        // Step 6: choose one complete journey using the product policy below.
+        let recommendedJourney = selectRecommendedJourney(
+            from: completeJourneys,
+            coverageByLeg: coverageByLeg
+        )
+
         let snapshot = makeSnapshot(
             queryPlan: queryPlan,
             generation: refreshGeneration,
             fetchedAt: fetchedAt,
             mergedCalls: mergedCalls,
             optionsByLeg: optionsByLeg,
-            coverageByLeg: coverageByLeg
+            coverageByLeg: coverageByLeg,
+            recommendedJourney: recommendedJourney
         )
         if refreshGeneration == generation {
             latestSnapshot = snapshot
@@ -71,25 +116,33 @@ actor JourneyTimingEngine {
                 mergedCalls: mergedCalls,
                 now: fetchedAt
             ),
-            recommendedDeparture: nil,
-            currentLegArrival: nil,
-            destinationArrival: nil
+            recommendedDeparture: recommendedJourney.map(
+                makeRecommendedDeparture
+            ),
+            currentLegArrival: recommendedJourney?.legs.first?.arrival,
+            destinationArrival: recommendedJourney?.destinationArrival
         )
     }
 
     // MARK: - Step 1: request all relevant information
 
-    private func makeQueryPlan(
-        route: ResolvedUserRoute,
-        currentLegId: UUID
-    ) throws -> TimingQueryPlan {
+    private func remainingLegs(
+        in route: ResolvedUserRoute,
+        startingAt currentLegId: UUID
+    ) throws -> [ResolvedLeg] {
         guard let currentLegIndex = route.legs.firstIndex(where: {
             $0.id == currentLegId
         }) else {
             throw JourneyTimingError.currentLegNotFound(currentLegId)
         }
 
-        let remainingLegs = route.legs[currentLegIndex...]
+        return Array(route.legs[currentLegIndex...])
+    }
+
+    private func makeQueryPlan(
+        route: ResolvedUserRoute,
+        remainingLegs: [ResolvedLeg]
+    ) -> TimingQueryPlan {
         let legs = remainingLegs.map { leg in
             let routeIds = Set(leg.acceptableRouteIds).union([leg.mbtaRouteId])
             let services = Set(routeIds.map { routeId in
@@ -180,6 +233,7 @@ actor JourneyTimingEngine {
             directionId: prediction.directionId,
             vehicleId: prediction.vehicleId ?? schedule.vehicleId,
             headsign: prediction.headsign ?? schedule.headsign,
+            isLastTrip: prediction.isLastTrip ?? schedule.isLastTrip,
             scheduleId: prediction.scheduleId ?? schedule.scheduleId,
             predictionId: prediction.predictionId,
             scheduled: schedule.scheduled,
@@ -316,6 +370,362 @@ actor JourneyTimingEngine {
             .contains { value in
                 value.contains("canceled") || value.contains("cancelled")
             }
+    }
+
+    // MARK: - Integration decision: in-progress current leg
+
+    // JourneyEngine must eventually pass explicit onboard-trip context here.
+    // `trackedTripId` alone is not sufficient because it can identify an
+    // approaching vehicle before the passenger has actually boarded.
+
+    // MARK: - Step 4: connect adjacent legs
+
+    private func connectAdjacentLegs(
+        remainingLegs: [ResolvedLeg],
+        optionsByLeg: [UUID: [LegTripOption]]
+    ) -> TimingConnectionGraph {
+        guard remainingLegs.count > 1 else {
+            return TimingConnectionGraph(transfersByConnection: [:])
+        }
+
+        var transfersByConnection: [OptionConnectionKey: TransferTiming] = [:]
+
+        for legIndex in 0..<(remainingLegs.count - 1) {
+            let arrivingLeg = remainingLegs[legIndex]
+            let departingLeg = remainingLegs[legIndex + 1]
+            let arrivingOptions = optionsByLeg[arrivingLeg.id] ?? []
+            let departingOptions = optionsByLeg[departingLeg.id] ?? []
+
+            for (optionIndex, departingOption) in departingOptions.enumerated() {
+                let nextAlternativeDeparture = nextAlternativeDeparture(
+                    after: optionIndex,
+                    in: departingOptions
+                )
+                let nextAlternativeGap = nextAlternativeDeparture.map {
+                    $0.timeIntervalSince(departingOption.departure)
+                }
+                let isLastService = departingOption.origin.isLastTrip == true
+                    && nextAlternativeDeparture == nil
+                let safetyMargin = safetyMargin(
+                    for: departingLeg,
+                    nextAlternativeGap: nextAlternativeGap,
+                    isLastService: isLastService
+                )
+                let requirement = calculateTransferTime(
+                    from: arrivingLeg,
+                    to: departingLeg,
+                    safetyMargin: safetyMargin
+                )
+
+                for arrivingOption in arrivingOptions {
+                    let transfer = TransferTiming(
+                        arrivingLegId: arrivingLeg.id,
+                        departingLegId: departingLeg.id,
+                        stationId: departingLeg.startStop.stationId,
+                        arrival: arrivingOption.arrival,
+                        departure: departingOption.departure,
+                        requirement: requirement,
+                        nextAlternativeDeparture: nextAlternativeDeparture,
+                        risk: connectionRisk(
+                            usableSlack: departingOption.departure
+                                .timeIntervalSince(arrivingOption.arrival)
+                                - requirement.requiredTime,
+                            nextAlternativeGap: nextAlternativeGap,
+                            isLastService: isLastService
+                        )
+                    )
+
+                    guard transfer.usableSlack >= 0 else { continue }
+
+                    transfersByConnection[
+                        OptionConnectionKey(
+                            arrivingOptionId: arrivingOption.id,
+                            departingOptionId: departingOption.id
+                        )
+                    ] = transfer
+                }
+            }
+        }
+
+        return TimingConnectionGraph(
+            transfersByConnection: transfersByConnection
+        )
+    }
+
+    private func nextAlternativeDeparture(
+        after optionIndex: Int,
+        in options: [LegTripOption]
+    ) -> Date? {
+        let selectedDeparture = options[optionIndex].departure
+        return options.dropFirst(optionIndex + 1)
+            .first { $0.departure > selectedDeparture }?
+            .departure
+    }
+
+    // MARK: - Step 5: search complete paths
+
+    /// Dynamic programming keeps one best path for each option on the current
+    /// layer. Future compatibility depends only on that final option.
+    private func solveJourneys(
+        remainingLegs: [ResolvedLeg],
+        optionsByLeg: [UUID: [LegTripOption]],
+        connectionGraph: TimingConnectionGraph
+    ) -> [TimedJourney] {
+        guard let firstLeg = remainingLegs.first else { return [] }
+
+        var bestPathByFinalOptionId: [String: TimedJourney] = [:]
+        for option in optionsByLeg[firstLeg.id] ?? [] {
+            if let path = TimedJourney(
+                legs: [option],
+                transfers: [],
+                warnings: []
+            ) {
+                bestPathByFinalOptionId[option.id] = path
+            }
+        }
+
+        for leg in remainingLegs.dropFirst() {
+            var nextBestPathByFinalOptionId: [String: TimedJourney] = [:]
+
+            for option in optionsByLeg[leg.id] ?? [] {
+                for path in bestPathByFinalOptionId.values {
+                    guard let previousOption = path.legs.last,
+                          let transfer = connectionGraph.transfer(
+                            from: previousOption,
+                            to: option
+                          ),
+                          let candidate = TimedJourney(
+                            legs: path.legs + [option],
+                            transfers: path.transfers + [transfer],
+                            warnings: []
+                          ) else {
+                        continue
+                    }
+
+                    if let current = nextBestPathByFinalOptionId[option.id] {
+                        if isPreferredJourney(candidate, over: current) {
+                            nextBestPathByFinalOptionId[option.id] = candidate
+                        }
+                    } else {
+                        nextBestPathByFinalOptionId[option.id] = candidate
+                    }
+                }
+            }
+
+            bestPathByFinalOptionId = nextBestPathByFinalOptionId
+            if bestPathByFinalOptionId.isEmpty {
+                return []
+            }
+        }
+
+        return Array(bestPathByFinalOptionId.values)
+    }
+
+    // MARK: - Step 6: select and describe the recommendation
+
+    private func selectRecommendedJourney(
+        from journeys: [TimedJourney],
+        coverageByLeg: [UUID: LegTimingCoverage]
+    ) -> TimedJourney? {
+        guard let selected = journeys.min(by: { candidate, current in
+            isPreferredJourney(candidate, over: current)
+        }) else {
+            return nil
+        }
+
+        return TimedJourney(
+            legs: selected.legs,
+            transfers: selected.transfers,
+            warnings: timingWarnings(
+                for: selected,
+                coverageByLeg: coverageByLeg
+            )
+        )
+    }
+
+    private func makeRecommendedDeparture(
+        from journey: TimedJourney
+    ) -> RecommendedDeparture {
+        RecommendedDeparture(
+            departureTime: journey.originDeparture,
+            timeSource: journey.legs[0].departureTimeSource,
+            destinationArrivalTime: journey.destinationArrival,
+            selectedTripIds: journey.legs.map(\.tripId),
+            confidence: journey.confidence,
+            warnings: journey.warnings
+        )
+    }
+
+    private func timingWarnings(
+        for journey: TimedJourney,
+        coverageByLeg: [UUID: LegTimingCoverage]
+    ) -> [TimingWarning] {
+        var warnings: [TimingWarning] = []
+
+        for option in journey.legs {
+            if option.confidence == .scheduled {
+                appendWarning(.scheduleOnly(legId: option.legId), to: &warnings)
+            }
+
+            if coverageByLeg[option.legId]?.status != .sufficient {
+                appendWarning(
+                    .incompleteCoverage(legId: option.legId),
+                    to: &warnings
+                )
+            }
+        }
+
+        for transfer in journey.transfers {
+            switch transfer.risk {
+            case .normal:
+                break
+            case .tight:
+                appendWarning(
+                    .tightConnection(stationId: transfer.stationId),
+                    to: &warnings
+                )
+            case .highConsequence:
+                if let nextAlternativeDeparture = transfer.nextAlternativeDeparture {
+                    appendWarning(
+                        .longRecoveryGap(
+                            stationId: transfer.stationId,
+                            seconds: nextAlternativeDeparture
+                                .timeIntervalSince(transfer.departure)
+                        ),
+                        to: &warnings
+                    )
+                }
+            case .lastService:
+                appendWarning(
+                    .lastService(stationId: transfer.stationId),
+                    to: &warnings
+                )
+            }
+        }
+
+        return warnings
+    }
+
+    private func appendWarning(
+        _ warning: TimingWarning,
+        to warnings: inout [TimingWarning]
+    ) {
+        if !warnings.contains(warning) {
+            warnings.append(warning)
+        }
+    }
+
+    // MARK: - Policy decision: transfer safety and risk
+
+    /// These are deliberately basic first-pass values. Revisit the mode-based
+    /// margins, recovery-gap thresholds, and walking model with real route data.
+    private func safetyMargin(
+        for departingLeg: ResolvedLeg,
+        nextAlternativeGap: TimeInterval?,
+        isLastService: Bool
+    ) -> TimeInterval {
+        let ordinaryMargin: TimeInterval = 2 * 60
+        let infrequentServiceMargin: TimeInterval = 5 * 60
+        let highConsequenceMargin: TimeInterval = 10 * 60
+
+        let modeMargin: TimeInterval
+        switch departingLeg.transitType {
+        case .commuterRail, .ferry:
+            modeMargin = infrequentServiceMargin
+        default:
+            modeMargin = ordinaryMargin
+        }
+
+        if isLastService || (nextAlternativeGap ?? 0) >= 60 * 60 {
+            return max(modeMargin, highConsequenceMargin)
+        }
+        if (nextAlternativeGap ?? 0) >= 30 * 60 {
+            return max(modeMargin, infrequentServiceMargin)
+        }
+        return modeMargin
+    }
+
+    private func calculateTransferTime(
+        from arrivingLeg: ResolvedLeg,
+        to departingLeg: ResolvedLeg,
+        safetyMargin: TimeInterval
+    ) -> TransferRequirement {
+        let arrivalLocation = CLLocation(
+            latitude: arrivingLeg.endStop.latitude,
+            longitude: arrivingLeg.endStop.longitude
+        )
+        let departureLocation = CLLocation(
+            latitude: departingLeg.startStop.latitude,
+            longitude: departingLeg.startStop.longitude
+        )
+        let walkingDistance = arrivalLocation.distance(from: departureLocation)
+
+        return TransferRequirement(
+            minimumTransferTime: walkingDistance / 1.4,
+            safetyMargin: safetyMargin
+        )
+    }
+
+    private func connectionRisk(
+        usableSlack: TimeInterval,
+        nextAlternativeGap: TimeInterval?,
+        isLastService: Bool
+    ) -> ConnectionRisk {
+        if isLastService {
+            return .lastService
+        }
+        if (nextAlternativeGap ?? 0) >= 30 * 60 {
+            return .highConsequence
+        }
+        if usableSlack < 2 * 60 {
+            return .tight
+        }
+        return .normal
+    }
+
+    // MARK: - Policy decision: journey ranking
+
+    /// Current ordering: earliest destination arrival, lowest total connection
+    /// risk, then latest initial departure. The final signature is only a stable
+    /// deterministic tie-breaker.
+    private func isPreferredJourney(
+        _ candidate: TimedJourney,
+        over current: TimedJourney
+    ) -> Bool {
+        if candidate.destinationArrival != current.destinationArrival {
+            return candidate.destinationArrival < current.destinationArrival
+        }
+
+        let candidateRisk = totalRiskScore(candidate)
+        let currentRisk = totalRiskScore(current)
+        if candidateRisk != currentRisk {
+            return candidateRisk < currentRisk
+        }
+
+        if candidate.originDeparture != current.originDeparture {
+            return candidate.originDeparture > current.originDeparture
+        }
+
+        return journeySignature(candidate) < journeySignature(current)
+    }
+
+    private func totalRiskScore(_ journey: TimedJourney) -> Int {
+        journey.transfers.reduce(into: 0) { score, transfer in
+            switch transfer.risk {
+            case .normal:
+                break
+            case .tight:
+                score += 1
+            case .highConsequence:
+                score += 2
+            case .lastService:
+                score += 3
+            }
+        }
+    }
+
+    private func journeySignature(_ journey: TimedJourney) -> String {
+        journey.legs.map(\.id).joined(separator: "|")
     }
 
     // MARK: - Prediction-state projection
@@ -458,7 +868,8 @@ actor JourneyTimingEngine {
         fetchedAt: Date,
         mergedCalls: [StopCall],
         optionsByLeg: [UUID: [LegTripOption]],
-        coverageByLeg: [UUID: LegTimingCoverage]
+        coverageByLeg: [UUID: LegTimingCoverage],
+        recommendedJourney: TimedJourney?
     ) -> RouteTimingSnapshot {
         let callsByKey = Dictionary(
             mergedCalls.map { ($0.key, $0) },
@@ -474,36 +885,9 @@ actor JourneyTimingEngine {
             calls: callsByKey,
             optionsByLeg: optionsByLeg,
             coverageByLeg: coverageByLeg,
-            recommendedJourney: nil
+            recommendedJourney: recommendedJourney
         )
     }
-
-    // MARK: - Step 4 preparation: transfer policy
-
-    /// Temporary physical transfer estimate. The later connection policy should
-    /// pass a risk-based safety margin instead of always using 30 seconds.
-    private func calculateTransferTime(
-        from arrivingLeg: ResolvedLeg,
-        to departingLeg: ResolvedLeg,
-        safetyMargin: TimeInterval = 30
-    ) -> TransferRequirement {
-        let arrivalLocation = CLLocation(
-            latitude: arrivingLeg.endStop.latitude,
-            longitude: arrivingLeg.endStop.longitude
-        )
-        let departureLocation = CLLocation(
-            latitude: departingLeg.startStop.latitude,
-            longitude: departingLeg.startStop.longitude
-        )
-        let walkingDistance = arrivalLocation.distance(from: departureLocation)
-
-        return TransferRequirement(
-            minimumTransferTime: walkingDistance / 1.4,
-            safetyMargin: safetyMargin
-        )
-    }
-    // Steps 4-6 remain: connect adjacent options, search complete paths, and
-    // apply the product's risk/earliness policy before creating the command.
 }
 
 enum JourneyTimingError: Error, Equatable {
