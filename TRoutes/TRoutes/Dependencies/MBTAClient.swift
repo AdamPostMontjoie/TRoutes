@@ -271,7 +271,20 @@ extension MBTAClient:DependencyKey {
             for prediction in predictionResponse.data {
                 let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
                 let departureDate = prediction.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
-                guard let time = departureDate ?? arrivalDate, time >= now else { continue }
+                let terminalStatus = [
+                    prediction.attributes.status,
+                    prediction.attributes.scheduleRelationship
+                ]
+                    .compactMap { $0?.lowercased() }
+                    .contains {
+                        $0.contains("canceled")
+                            || $0.contains("cancelled")
+                            || $0.contains("skipped")
+                    }
+                let eventIsCurrent = (departureDate ?? arrivalDate).map {
+                    $0 >= now
+                } ?? false
+                guard terminalStatus || eventIsCurrent else { continue }
                 guard let tripId = prediction.relationships.trip?.data?.id,
                       let stopId = prediction.relationships.stop?.data?.id,
                       let routeId = prediction.relationships.route?.data?.id,
@@ -331,8 +344,21 @@ extension MBTAClient:DependencyKey {
             return scheduleResponse.data.compactMap { schedule in
                 let arrivalDate = schedule.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
                 let departureDate = schedule.attributes.departureTime.flatMap { isoFormatter.date(from: $0) }
+                let terminalStatus = [
+                    schedule.attributes.status,
+                    schedule.attributes.scheduleRelationship
+                ]
+                    .compactMap { $0?.lowercased() }
+                    .contains {
+                        $0.contains("canceled")
+                            || $0.contains("cancelled")
+                            || $0.contains("skipped")
+                    }
+                let eventIsCurrent = (departureDate ?? arrivalDate).map {
+                    $0 >= now
+                } ?? false
 
-                guard let time = departureDate ?? arrivalDate, time >= now,
+                guard terminalStatus || eventIsCurrent,
                       let tripId = schedule.relationships.trip?.data?.id,
                       let stopId = schedule.relationships.stop?.data?.id,
                       let routeId = schedule.relationships.route?.data?.id,

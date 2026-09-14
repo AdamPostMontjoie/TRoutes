@@ -19,6 +19,7 @@ struct PredictionSlice: Equatable, Sendable {
 /// JourneyAction copies its durable timing fields into JourneyTimingState.
 struct JourneyTimingUpdate: Equatable, Sendable {
     let resolvedRouteId: UUID
+    let context: JourneyTimingContext
     let generation: UInt64
     let fetchedAt: Date
     let predictionSlices: [PredictionSlice]

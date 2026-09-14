@@ -6,10 +6,11 @@ enum JourneyCommand: Equatable {
     case missedVehicle(stopId: String)//we missed the train
     case confirmDeparture(stopId: String)//w
     case handleNewPredictions(predictionResults:[TransitPrediction])
+    case journeyTimingUpdate(update:JourneyTimingUpdate)
     case refreshTimes(stopId: String, isUserInitiated: Bool)
     case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
-    case handleVehicleSearchResult(vehicleId: String, tripId: String)
+    case vehicleSearchResult(vehicleId: String, tripId: String)
 }
 
 ///Determines JourneyCommand Validity, Runs JourneyAction, and emits JourneyEffects
@@ -88,6 +89,18 @@ struct JourneyCommandValidator {
         
         case let .handleNewPredictions(predictions):
             return JourneyAction.handleNewPredictions.reduce(state: &state, predictions:predictions)
+
+        case let .journeyTimingUpdate(update):
+            guard update.resolvedRouteId == state.route.id,
+                  update.context == state.timingContext,
+                  update.generation > state.timingState.generation else {
+                return []
+            }
+
+            return JourneyAction.handleJourneyTimingUpdate.reduce(
+                state: &state,
+                timingUpdate: update
+            )
             
             //determine to emit updatetrackedvehicle effect
         case let .refreshTimes(stopId: id, isUserInitiated: isUserInitiated):
@@ -119,7 +132,7 @@ struct JourneyCommandValidator {
             }
             return [.sendNotification(notificationMessage, user: userMessage)]
             
-        case let .handleVehicleSearchResult(vehicleId, tripId):
+        case let .vehicleSearchResult(vehicleId, tripId):
             guard state.monitoringMode == .surface, state.trackedVehicleId == nil else { return [] }
             state.trackedVehicleId = vehicleId
             state.trackedTripId = tripId

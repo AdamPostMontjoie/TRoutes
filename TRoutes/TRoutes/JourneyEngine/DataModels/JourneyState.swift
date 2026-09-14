@@ -50,6 +50,56 @@ struct JourneyState: Equatable, Codable {
         return legOrder[legIndex]
     }
 
+    /// Translates JourneyEngine's progression state into the smaller context
+    /// needed for timing. In particular, `.enRoute` alone is not proof that the
+    /// passenger is onboard because a new journey starts en route to boarding.
+    var timingContext: JourneyTimingContext? {
+        guard let currentStop, !isEndOfJourney else { return nil }
+
+        switch currentStop.journeyRole {
+        case .boarding:
+            guard let currentLeg else { return nil }
+            let phase: JourneyTimingContext.Phase =
+                movementStatus == .enRoute && legIndex > 0
+                ? .transferring
+                : .awaitingBoarding
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: phase
+            )
+
+        case .intermediate:
+            guard let currentLeg else { return nil }
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: .onboard(tripId: trackedTripId)
+            )
+
+        case .transfer:
+            if movementStatus == .enRoute {
+                guard let currentLeg else { return nil }
+                return JourneyTimingContext(
+                    timingLegId: currentLeg.id,
+                    phase: .onboard(tripId: trackedTripId)
+                )
+            }
+
+            let nextLegIndex = legIndex + 1
+            guard legOrder.indices.contains(nextLegIndex) else { return nil }
+            return JourneyTimingContext(
+                timingLegId: legOrder[nextLegIndex].id,
+                phase: .transferring
+            )
+
+        case .final:
+            guard movementStatus == .enRoute, let currentLeg else { return nil }
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: .onboard(tripId: trackedTripId)
+            )
+        }
+    }
+
     func acceptableRouteIds(for stop: ResolvedStop) -> [String] {
         guard legOrder.indices.contains(stop.legIndex) else {
             return []

@@ -11,9 +11,15 @@ enum JourneyAction: Equatable {
     case departFromStop
     case backtrackToStop
     case handleNewPredictions
+    case handleJourneyTimingUpdate
     case evaluatePredictionRefresh
     
-    func reduce(state: inout JourneyState, predictions: [TransitPrediction]? = nil, isManual: Bool = false) -> [JourneyEffect] {
+    func reduce(
+        state: inout JourneyState,
+        predictions: [TransitPrediction]? = nil,
+        timingUpdate: JourneyTimingUpdate? = nil,
+        isManual: Bool = false
+    ) -> [JourneyEffect] {
         switch self {
         case .arriveAtStop:
             return arriveAtStop(state: &state)
@@ -23,6 +29,11 @@ enum JourneyAction: Equatable {
             return backtrackToStop(state: &state)
         case .handleNewPredictions:
             return handleNewPredictions(state: &state, predictions:predictions ?? nil)
+        case .handleJourneyTimingUpdate:
+            return handleJourneyTimingUpdate(
+                state: &state,
+                update: timingUpdate
+            )
         case .evaluatePredictionRefresh:
             return evaluatePredictionRefresh(state: &state, isManual: isManual)
         }
@@ -267,6 +278,32 @@ enum JourneyAction: Equatable {
         }
         return effects
     }
+
+    // MARK: - Journey timing updates
+
+    private func handleJourneyTimingUpdate(
+        state: inout JourneyState,
+        update: JourneyTimingUpdate?
+    ) -> [JourneyEffect] {
+        guard let update else { return [] }
+
+        let hasCurrentTiming = update.recommendedDeparture != nil
+            || update.currentLegArrival != nil
+            || update.destinationArrival != nil
+        state.timingState.status = hasCurrentTiming ? .current : .unavailable
+        state.timingState.generation = update.generation
+        state.timingState.updatedAt = update.fetchedAt
+        state.timingState.recommendedDeparture = update.recommendedDeparture
+        state.timingState.currentLegArrival = update.currentLegArrival
+        state.timingState.destinationArrival = update.destinationArrival
+
+        // MARK: Prediction replacement handoff
+        // Intentionally do not apply `update.predictionSlices` yet. The existing
+        // prediction command remains authoritative until the completed timing
+        // path has been verified and explicitly swapped in.
+
+        return []
+    }
     
     private func effectsForNextStop(
         _ nextStop: ResolvedStop,
@@ -304,11 +341,12 @@ enum JourneyAction: Equatable {
     }
 }
 
-//Journey Effects need to happen in strict order of operations to work effectively
+//Some Journey Effects need to happen in strict order of operations to work effectively
 enum JourneyEffect: Equatable {
-    case switchMonitoringMode(MonitoringMode) //first in order
-    case monitorStop(ResolvedStop) //second
-    case fetchPredictions//third
+    case switchMonitoringMode(MonitoringMode) //1
+    case monitorStop(ResolvedStop) //2
+    case fetchPredictions
+    case updateJourneyTiming
     
     case sendNotification(_ debug: String, user: String? = nil)
     case scheduleEndRoute(seconds: Int)

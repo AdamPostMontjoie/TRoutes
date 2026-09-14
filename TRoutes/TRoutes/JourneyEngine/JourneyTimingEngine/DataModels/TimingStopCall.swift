@@ -30,6 +30,8 @@ struct TripStopKey: Hashable, Sendable {
 enum StopCallAvailability: String, Sendable {
     case scheduledOnly
     case predicted
+    /// The call had realtime data in a recent snapshot, but is temporarily
+    /// absent from the current prediction response.
     case predictionLost
     case departed
     case canceled

@@ -48,10 +48,10 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
         self.arrival = arrival
         self.departureTimeSource = departureTimeSource
 
-        switch (origin.predicted, destination.predicted) {
-        case (.some, .some):
+        switch (origin.availability, destination.availability) {
+        case (.predicted, .predicted):
             confidence = .predicted
-        case (.none, .none):
+        case (.scheduledOnly, .scheduledOnly):
             confidence = .scheduled
         default:
             confidence = .mixed
@@ -112,6 +112,7 @@ enum TimingWarning: Equatable, Codable, Sendable {
     case longRecoveryGap(stationId: String, seconds: TimeInterval)
     case lastService(stationId: String)
     case scheduleOnly(legId: UUID)
+    case predictionTemporarilyUnavailable(legId: UUID)
     case incompleteCoverage(legId: UUID)
 }
 
@@ -187,6 +188,7 @@ struct LegTimingCoverage: Equatable, Sendable {
 /// Internal result of one route-wide timing refresh.
 struct RouteTimingSnapshot: Equatable, Sendable {
     let resolvedRouteId: UUID
+    let context: JourneyTimingContext
     let generation: UInt64
     let fetchedAt: Date
     let calls: [TripStopKey: StopCall]

@@ -279,6 +279,12 @@ actor JourneyEngine {
             case .fetchPredictions:
                 print("JourneyEngine effect: fetchPredictions")
                 await fetchPredictions()
+
+            case .updateJourneyTiming:
+                print("JourneyEngine effect: updateJourneyTiming")
+                // Timing is advisory. Do not hold up tracking-critical effects
+                // while its network snapshot is being collected.
+                Task { await self.fetchJourneyTiming() }
                 
             case let .sendNotification(debug, user):
                 print("JourneyEngine effect: sendNotification - \(debug)")
@@ -414,6 +420,23 @@ actor JourneyEngine {
         await self.validateJourneyCommand(.refreshTimes(stopId: stopId, isUserInitiated: true))
     }
     
+    private func fetchJourneyTiming() async {
+        guard
+            let journey = self.activeJourney,
+            let context = journey.timingContext
+        else { return }
+        do {
+            let update = try await JourneyTimingEngine.shared.refreshJourneyTiming(
+                route: journey.route,
+                context: context
+            )
+            await validateJourneyCommand(.journeyTimingUpdate(update: update))
+        }
+        catch {
+            // A timing failure must not affect journey progression or tracking.
+            print("JourneyEngine timing refresh failed: \(error)")
+        }
+    }
     private func fetchPredictions() async {
         lastPredictionFetchTime = Date()
         
@@ -471,7 +494,7 @@ actor JourneyEngine {
                        let vehicleId = first.vehicleId,
                        let tripId = first.tripId {
                         print("JourneyEngine: Vehicle search found vehicle: \(vehicleId) trip: \(tripId)")
-                        await self.validateJourneyCommand(.handleVehicleSearchResult(vehicleId: vehicleId, tripId: tripId))
+                        await self.validateJourneyCommand(.vehicleSearchResult(vehicleId: vehicleId, tripId: tripId))
                         return
                     }
                 } catch {
