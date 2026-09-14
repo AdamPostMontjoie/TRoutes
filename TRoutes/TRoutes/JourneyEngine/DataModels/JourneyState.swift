@@ -59,10 +59,14 @@ struct JourneyState: Equatable, Codable {
         switch currentStop.journeyRole {
         case .boarding:
             guard let currentLeg else { return nil }
-            let phase: JourneyTimingContext.Phase =
-                movementStatus == .enRoute && legIndex > 0
-                ? .transferring
-                : .awaitingBoarding
+            let phase: JourneyTimingContext.Phase
+            if movementStatus == .atStop {
+                phase = .atBoardingStop
+            } else if legIndex > 0 {
+                phase = .transferring
+            } else {
+                phase = .approachingBoarding
+            }
             return JourneyTimingContext(
                 timingLegId: currentLeg.id,
                 phase: phase

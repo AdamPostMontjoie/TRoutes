@@ -75,24 +75,17 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
     }
 }
 
-/// The time required to make a transfer. Physical movement and risk protection
-/// are separate so product policy can tune them independently.
-struct TransferRequirement: Equatable, Sendable {
+/// Physical movement and preferred reliability protection are separate. Only
+/// physical movement determines whether a connection remains possible.
+struct TransferRequirement: Equatable, Codable, Sendable {
     let minimumTransferTime: TimeInterval
-    let safetyMargin: TimeInterval
-    var requiredTime: TimeInterval {
-        minimumTransferTime + safetyMargin
-    }
+    let preferredReliabilityBuffer: TimeInterval
 }
 
-enum ConnectionRisk: String, Sendable {
-    case normal
-    case tight
-    case highConsequence
-    case lastService
-}
-
-struct TransferTiming: Equatable, Sendable {
+/// The next transfer currently being evaluated. Impossible transfers may be
+/// retained here for warning purposes even though the journey solver excludes
+/// them from a complete path.
+struct TransferTiming: Equatable, Codable, Sendable {
     let arrivingLegId: UUID
     let departingLegId: UUID
     let stationId: String
@@ -100,10 +93,24 @@ struct TransferTiming: Equatable, Sendable {
     let departure: Date
     let requirement: TransferRequirement
     let nextAlternativeDeparture: Date?
-    let risk: ConnectionRisk
+    let isHighConsequence: Bool
+    let isLastService: Bool
 
-    var usableSlack: TimeInterval {
-        departure.timeIntervalSince(arrival) - requirement.requiredTime
+    var physicalSlack: TimeInterval {
+        departure.timeIntervalSince(arrival) - requirement.minimumTransferTime
+    }
+
+    var bufferSlack: TimeInterval {
+        physicalSlack - requirement.preferredReliabilityBuffer
+    }
+
+    /// Reaching the platform exactly at departure is not treated as boardable.
+    var isPhysicallyPossible: Bool {
+        physicalSlack > 0
+    }
+
+    var meetsReliabilityBuffer: Bool {
+        isPhysicallyPossible && bufferSlack >= 0
     }
 }
 
@@ -140,7 +147,7 @@ struct TimedJourney: Equatable, Sendable {
                   transfer.departingLegId == legs[index + 1].legId,
                   transfer.arrival == legs[index].arrival,
                   transfer.departure == legs[index + 1].departure,
-                  transfer.usableSlack >= 0 else {
+                  transfer.isPhysicallyPossible else {
                 return nil
             }
         }
@@ -194,5 +201,7 @@ struct RouteTimingSnapshot: Equatable, Sendable {
     let calls: [TripStopKey: StopCall]
     let optionsByLeg: [UUID: [LegTripOption]]
     let coverageByLeg: [UUID: LegTimingCoverage]
+    let etaJourney: TimedJourney?
     let recommendedJourney: TimedJourney?
+    let connection: TransferTiming?
 }

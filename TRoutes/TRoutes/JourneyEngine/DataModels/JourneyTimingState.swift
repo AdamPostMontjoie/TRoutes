@@ -23,11 +23,20 @@ struct RecommendedDeparture: Equatable, Codable, Sendable {
     let destinationArrivalTime: Date
     let selectedTripIds: [String]
     let confidence: TimingConfidence
-    let warnings: [TimingWarning]
 
     var firstTripId: String? {
         selectedTripIds.first
     }
+}
+
+/// The user-facing classification of the next transfer on the journey's
+/// currently assumed path. The connection retains the facts used to derive it.
+enum ConnectionWarning: String, Equatable, Codable, Sendable {
+    case none
+    case tight
+    case highConsequence
+    case tightHighConsequence
+    case likelyMiss
 }
 
 /// The small persisted timing summary owned by JourneyState. Raw API observations
@@ -40,4 +49,5 @@ struct JourneyTimingState: Equatable, Codable, Sendable {
     var recommendedDeparture: RecommendedDeparture?
     var currentLegArrival: Date?
     var destinationArrival: Date?
+    var connection: TransferTiming?
 }

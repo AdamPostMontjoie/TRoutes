@@ -1,0 +1,409 @@
+//
+//  MergeTimingData.swift
+//  TRoutes
+//
+
+import Foundation
+
+/// Stable identity for carrying a live observation across refreshes. The MBTA
+/// schedule relationship is strongest; without it, stop sequence is required
+/// so a trip that visits the same stop twice is never guessed together.
+enum TimingCallObservationKey: Hashable {
+    case schedule(String)
+    case tripStop(
+        routeId: String,
+        directionId: Int,
+        tripId: String,
+        stopId: String,
+        stopSequence: Int
+    )
+}
+
+struct PredictionObservation {
+    let lastLiveCall: StopCall
+    let lastSeenAt: Date
+    var missingSince: Date?
+}
+
+struct RoutePredictionHistory {
+    let resolvedRouteId: UUID
+    let observations: [TimingCallObservationKey: PredictionObservation]
+}
+
+struct PredictionHistoryReconciliation {
+    let calls: [StopCall]
+    let observations: [TimingCallObservationKey: PredictionObservation]
+}
+
+// MARK: - Step 2: normalize and merge
+
+extension JourneyTimingEngine {
+    /// Produces one logical StopCall per trip/stop visit. A matching prediction
+    /// adds live times without discarding the scheduled times used as fallback.
+    func mergeScheduleAndPredictionCalls(
+        _ calls: UnmergedTimingCalls
+    ) -> [StopCall] {
+        let schedulesById = Dictionary(
+            calls.scheduleCalls.compactMap { call in
+                call.scheduleId.map { ($0, call) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let schedulesByIdentity = Dictionary(
+            calls.scheduleCalls.map { ($0.key, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var matchedScheduleKeys = Set<TripStopKey>()
+        let predictedCalls = calls.predictionCalls.map { prediction in
+            let schedule = prediction.scheduleId.flatMap { schedulesById[$0] }
+                ?? schedulesByIdentity[prediction.key]
+
+            if let schedule {
+                matchedScheduleKeys.insert(schedule.key)
+            }
+
+            return makeMergedStopCall(
+                schedule: schedule,
+                prediction: prediction
+            )
+        }
+        let scheduleOnlyCalls = calls.scheduleCalls.filter {
+            !matchedScheduleKeys.contains($0.key)
+        }
+
+        return (predictedCalls + scheduleOnlyCalls).sorted {
+            callSortTime($0) < callSortTime($1)
+        }
+    }
+
+    func makeMergedStopCall(
+        schedule: StopCall?,
+        prediction: StopCall
+    ) -> StopCall {
+        guard let schedule else { return prediction }
+
+        let availability: StopCallAvailability =
+            isCanceledOrSkipped(prediction) || isCanceledOrSkipped(schedule)
+            ? .canceled
+            : .predicted
+
+        return StopCall(
+            key: prediction.key,
+            routeId: prediction.routeId,
+            directionId: prediction.directionId,
+            vehicleId: prediction.vehicleId ?? schedule.vehicleId,
+            headsign: prediction.headsign ?? schedule.headsign,
+            isLastTrip: prediction.isLastTrip ?? schedule.isLastTrip,
+            scheduleId: prediction.scheduleId ?? schedule.scheduleId,
+            predictionId: prediction.predictionId,
+            scheduled: schedule.scheduled,
+            predicted: prediction.predicted,
+            status: prediction.status ?? schedule.status,
+            scheduleRelationship: prediction.scheduleRelationship
+                ?? schedule.scheduleRelationship,
+            availability: availability
+        )
+    }
+
+    func callSortTime(_ call: StopCall) -> Date {
+        call.effectiveDeparture ?? call.effectiveArrival ?? .distantFuture
+    }
+
+    /// Reconciles a successful current response with previous live observations.
+    /// This is intentionally separate from request caching: its only purpose is
+    /// to interpret a prediction that was present and then disappeared.
+    func reconcilePredictionHistory(
+        currentCalls: [StopCall],
+        previousObservations: [TimingCallObservationKey: PredictionObservation],
+        queryPlan: TimingQueryPlan,
+        context: JourneyTimingContext,
+        now: Date
+    ) -> PredictionHistoryReconciliation {
+        var calls: [StopCall] = []
+        var observations: [TimingCallObservationKey: PredictionObservation] = [:]
+        var seenKeys = Set<TimingCallObservationKey>()
+
+        for currentCall in currentCalls {
+            guard let key = observationKey(for: currentCall) else {
+                calls.append(normalizedAvailability(for: currentCall))
+                continue
+            }
+
+            seenKeys.insert(key)
+
+            if isCanceledOrSkipped(currentCall) {
+                calls.append(copy(currentCall, availability: .canceled))
+                continue
+            }
+
+            if currentCall.predicted != nil {
+                let liveCall = copy(currentCall, availability: .predicted)
+                calls.append(liveCall)
+                observations[key] = PredictionObservation(
+                    lastLiveCall: liveCall,
+                    lastSeenAt: now,
+                    missingSince: nil
+                )
+                continue
+            }
+
+            guard var observation = previousObservations[key] else {
+                calls.append(currentCall)
+                continue
+            }
+
+            if observation.missingSince == nil {
+                observation.missingSince = now
+            }
+            guard shouldRetain(
+                observation: observation,
+                queryPlan: queryPlan,
+                context: context,
+                now: now
+            ) else {
+                calls.append(currentCall)
+                continue
+            }
+            observations[key] = observation
+            if let reconciledCall = callForMissingPrediction(
+                scheduleCall: currentCall,
+                observation: observation,
+                queryPlan: queryPlan,
+                context: context,
+                now: now
+            ) {
+                calls.append(reconciledCall)
+            }
+        }
+
+        for (key, previousObservation) in previousObservations
+        where !seenKeys.contains(key)
+            && isRelevant(previousObservation.lastLiveCall, to: queryPlan) {
+            var observation = previousObservation
+            if observation.missingSince == nil {
+                observation.missingSince = now
+            }
+            guard shouldRetain(
+                observation: observation,
+                queryPlan: queryPlan,
+                context: context,
+                now: now
+            ) else {
+                continue
+            }
+
+            observations[key] = observation
+            if let reconciledCall = callForMissingPrediction(
+                scheduleCall: nil,
+                observation: observation,
+                queryPlan: queryPlan,
+                context: context,
+                now: now
+            ) {
+                calls.append(reconciledCall)
+            }
+        }
+
+        return PredictionHistoryReconciliation(
+            calls: calls.sorted { callSortTime($0) < callSortTime($1) },
+            observations: observations
+        )
+    }
+
+    func observationKey(for call: StopCall) -> TimingCallObservationKey? {
+        if let scheduleId = call.scheduleId {
+            return .schedule(scheduleId)
+        }
+        guard let stopSequence = call.key.stopSequence else {
+            return nil
+        }
+        return .tripStop(
+            routeId: call.routeId,
+            directionId: call.directionId,
+            tripId: call.key.tripId,
+            stopId: call.key.stopId,
+            stopSequence: stopSequence
+        )
+    }
+
+    func normalizedAvailability(for call: StopCall) -> StopCall {
+        if isCanceledOrSkipped(call) {
+            return copy(call, availability: .canceled)
+        }
+        return call
+    }
+
+    func callForMissingPrediction(
+        scheduleCall: StopCall?,
+        observation: PredictionObservation,
+        queryPlan: TimingQueryPlan,
+        context: JourneyTimingContext,
+        now: Date
+    ) -> StopCall? {
+        let lastLiveCall = observation.lastLiveCall
+        let lastPredictedEvent = predictionEventTime(for: lastLiveCall)
+
+        if let lastPredictedEvent, lastPredictedEvent <= now {
+            return historicalOverlay(
+                scheduleCall: scheduleCall,
+                liveCall: lastLiveCall,
+                availability: .departed
+            )
+        }
+
+        let historyPolicy = PredictionHistoryPolicy()
+        let missingDuration = now.timeIntervalSince(
+            observation.missingSince ?? now
+        )
+        if missingDuration <= historyPolicy.predictionLossGrace {
+            return historicalOverlay(
+                scheduleCall: scheduleCall,
+                liveCall: lastLiveCall,
+                availability: .predictionLost
+            )
+        }
+
+        if let scheduleCall {
+            return scheduleCall
+        }
+
+        // A confirmed onboard trip keeps its scheduled destination fallback
+        // even if that schedule was omitted from the latest response.
+        if isOnboardDestination(
+            lastLiveCall,
+            queryPlan: queryPlan,
+            context: context
+        ) {
+            return scheduleFallback(from: lastLiveCall)
+        }
+
+        return nil
+    }
+
+    func historicalOverlay(
+        scheduleCall: StopCall?,
+        liveCall: StopCall,
+        availability: StopCallAvailability
+    ) -> StopCall {
+        let merged = scheduleCall.map {
+            makeMergedStopCall(schedule: $0, prediction: liveCall)
+        } ?? liveCall
+        return copy(merged, availability: availability)
+    }
+
+    func scheduleFallback(from call: StopCall) -> StopCall? {
+        guard call.scheduled != nil else { return nil }
+        return StopCall(
+            key: call.key,
+            routeId: call.routeId,
+            directionId: call.directionId,
+            vehicleId: call.vehicleId,
+            headsign: call.headsign,
+            isLastTrip: call.isLastTrip,
+            scheduleId: call.scheduleId,
+            predictionId: nil,
+            scheduled: call.scheduled,
+            predicted: nil,
+            status: call.status,
+            scheduleRelationship: call.scheduleRelationship,
+            availability: .scheduledOnly
+        )
+    }
+
+    func copy(
+        _ call: StopCall,
+        availability: StopCallAvailability
+    ) -> StopCall {
+        StopCall(
+            key: call.key,
+            routeId: call.routeId,
+            directionId: call.directionId,
+            vehicleId: call.vehicleId,
+            headsign: call.headsign,
+            isLastTrip: call.isLastTrip,
+            scheduleId: call.scheduleId,
+            predictionId: call.predictionId,
+            scheduled: call.scheduled,
+            predicted: call.predicted,
+            status: call.status,
+            scheduleRelationship: call.scheduleRelationship,
+            availability: availability
+        )
+    }
+
+    func predictionEventTime(for call: StopCall) -> Date? {
+        call.predicted?.departure ?? call.predicted?.arrival
+    }
+
+    func shouldRetain(
+        observation: PredictionObservation,
+        queryPlan: TimingQueryPlan,
+        context: JourneyTimingContext,
+        now: Date
+    ) -> Bool {
+        if isOnboardCurrentLegCall(
+            observation.lastLiveCall,
+            queryPlan: queryPlan,
+            context: context
+        ) {
+            return true
+        }
+
+        let historyPolicy = PredictionHistoryPolicy()
+        let liveCall = observation.lastLiveCall
+        let eventTime = [
+            predictionEventTime(for: liveCall),
+            liveCall.scheduled?.departure ?? liveCall.scheduled?.arrival,
+            observation.lastSeenAt
+        ]
+            .compactMap { $0 }
+            .max() ?? observation.lastSeenAt
+        return now.timeIntervalSince(eventTime)
+            <= historyPolicy.retentionAfterEvent
+    }
+
+    func isRelevant(
+        _ call: StopCall,
+        to queryPlan: TimingQueryPlan
+    ) -> Bool {
+        queryPlan.queriedStopIds.contains(call.key.stopId)
+            && queryPlan.services.contains(
+                TimingRouteDirection(
+                    routeId: call.routeId,
+                    directionId: call.directionId
+                )
+            )
+    }
+
+    func isOnboardDestination(
+        _ call: StopCall,
+        queryPlan: TimingQueryPlan,
+        context: JourneyTimingContext
+    ) -> Bool {
+        guard case let .onboard(tripId) = context.phase,
+              let tripId,
+              call.key.tripId == tripId,
+              let currentLeg = queryPlan.legs.first,
+              currentLeg.id == context.timingLegId else {
+            return false
+        }
+        return currentLeg.destination.acceptableStopIds.contains(call.key.stopId)
+    }
+
+    func isOnboardCurrentLegCall(
+        _ call: StopCall,
+        queryPlan: TimingQueryPlan,
+        context: JourneyTimingContext
+    ) -> Bool {
+        guard case let .onboard(tripId) = context.phase,
+              let tripId,
+              call.key.tripId == tripId,
+              let currentLeg = queryPlan.legs.first,
+              currentLeg.id == context.timingLegId else {
+            return false
+        }
+        return currentLeg.origin.acceptableStopIds.contains(call.key.stopId)
+            || currentLeg.destination.acceptableStopIds.contains(call.key.stopId)
+    }
+}

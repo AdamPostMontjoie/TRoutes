@@ -287,15 +287,13 @@ enum JourneyAction: Equatable {
     ) -> [JourneyEffect] {
         guard let update else { return [] }
 
-        let hasCurrentTiming = update.recommendedDeparture != nil
-            || update.currentLegArrival != nil
-            || update.destinationArrival != nil
-        state.timingState.status = hasCurrentTiming ? .current : .unavailable
+        state.timingState.status = update.status
         state.timingState.generation = update.generation
         state.timingState.updatedAt = update.fetchedAt
         state.timingState.recommendedDeparture = update.recommendedDeparture
         state.timingState.currentLegArrival = update.currentLegArrival
         state.timingState.destinationArrival = update.destinationArrival
+        state.timingState.connection = update.connection
 
         // MARK: Prediction replacement handoff
         // Intentionally do not apply `update.predictionSlices` yet. The existing

@@ -12,9 +12,18 @@ struct JourneyTimingContext: Equatable, Sendable {
     let phase: Phase
 
     enum Phase: Equatable, Sendable {
-        case awaitingBoarding
+        case approachingBoarding
+        case atBoardingStop
         case onboard(tripId: String?)
         case transferring
+    }
+
+    var allowsRecommendation: Bool {
+        phase == .approachingBoarding
+    }
+
+    var showsConnectionWarning: Bool {
+        !allowsRecommendation
     }
 
     var onboardTripId: String? {
