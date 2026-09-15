@@ -30,6 +30,11 @@ struct DebugDashboardView: View {
             if let journey = store.journey {
                 VStack(alignment: .leading, spacing: 8) {
                     debugSection(
+                        "Timing",
+                        rows: timingRows(journey.timingState)
+                    )
+
+                    debugSection(
                         "Journey",
                         rows: [
                             ("Route", journey.route.name),
@@ -139,6 +144,82 @@ struct DebugDashboardView: View {
         case let .unavailable(stopId, message):
             return "unavailable \(stopId): \(message)"
         }
+    }
+
+    private func timingRows(
+        _ timingState: JourneyTimingState
+    ) -> [(String, String)] {
+        var rows: [(String, String)] = [
+            ("Status", timingState.status.rawValue),
+            ("Session", timingState.refreshSessionId?.uuidString ?? "nil"),
+            ("Generation", "\(timingState.generation)"),
+            ("Updated", dateText(timingState.updatedAt)),
+            ("Current leg ETA", dateText(timingState.currentLegArrival)),
+            ("Journey ETA", dateText(timingState.destinationArrival))
+        ]
+
+        if let recommendation = timingState.recommendedDeparture {
+            rows.append(
+                (
+                    "Recommendation",
+                    "\(dateText(recommendation.departureTime)) • \(recommendation.timeSource.rawValue)"
+                )
+            )
+            rows.append(
+                (
+                    "Recommended ETA",
+                    dateText(recommendation.destinationArrivalTime)
+                )
+            )
+            rows.append(
+                (
+                    "Recommended trips",
+                    recommendation.selectedTripIds.joined(separator: ", ")
+                )
+            )
+            rows.append(("Confidence", recommendation.confidence.rawValue))
+        } else {
+            rows.append(("Recommendation", "nil"))
+        }
+
+        if let connection = timingState.connection {
+            rows.append(("Warning", connection.warning.rawValue))
+            rows.append(
+                (
+                    "Connection",
+                    "\(dateText(connection.arrival)) → \(dateText(connection.departure))"
+                )
+            )
+            rows.append(
+                ("Physical slack", durationText(connection.physicalSlack))
+            )
+            rows.append(
+                ("Buffer slack", durationText(connection.bufferSlack))
+            )
+            rows.append(
+                ("High consequence", connection.isHighConsequence ? "true" : "false")
+            )
+            rows.append(("Last service", connection.isLastService ? "true" : "false"))
+            rows.append(
+                (
+                    "Next alternative",
+                    dateText(connection.nextAlternativeDeparture)
+                )
+            )
+        } else {
+            rows.append(("Warning", "none"))
+        }
+
+        return rows
+    }
+
+    private func dateText(_ date: Date?) -> String {
+        guard let date else { return "nil" }
+        return date.formatted(date: .abbreviated, time: .standard)
+    }
+
+    private func durationText(_ duration: TimeInterval) -> String {
+        "\(Int(duration.rounded())) sec"
     }
 
     private func coordinateText(_ stop: ResolvedStop) -> String {

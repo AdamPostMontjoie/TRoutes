@@ -169,8 +169,6 @@ extension JourneyTimingEngine {
             if let reconciledCall = callForMissingPrediction(
                 scheduleCall: currentCall,
                 observation: observation,
-                queryPlan: queryPlan,
-                context: context,
                 now: now
             ) {
                 calls.append(reconciledCall)
@@ -197,14 +195,13 @@ extension JourneyTimingEngine {
             if let reconciledCall = callForMissingPrediction(
                 scheduleCall: nil,
                 observation: observation,
-                queryPlan: queryPlan,
-                context: context,
                 now: now
             ) {
                 calls.append(reconciledCall)
             }
         }
 
+        print("2/6 Merged Timing Calls")
         return PredictionHistoryReconciliation(
             calls: calls.sorted { callSortTime($0) < callSortTime($1) },
             observations: observations
@@ -237,8 +234,6 @@ extension JourneyTimingEngine {
     func callForMissingPrediction(
         scheduleCall: StopCall?,
         observation: PredictionObservation,
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext,
         now: Date
     ) -> StopCall? {
         let lastLiveCall = observation.lastLiveCall
@@ -264,21 +259,7 @@ extension JourneyTimingEngine {
             )
         }
 
-        if let scheduleCall {
-            return scheduleCall
-        }
-
-        // A confirmed onboard trip keeps its scheduled destination fallback
-        // even if that schedule was omitted from the latest response.
-        if isOnboardDestination(
-            lastLiveCall,
-            queryPlan: queryPlan,
-            context: context
-        ) {
-            return scheduleFallback(from: lastLiveCall)
-        }
-
-        return nil
+        return scheduleCall
     }
 
     func historicalOverlay(
@@ -290,25 +271,6 @@ extension JourneyTimingEngine {
             makeMergedStopCall(schedule: $0, prediction: liveCall)
         } ?? liveCall
         return copy(merged, availability: availability)
-    }
-
-    func scheduleFallback(from call: StopCall) -> StopCall? {
-        guard call.scheduled != nil else { return nil }
-        return StopCall(
-            key: call.key,
-            routeId: call.routeId,
-            directionId: call.directionId,
-            vehicleId: call.vehicleId,
-            headsign: call.headsign,
-            isLastTrip: call.isLastTrip,
-            scheduleId: call.scheduleId,
-            predictionId: nil,
-            scheduled: call.scheduled,
-            predicted: nil,
-            status: call.status,
-            scheduleRelationship: call.scheduleRelationship,
-            availability: .scheduledOnly
-        )
     }
 
     func copy(
@@ -374,21 +336,6 @@ extension JourneyTimingEngine {
                     directionId: call.directionId
                 )
             )
-    }
-
-    func isOnboardDestination(
-        _ call: StopCall,
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext
-    ) -> Bool {
-        guard case let .onboard(tripId) = context.phase,
-              let tripId,
-              call.key.tripId == tripId,
-              let currentLeg = queryPlan.legs.first,
-              currentLeg.id == context.timingLegId else {
-            return false
-        }
-        return currentLeg.destination.acceptableStopIds.contains(call.key.stopId)
     }
 
     func isOnboardCurrentLegCall(

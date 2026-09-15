@@ -53,7 +53,7 @@ extension JourneyClient: DependencyKey {
             }
         },
         requestNewTimes: {
-            await JourneyEngine.shared.manualRefreshPredictions()
+            await JourneyEngine.shared.manualRefreshTiming()
         },
         nextStop: {
             await JourneyEngine.shared.manualEventValidator(.nextStopTapped)

@@ -256,8 +256,11 @@ struct PredictionState: Equatable, Codable {
     var arrivedTrains: [ArrivedTrain] = []
     var lastObservedPredictions: [TransitPrediction] = []
     
-    mutating func cleanArrivedTrains(newPredictions: [TransitPrediction]) {
-        let newTripIds = Set(newPredictions.compactMap { $0.tripId })
+    mutating func cleanArrivedTrains(
+        displayPredictions: [TransitPrediction],
+        livePredictions: [TransitPrediction]
+    ) {
+        let newTripIds = Set(livePredictions.compactMap { $0.tripId })
         for oldPrediction in lastObservedPredictions {
             guard let tripId = oldPrediction.tripId else { continue }
             if !newTripIds.contains(tripId) {
@@ -273,7 +276,7 @@ struct PredictionState: Equatable, Codable {
             }
         }
         arrivedTrains.removeAll { Date().timeIntervalSince($0.arrivedAt) > 180 }
-        lastObservedPredictions = newPredictions
+        lastObservedPredictions = displayPredictions
     }
 }
 

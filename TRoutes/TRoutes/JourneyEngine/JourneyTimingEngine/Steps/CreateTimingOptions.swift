@@ -14,7 +14,7 @@ extension JourneyTimingEngine {
         context: JourneyTimingContext,
         now: Date
     ) -> [UUID: [LegTripOption]] {
-        Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
+        let optionsByLeg = Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let isInProgressLeg = context.isOnboard
                 && leg.id == context.timingLegId
             let options = buildTripOptions(
@@ -26,6 +26,8 @@ extension JourneyTimingEngine {
             )
             return (leg.id, options)
         })
+        print("3/6 Created Timing Options")
+        return optionsByLeg
     }
 
     /// Filters both endpoints, groups destinations by trip, pairs same-trip

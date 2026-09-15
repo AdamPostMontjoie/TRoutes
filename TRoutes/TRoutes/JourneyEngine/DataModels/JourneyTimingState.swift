@@ -44,6 +44,7 @@ enum ConnectionWarning: String, Equatable, Codable, Sendable {
 /// the reusable schedule cache.
 struct JourneyTimingState: Equatable, Codable, Sendable {
     var status: JourneyTimingStatus = .idle
+    var refreshSessionId: UUID?
     var generation: UInt64 = 0
     var updatedAt: Date?
     var recommendedDeparture: RecommendedDeparture?

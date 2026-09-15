@@ -14,16 +14,21 @@ actor JourneyTimingEngine {
     static let shared = JourneyTimingEngine()
     private init() {}
 
+    private var refreshSessionId = UUID()
     private var generation: UInt64 = 0
     private(set) var latestSnapshot: RouteTimingSnapshot?
     private var predictionHistory: RoutePredictionHistory?
 
     /// Runs the route-wide timing pipeline without mutating JourneyState.
+    /// Additional stop IDs only expand the projected prediction slices; the
+    /// caller remains responsible for interpreting why those slices are needed.
     func refreshJourneyTiming(
         route: ResolvedUserRoute,
-        context: JourneyTimingContext
+        context: JourneyTimingContext,
+        additionalPredictionStopIds: Set<UUID> = []
     ) async throws -> JourneyTimingUpdate {
         generation &+= 1
+        let sessionId = refreshSessionId
         let refreshGeneration = generation
         let previousObservations = predictionHistory?.resolvedRouteId == route.id
             ? predictionHistory?.observations ?? [:]
@@ -36,14 +41,20 @@ actor JourneyTimingEngine {
         )
         let queryPlan = makeQueryPlan(
             route: route,
-            remainingLegs: remainingLegs
+            remainingLegs: remainingLegs,
+            additionalPredictionStopIds: additionalPredictionStopIds
         )
         let unmergedCalls = try await requestAllTimingCalls(
             queryPlan: queryPlan
         )
+        let fetchedAt = Date()
+        let predictionSlices = buildPredictionSlices(
+            queryPlan: queryPlan,
+            rawCalls: unmergedCalls,
+            now: fetchedAt
+        )
 
         // Step 2: merge schedules, predictions, and disappearance history.
-        let fetchedAt = Date()
         let currentMergedCalls = mergeScheduleAndPredictionCalls(unmergedCalls)
         let reconciliation = reconcilePredictionHistory(
             currentCalls: currentMergedCalls,
@@ -101,7 +112,8 @@ actor JourneyTimingEngine {
         )
 
         // Only the newest overlapping refresh may replace actor-owned history.
-        if refreshGeneration == generation {
+        if sessionId == refreshSessionId,
+           refreshGeneration == generation {
             latestSnapshot = snapshot
             predictionHistory = RoutePredictionHistory(
                 resolvedRouteId: route.id,
@@ -109,14 +121,28 @@ actor JourneyTimingEngine {
             )
         }
 
+        guard sessionId == refreshSessionId else {
+            throw JourneyTimingError.refreshInvalidated
+        }
+
         return makeTimingUpdate(
             route: route,
             context: context,
+            refreshSessionId: sessionId,
             generation: refreshGeneration,
             fetchedAt: fetchedAt,
-            queryPlan: queryPlan,
-            mergedCalls: mergedCalls,
+            predictionSlices: predictionSlices,
             selection: selection
         )
+    }
+
+    /// Invalidates in-flight work and clears timing state owned below
+    /// JourneyEngine. PredictionManager remains the sole cache owner.
+    func resetJourneyTiming() async {
+        generation &+= 1
+        refreshSessionId = UUID()
+        latestSnapshot = nil
+        predictionHistory = nil
+        await PredictionManager.shared.clearScheduleCache()
     }
 }

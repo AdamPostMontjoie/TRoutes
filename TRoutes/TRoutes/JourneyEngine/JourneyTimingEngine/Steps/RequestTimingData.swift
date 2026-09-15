@@ -23,20 +23,13 @@ extension JourneyTimingEngine {
 
     func makeQueryPlan(
         route: ResolvedUserRoute,
-        remainingLegs: [ResolvedLeg]
+        remainingLegs: [ResolvedLeg],
+        additionalPredictionStopIds: Set<UUID> = []
     ) -> TimingQueryPlan {
         let legs = remainingLegs.map { leg in
-            let routeIds = Set(leg.acceptableRouteIds).union([leg.mbtaRouteId])
-            let services = Set(routeIds.map { routeId in
-                TimingRouteDirection(
-                    routeId: routeId,
-                    directionId: leg.mbtaDirectionId
-                )
-            })
-
             return TimingLegPlan(
                 id: leg.id,
-                services: services,
+                services: timingServices(for: leg),
                 origin: TimingEndpointPlan(
                     resolvedStopId: leg.startStop.id,
                     canonicalStopId: leg.startStop.mbtaStopId,
@@ -50,7 +43,51 @@ extension JourneyTimingEngine {
             )
         }
 
-        return TimingQueryPlan(resolvedRouteId: route.id, legs: legs)
+        var predictionTargets = legs.map { leg in
+            TimingPredictionTargetPlan(
+                endpoint: leg.origin,
+                services: leg.services
+            )
+        }
+
+        for stopId in additionalPredictionStopIds
+        where !predictionTargets.contains(where: { $0.id == stopId }) {
+            guard let stop = route.legs
+                .flatMap(\.stops)
+                .first(where: { $0.id == stopId }),
+                  route.legs.indices.contains(stop.legIndex) else {
+                continue
+            }
+            let leg = route.legs[stop.legIndex]
+            predictionTargets.append(
+                TimingPredictionTargetPlan(
+                    endpoint: TimingEndpointPlan(
+                        resolvedStopId: stop.id,
+                        canonicalStopId: stop.mbtaStopId,
+                        acceptableStopIds: Set(stop.acceptableStopIds)
+                    ),
+                    services: timingServices(for: leg)
+                )
+            )
+        }
+        print("1/6 Created Timing Query Plan")
+        return TimingQueryPlan(
+            resolvedRouteId: route.id,
+            legs: legs,
+            predictionTargets: predictionTargets
+        )
+    }
+
+    private func timingServices(
+        for leg: ResolvedLeg
+    ) -> Set<TimingRouteDirection> {
+        let routeIds = Set(leg.acceptableRouteIds).union([leg.mbtaRouteId])
+        return Set(routeIds.map { routeId in
+            TimingRouteDirection(
+                routeId: routeId,
+                directionId: leg.mbtaDirectionId
+            )
+        })
     }
 
     /// PredictionManager owns the two network requests, request coalescing, and
@@ -67,4 +104,5 @@ extension JourneyTimingEngine {
 
 enum JourneyTimingError: Error, Equatable {
     case currentLegNotFound(UUID)
+    case refreshInvalidated
 }

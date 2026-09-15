@@ -21,7 +21,10 @@ extension JourneyTimingEngine {
         optionsByLeg: [UUID: [LegTripOption]],
         connectionGraph: TimingConnectionGraph
     ) -> [TimedJourney] {
-        guard let firstLeg = remainingLegs.first else { return [] }
+        guard let firstLeg = remainingLegs.first else {
+            print("5/6 Searched Complete Timing Paths")
+            return []
+        }
 
         let selectionPolicy = JourneySelectionPolicy()
         var bestPathByOptions: [PartialJourneyKey: TimedJourney] = [:]
@@ -78,10 +81,12 @@ extension JourneyTimingEngine {
 
             bestPathByOptions = nextBestPathByOptions
             if bestPathByOptions.isEmpty {
+                print("5/6 Searched Complete Timing Paths")
                 return []
             }
         }
 
+        print("5/6 Searched Complete Timing Paths")
         return Array(bestPathByOptions.values)
     }
 }

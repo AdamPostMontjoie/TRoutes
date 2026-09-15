@@ -15,15 +15,36 @@ import Foundation
 struct TimingQueryPlan: Equatable, Sendable {
     let resolvedRouteId: UUID
     let legs: [TimingLegPlan]
+    let predictionTargets: [TimingPredictionTargetPlan]
+
+    init(
+        resolvedRouteId: UUID,
+        legs: [TimingLegPlan],
+        predictionTargets: [TimingPredictionTargetPlan]? = nil
+    ) {
+        self.resolvedRouteId = resolvedRouteId
+        self.legs = legs
+        self.predictionTargets = predictionTargets ?? legs.map {
+            TimingPredictionTargetPlan(
+                endpoint: $0.origin,
+                services: $0.services
+            )
+        }
+    }
 
     var queriedStopIds: Set<String> {
-        Set(legs.flatMap { leg in
+        let legStopIds = Set(legs.flatMap { leg in
             leg.origin.acceptableStopIds.union(leg.destination.acceptableStopIds)
         })
+        let predictionStopIds = Set(predictionTargets.flatMap {
+            $0.endpoint.acceptableStopIds
+        })
+        return legStopIds.union(predictionStopIds)
     }
 
     var services: Set<TimingRouteDirection> {
         Set(legs.flatMap(\.services))
+            .union(predictionTargets.flatMap(\.services))
     }
 
     var queriedRouteIds: Set<String> {
@@ -67,6 +88,17 @@ struct TimingLegPlan: Equatable, Sendable, Identifiable {
     let services: Set<TimingRouteDirection>
     let origin: TimingEndpointPlan
     let destination: TimingEndpointPlan
+}
+
+/// One resolved stop whose prediction board should be projected from the
+/// route-wide response.
+struct TimingPredictionTargetPlan: Equatable, Sendable, Identifiable {
+    let endpoint: TimingEndpointPlan
+    let services: Set<TimingRouteDirection>
+
+    var id: UUID {
+        endpoint.resolvedStopId
+    }
 }
 
 /// One logical endpoint may be represented by several acceptable MBTA platform

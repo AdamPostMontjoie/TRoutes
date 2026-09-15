@@ -50,6 +50,7 @@ extension JourneyTimingEngine {
         optionsByLeg: [UUID: [LegTripOption]]
     ) -> TimingConnectionGraph {
         guard remainingLegs.count > 1 else {
+            print("4/6 Created Timing Graph")
             return TimingConnectionGraph(connectionsByOption: [:])
         }
 
@@ -102,6 +103,7 @@ extension JourneyTimingEngine {
             }
         }
 
+        print("4/6 Created Timing Graph")
         return TimingConnectionGraph(
             connectionsByOption: connectionsByOption
         )

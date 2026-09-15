@@ -38,6 +38,12 @@ extension JourneyTimingEngine {
         let firstLegOptions = queryPlan.legs.first.flatMap {
             optionsByLeg[$0.id]
         } ?? []
+        if context.allowsRecommendation {
+            logRecommendedPath(
+                recommendedJourney,
+                firstLegOptions: firstLegOptions
+            )
+        }
         let currentLegOption: LegTripOption?
         if context.allowsRecommendation {
             currentLegOption = recommendedJourney?.legs.first
@@ -75,6 +81,40 @@ extension JourneyTimingEngine {
             recommendedJourney: recommendedJourney,
             currentLegOption: currentLegOption,
             connection: connection
+        )
+    }
+
+    private func logRecommendedPath(
+        _ journey: TimedJourney?,
+        firstLegOptions: [LegTripOption]
+    ) {
+        guard let journey else {
+            print("Recommended path: unavailable (no complete journey)")
+            return
+        }
+
+        let recommendedTime = journey.originDeparture.formatted(
+            date: .omitted,
+            time: .shortened
+        )
+        let firstUsableTime = firstLegOptions.map(\.departure).min()
+        let firstTimeText = firstUsableTime?.formatted(
+            date: .omitted,
+            time: .shortened
+        ) ?? "nil"
+        let deltaText = firstUsableTime.map {
+            String(
+                format: "%+.1f min",
+                journey.originDeparture.timeIntervalSince($0) / 60
+            )
+        } ?? "nil"
+        let source = journey.legs[0].departureTimeSource == .prediction
+            ? "predicted"
+            : "scheduled"
+        let trips = journey.legs.map(\.tripId).joined(separator: " → ")
+
+        print(
+            "Recommended path: \(recommendedTime) | first usable: \(firstTimeText) | delta: \(deltaText) | \(source) | trips: \(trips)"
         )
     }
 
@@ -143,23 +183,20 @@ extension JourneyTimingEngine {
     func makeTimingUpdate(
         route: ResolvedUserRoute,
         context: JourneyTimingContext,
+        refreshSessionId: UUID,
         generation: UInt64,
         fetchedAt: Date,
-        queryPlan: TimingQueryPlan,
-        mergedCalls: [StopCall],
+        predictionSlices: [PredictionSlice],
         selection: JourneyTimingSelection
     ) -> JourneyTimingUpdate {
-        JourneyTimingUpdate(
+        let update = JourneyTimingUpdate(
             resolvedRouteId: route.id,
             context: context,
+            refreshSessionId: refreshSessionId,
             generation: generation,
             fetchedAt: fetchedAt,
             status: timingStatus(for: selection),
-            predictionSlices: buildPredictionSlices(
-                queryPlan: queryPlan,
-                mergedCalls: mergedCalls,
-                now: fetchedAt
-            ),
+            predictionSlices: predictionSlices,
             recommendedDeparture: selection.recommendedJourney.map(
                 makeRecommendedDeparture
             ),
@@ -169,6 +206,8 @@ extension JourneyTimingEngine {
             destinationArrival: selection.etaJourney?.destinationArrival,
             connection: selection.connection
         )
+        print("6/6 Created Timing Update")
+        return update
     }
 
     func timingStatus(
@@ -274,49 +313,85 @@ extension JourneyTimingEngine {
 
     func buildPredictionSlices(
         queryPlan: TimingQueryPlan,
-        mergedCalls: [StopCall],
+        rawCalls: UnmergedTimingCalls,
         now: Date
     ) -> [PredictionSlice] {
-        queryPlan.legs.map { leg in
-            createPredictionSlice(for: leg, calls: mergedCalls, now: now)
+        queryPlan.predictionTargets.map { target in
+            createPredictionSlice(for: target, rawCalls: rawCalls, now: now)
         }
     }
 
-    /// Pulls the first three boardable calls for one resolved boarding stop.
+    /// Takes current live calls first, then fills the remaining board slots with
+    /// distinct scheduled calls. ETA and recommendations use the merged calls,
+    /// never this display-only projection.
     /// The slice ID is the exact ID later matched to PredictionState.
     func createPredictionSlice(
-        for leg: TimingLegPlan,
-        calls: [StopCall],
+        for target: TimingPredictionTargetPlan,
+        rawCalls: UnmergedTimingCalls,
         now: Date
     ) -> PredictionSlice {
-        let sortedCalls = matchingCalls(
-            at: leg.origin,
-            services: leg.services,
-            from: calls
+        let matchingLiveCalls = matchingCalls(
+            at: target.endpoint,
+            services: target.services,
+            from: rawCalls.predictionCalls
         )
+        // A current prediction for a trip supersedes its schedule even if that
+        // prediction is canceled or no longer boardable.
+        let predictedTripIds = Set(matchingLiveCalls.map(\.key.tripId))
+        let sortedLiveCalls = matchingLiveCalls
+            .filter { $0.predictionId != nil && $0.predicted != nil }
             .filter { isUsableForTravel($0) }
             .filter { ($0.effectiveDeparture ?? .distantPast) >= now }
             .sorted { callSortTime($0) < callSortTime($1) }
+        let sortedScheduleCalls = matchingCalls(
+            at: target.endpoint,
+            services: target.services,
+            from: rawCalls.scheduleCalls
+        )
+            .filter { $0.scheduleId != nil && $0.scheduled != nil }
+            .filter { isUsableForTravel($0) }
+            .filter { ($0.effectiveDeparture ?? .distantPast) >= now }
+            .filter { !predictedTripIds.contains($0.key.tripId) }
+            .sorted { callSortTime($0) < callSortTime($1) }
 
-        var seenTripIds = Set<String>()
-        var predictions: [TransitPrediction] = []
-        for call in sortedCalls {
-            guard seenTripIds.insert(call.key.tripId).inserted,
+        var observedLiveTripIds = Set<String>()
+        var observedLiveCalls: [(call: StopCall, prediction: TransitPrediction)] = []
+        for call in sortedLiveCalls {
+            guard observedLiveTripIds.insert(call.key.tripId).inserted,
                   let prediction = makeTransitPrediction(
                     from: call,
                     now: now
                   ) else {
                 continue
             }
-            predictions.append(prediction)
-            if predictions.count == 3 {
-                break
+            observedLiveCalls.append((call, prediction))
+        }
+        // The board is capped at three, but arrival detection must see every
+        // live trip so moving from fourth to third cannot look like a departure.
+        var selectedCalls = Array(observedLiveCalls.prefix(3))
+        var seenTripIds = Set(selectedCalls.map { $0.call.key.tripId })
+        if selectedCalls.count < 3 {
+            for call in sortedScheduleCalls {
+                guard seenTripIds.insert(call.key.tripId).inserted,
+                      let prediction = makeTransitPrediction(
+                        from: call,
+                        now: now
+                      ) else {
+                    continue
+                }
+                selectedCalls.append((call, prediction))
+                if selectedCalls.count == 3 {
+                    break
+                }
             }
         }
 
         return PredictionSlice(
-            predictedStopId: leg.origin.resolvedStopId,
-            predictions: predictions
+            predictedStopId: target.id,
+            predictions: selectedCalls
+                .sorted { callSortTime($0.call) < callSortTime($1.call) }
+                .map { $0.prediction },
+            livePredictions: observedLiveCalls.map { $0.prediction }
         )
     }
 

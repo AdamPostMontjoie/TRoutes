@@ -12,7 +12,12 @@ import Foundation
 /// `PredictionState.predictedStop.id` when applying the update.
 struct PredictionSlice: Equatable, Sendable {
     let predictedStopId: UUID
+    /// Up to three chronological board items, prioritizing live calls when
+    /// selecting them and using schedules only to fill empty slots.
     let predictions: [TransitPrediction]
+    /// Only calls present in the current predictions response. Tracking must not
+    /// treat scheduled filler as an observed vehicle.
+    let livePredictions: [TransitPrediction]
 }
 
 /// Transient output delivered to JourneyAction. This is not persisted directly;
@@ -20,6 +25,7 @@ struct PredictionSlice: Equatable, Sendable {
 struct JourneyTimingUpdate: Equatable, Sendable {
     let resolvedRouteId: UUID
     let context: JourneyTimingContext
+    let refreshSessionId: UUID
     let generation: UInt64
     let fetchedAt: Date
     let status: JourneyTimingStatus
