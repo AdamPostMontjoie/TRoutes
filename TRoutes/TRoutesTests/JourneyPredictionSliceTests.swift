@@ -82,7 +82,7 @@ struct JourneyPredictionSliceTests {
                 canonicalStopId: "boarding",
                 acceptableStopIds: ["boarding"]
             ),
-            services: [TimingRouteDirection(routeId: "route", directionId: 0)]
+            acceptableRouteDirections: [TimingRouteDirection(routeId: "route", directionId: 0)]
         )
     }
 

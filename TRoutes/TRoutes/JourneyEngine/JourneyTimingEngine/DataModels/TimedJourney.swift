@@ -197,7 +197,7 @@ struct RouteTimingSnapshot: Equatable, Sendable {
     let context: JourneyTimingContext
     let generation: UInt64
     let fetchedAt: Date
-    let calls: [TripStopKey: TripStopTiming]
+    let timingsByTripStop: [TripStopKey: TripStopTiming]
     let optionsByLeg: [UUID: [LegTripOption]]
     let coverageByLeg: [UUID: LegTimingCoverage]
     let etaJourney: TimedJourney?

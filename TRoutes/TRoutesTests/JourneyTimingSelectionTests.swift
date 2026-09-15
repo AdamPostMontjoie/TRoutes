@@ -289,7 +289,7 @@ struct JourneyTimingSelectionTests {
         firstLegId: UUID,
         secondLegId: UUID
     ) -> TimingQueryPlan {
-        let service = Set([
+        let routeDirections = Set([
             TimingRouteDirection(routeId: "route", directionId: 0)
         ])
         return TimingQueryPlan(
@@ -297,7 +297,7 @@ struct JourneyTimingSelectionTests {
             legs: [
                 TimingLegPlan(
                     id: firstLegId,
-                    services: service,
+                    acceptableRouteDirections: routeDirections,
                     origin: TimingEndpointPlan(
                         resolvedStopId: UUID(),
                         canonicalStopId: "origin",
@@ -311,7 +311,7 @@ struct JourneyTimingSelectionTests {
                 ),
                 TimingLegPlan(
                     id: secondLegId,
-                    services: service,
+                    acceptableRouteDirections: routeDirections,
                     origin: TimingEndpointPlan(
                         resolvedStopId: UUID(),
                         canonicalStopId: "transfer-departure",

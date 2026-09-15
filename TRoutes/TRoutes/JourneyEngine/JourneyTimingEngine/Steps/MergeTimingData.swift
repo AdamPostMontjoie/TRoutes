@@ -2,6 +2,8 @@
 //  MergeTimingData.swift
 //  TRoutes
 //
+//  Created by Adam Post on 9/13/26.
+//
 
 import Foundation
 
@@ -329,7 +331,7 @@ extension JourneyTimingEngine {
         to queryPlan: TimingQueryPlan
     ) -> Bool {
         queryPlan.queriedStopIds.contains(call.key.stopId)
-            && queryPlan.services.contains(
+            && queryPlan.acceptableRouteDirections.contains(
                 TimingRouteDirection(
                     routeId: call.routeId,
                     directionId: call.directionId

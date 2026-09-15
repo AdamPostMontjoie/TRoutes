@@ -2,6 +2,8 @@
 //  CreateTimingUpdate.swift
 //  TRoutes
 //
+//  Created by Adam Post on 9/13/26.
+//
 
 import Foundation
 
@@ -332,7 +334,7 @@ extension JourneyTimingEngine {
     ) -> PredictionSlice {
         let matchingLiveCalls = matchingCalls(
             at: target.endpoint,
-            services: target.services,
+            acceptableRouteDirections: target.acceptableRouteDirections,
             from: rawCalls.predictionCalls
         )
         // A current prediction for a trip supersedes its schedule even if that
@@ -345,7 +347,7 @@ extension JourneyTimingEngine {
             .sorted { callSortTime($0) < callSortTime($1) }
         let sortedScheduleCalls = matchingCalls(
             at: target.endpoint,
-            services: target.services,
+            acceptableRouteDirections: target.acceptableRouteDirections,
             from: rawCalls.scheduleCalls
         )
             .filter { $0.scheduleId != nil && $0.scheduled != nil }
@@ -455,12 +457,12 @@ extension JourneyTimingEngine {
         Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let originCalls = matchingCalls(
                 at: leg.origin,
-                services: leg.services,
+                acceptableRouteDirections: leg.acceptableRouteDirections,
                 from: mergedCalls
             ).filter { isUsableForTravel($0) }
             let destinationCalls = matchingCalls(
                 at: leg.destination,
-                services: leg.services,
+                acceptableRouteDirections: leg.acceptableRouteDirections,
                 from: mergedCalls
             ).filter { isUsableForTravel($0) }
             let options = optionsByLeg[leg.id] ?? []
@@ -499,7 +501,7 @@ extension JourneyTimingEngine {
         coverageByLeg: [UUID: LegTimingCoverage],
         selection: JourneyTimingSelection
     ) -> RouteTimingSnapshot {
-        let callsByKey = Dictionary(
+        let timingsByTripStop = Dictionary(
             mergedCalls.map { ($0.key, $0) },
             uniquingKeysWith: { current, replacement in
                 replacement.predicted == nil ? current : replacement
@@ -511,7 +513,7 @@ extension JourneyTimingEngine {
             context: context,
             generation: generation,
             fetchedAt: fetchedAt,
-            calls: callsByKey,
+            timingsByTripStop: timingsByTripStop,
             optionsByLeg: optionsByLeg,
             coverageByLeg: coverageByLeg,
             etaJourney: selection.etaJourney,

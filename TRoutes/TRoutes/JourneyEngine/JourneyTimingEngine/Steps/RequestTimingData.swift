@@ -2,6 +2,8 @@
 //  RequestTimingData.swift
 //  TRoutes
 //
+//  Created by Adam Post on 9/13/26.
+//
 
 import Foundation
 
@@ -29,7 +31,7 @@ extension JourneyTimingEngine {
         let legs = remainingLegs.map { leg in
             return TimingLegPlan(
                 id: leg.id,
-                services: timingServices(for: leg),
+                acceptableRouteDirections: acceptableRouteDirections(for: leg),
                 origin: TimingEndpointPlan(
                     resolvedStopId: leg.startStop.id,
                     canonicalStopId: leg.startStop.mbtaStopId,
@@ -46,7 +48,7 @@ extension JourneyTimingEngine {
         var predictionTargets = legs.map { leg in
             TimingPredictionTargetPlan(
                 endpoint: leg.origin,
-                services: leg.services
+                acceptableRouteDirections: leg.acceptableRouteDirections
             )
         }
 
@@ -66,7 +68,7 @@ extension JourneyTimingEngine {
                         canonicalStopId: stop.mbtaStopId,
                         acceptableStopIds: Set(stop.acceptableStopIds)
                     ),
-                    services: timingServices(for: leg)
+                    acceptableRouteDirections: acceptableRouteDirections(for: leg)
                 )
             )
         }
@@ -78,7 +80,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    private func timingServices(
+    private func acceptableRouteDirections(
         for leg: ResolvedLeg
     ) -> Set<TimingRouteDirection> {
         let routeIds = Set(leg.acceptableRouteIds).union([leg.mbtaRouteId])

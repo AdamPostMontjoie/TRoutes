@@ -2,6 +2,8 @@
 //  CreateTimingOptions.swift
 //  TRoutes
 //
+//  Created by Adam Post on 9/13/26.
+//
 
 import Foundation
 
@@ -47,12 +49,12 @@ extension JourneyTimingEngine {
 
         var originCalls = matchingCalls(
             at: leg.origin,
-            services: leg.services,
+            acceptableRouteDirections: leg.acceptableRouteDirections,
             from: calls
         )
         var destinationCalls = matchingCalls(
             at: leg.destination,
-            services: leg.services,
+            acceptableRouteDirections: leg.acceptableRouteDirections,
             from: calls
         )
         if let onboardTripId {
@@ -89,12 +91,12 @@ extension JourneyTimingEngine {
 
     func matchingCalls(
         at endpoint: TimingEndpointPlan,
-        services: Set<TimingRouteDirection>,
+        acceptableRouteDirections: Set<TimingRouteDirection>,
         from calls: [TripStopTiming]
     ) -> [TripStopTiming] {
         calls.filter { call in
             endpoint.acceptableStopIds.contains(call.key.stopId)
-                && services.contains(
+                && acceptableRouteDirections.contains(
                     TimingRouteDirection(
                         routeId: call.routeId,
                         directionId: call.directionId

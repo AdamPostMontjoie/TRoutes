@@ -27,7 +27,7 @@ struct TimingQueryPlan: Equatable, Sendable {
         self.predictionTargets = predictionTargets ?? legs.map {
             TimingPredictionTargetPlan(
                 endpoint: $0.origin,
-                services: $0.services
+                acceptableRouteDirections: $0.acceptableRouteDirections
             )
         }
     }
@@ -42,20 +42,20 @@ struct TimingQueryPlan: Equatable, Sendable {
         return legStopIds.union(predictionStopIds)
     }
 
-    var services: Set<TimingRouteDirection> {
-        Set(legs.flatMap(\.services))
-            .union(predictionTargets.flatMap(\.services))
+    var acceptableRouteDirections: Set<TimingRouteDirection> {
+        Set(legs.flatMap(\.acceptableRouteDirections))
+            .union(predictionTargets.flatMap(\.acceptableRouteDirections))
     }
 
     var queriedRouteIds: Set<String> {
-        Set(services.map(\.routeId))
+        Set(acceptableRouteDirections.map(\.routeId))
     }
 
     var key: TimingQueryKey {
         TimingQueryKey(
             resolvedRouteId: resolvedRouteId,
             stopIds: queriedStopIds.sorted(),
-            services: services.sorted()
+            acceptableRouteDirections: acceptableRouteDirections.sorted()
         )
     }
 }
@@ -65,7 +65,7 @@ struct TimingQueryPlan: Equatable, Sendable {
 struct TimingQueryKey: Hashable, Sendable {
     let resolvedRouteId: UUID
     let stopIds: [String]
-    let services: [TimingRouteDirection]
+    let acceptableRouteDirections: [TimingRouteDirection]
 }
 
 /// A route and direction are paired because a route-wide response can contain
@@ -85,7 +85,7 @@ struct TimingRouteDirection: Hashable, Sendable, Comparable {
 /// The filters and endpoint identities for one route leg.
 struct TimingLegPlan: Equatable, Sendable, Identifiable {
     let id: UUID
-    let services: Set<TimingRouteDirection>
+    let acceptableRouteDirections: Set<TimingRouteDirection>
     let origin: TimingEndpointPlan
     let destination: TimingEndpointPlan
 }
@@ -94,7 +94,7 @@ struct TimingLegPlan: Equatable, Sendable, Identifiable {
 /// route-wide response.
 struct TimingPredictionTargetPlan: Equatable, Sendable, Identifiable {
     let endpoint: TimingEndpointPlan
-    let services: Set<TimingRouteDirection>
+    let acceptableRouteDirections: Set<TimingRouteDirection>
 
     var id: UUID {
         endpoint.resolvedStopId
