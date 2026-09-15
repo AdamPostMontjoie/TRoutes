@@ -13,11 +13,7 @@ enum JourneyAction: Equatable {
     case handleJourneyTimingUpdate
     case evaluateTimingRefresh
     
-    func reduce(
-        state: inout JourneyState,
-        timingUpdate: JourneyTimingUpdate? = nil,
-        isManual: Bool = false
-    ) -> [JourneyEffect] {
+    func reduce(state: inout JourneyState, timingUpdate: JourneyTimingUpdate? = nil, isManual: Bool = false) -> [JourneyEffect] {
         switch self {
         case .arriveAtStop:
             return arriveAtStop(state: &state)
@@ -250,10 +246,7 @@ enum JourneyAction: Equatable {
 
     // MARK: - Journey timing updates
 
-    private func handleJourneyTimingUpdate(
-        state: inout JourneyState,
-        update: JourneyTimingUpdate?
-    ) -> [JourneyEffect] {
+    private func handleJourneyTimingUpdate(state: inout JourneyState, update: JourneyTimingUpdate?) -> [JourneyEffect] {
         guard let update else { return [] }
 
         state.timingState.status = update.status
@@ -303,10 +296,7 @@ enum JourneyAction: Equatable {
         return effects
     }
 
-    private func applyPredictionSlice(
-        _ slice: PredictionSlice,
-        to predictionState: inout PredictionState
-    ) {
+    private func applyPredictionSlice(_ slice: PredictionSlice, to predictionState: inout PredictionState) {
         predictionState.cleanArrivedTrains(
             displayPredictions: slice.displayPredictions,
             livePredictions: slice.livePredictions

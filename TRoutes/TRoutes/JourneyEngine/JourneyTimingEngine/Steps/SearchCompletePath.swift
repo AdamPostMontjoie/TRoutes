@@ -18,11 +18,7 @@ extension JourneyTimingEngine {
     /// Dynamic programming keeps one best path for each first/final option
     /// pair. Preserving the first option is required because an at-stop ETA is
     /// anchored to the first boardable trip rather than the recommendation.
-    func solveJourneys(
-        remainingLegs: [ResolvedLeg],
-        optionsByLeg: [UUID: [LegTripOption]],
-        connectionGraph: TimingConnectionGraph
-    ) -> [TimedJourney] {
+    func solveJourneys(remainingLegs: [ResolvedLeg], optionsByLeg: [UUID: [LegTripOption]], connectionGraph: TimingConnectionGraph) -> [TimedJourney] {
         guard let firstLeg = remainingLegs.first else {
             print("5/6 Searched Complete Timing Paths")
             return []

@@ -130,11 +130,7 @@ struct TimedJourney: Equatable, Sendable {
 
     /// A timed journey is a non-empty, ordered set of legs with exactly one
     /// feasible transfer joining every adjacent pair.
-    init?(
-        legs: [LegTripOption],
-        transfers: [TransferTiming],
-        warnings: [TimingWarning]
-    ) {
+    init?(legs: [LegTripOption], transfers: [TransferTiming], warnings: [TimingWarning]){
         guard !legs.isEmpty,
               Set(legs.map(\.legId)).count == legs.count,
               transfers.count == legs.count - 1 else {

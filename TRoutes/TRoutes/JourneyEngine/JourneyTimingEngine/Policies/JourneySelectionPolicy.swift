@@ -27,10 +27,7 @@ struct JourneySelectionPolicy {
     /// Step 5 uses this only when two partial paths have the same first and
     /// current-final options. Keeping the more reliable path cannot remove a
     /// first-leg anchor needed later by the at-stop ETA policy.
-    func isPreferredPartialJourney(
-        _ candidate: TimedJourney,
-        over current: TimedJourney
-    ) -> Bool {
+    func isPreferredPartialJourney(_ candidate: TimedJourney, over current: TimedJourney) -> Bool {
         let candidateBuffered = meetsEveryReliabilityBuffer(candidate)
         let currentBuffered = meetsEveryReliabilityBuffer(current)
         if candidateBuffered != currentBuffered {
@@ -49,10 +46,7 @@ struct JourneySelectionPolicy {
     /// Before the first stop, a complete buffered journey is preferred over an
     /// unbuffered one. Within that class, arrive earliest and take the latest
     /// feeder that preserves the selected downstream service.
-    private func isPreferredRecommendation(
-        _ candidate: TimedJourney,
-        over current: TimedJourney
-    ) -> Bool {
+    private func isPreferredRecommendation(_ candidate: TimedJourney, over current: TimedJourney) -> Bool {
         let candidateBuffered = meetsEveryReliabilityBuffer(candidate)
         let currentBuffered = meetsEveryReliabilityBuffer(current)
         if candidateBuffered != currentBuffered {
@@ -81,10 +75,7 @@ struct JourneySelectionPolicy {
     /// After the first stop, the first leg is already assumed or fixed. The
     /// main ETA follows the earliest physically possible complete journey;
     /// reliability changes its connection warning rather than hiding it.
-    private func isPreferredActualJourney(
-        _ candidate: TimedJourney,
-        over current: TimedJourney
-    ) -> Bool {
+    private func isPreferredActualJourney(_ candidate: TimedJourney, over current: TimedJourney) -> Bool {
         if candidate.destinationArrival != current.destinationArrival {
             return candidate.destinationArrival < current.destinationArrival
         }

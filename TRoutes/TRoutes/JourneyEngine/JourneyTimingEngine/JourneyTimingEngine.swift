@@ -22,11 +22,7 @@ actor JourneyTimingEngine {
     /// Runs the route-wide timing pipeline without mutating JourneyState.
     /// Additional stop IDs only expand the projected prediction slices; the
     /// caller remains responsible for interpreting why those slices are needed.
-    func refreshJourneyTiming(
-        route: ResolvedUserRoute,
-        context: JourneyTimingContext,
-        additionalPredictionStopIds: Set<UUID> = []
-    ) async throws -> JourneyTimingUpdate {
+    func refreshJourneyTiming(route: ResolvedUserRoute, context: JourneyTimingContext, additionalPredictionStopIds: Set<UUID> = []) async throws -> JourneyTimingUpdate {
         generation &+= 1
         let sessionId = refreshSessionId
         let refreshGeneration = generation

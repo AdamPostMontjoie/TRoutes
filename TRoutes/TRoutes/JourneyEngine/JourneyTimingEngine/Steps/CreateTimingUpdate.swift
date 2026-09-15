@@ -20,14 +20,7 @@ extension JourneyTimingEngine {
     /// Selects recommendation and ETA independently from the same candidate
     /// journeys. Before the first stop they are the same journey. Afterwards,
     /// ETA is anchored to the user's first boardable or confirmed trip.
-    func selectTiming(
-        context: JourneyTimingContext,
-        queryPlan: TimingQueryPlan,
-        completeJourneys: [TimedJourney],
-        optionsByLeg: [UUID: [LegTripOption]],
-        coverageByLeg: [UUID: LegTimingCoverage],
-        connectionGraph: TimingConnectionGraph
-    ) -> JourneyTimingSelection {
+    func selectTiming(context: JourneyTimingContext, queryPlan: TimingQueryPlan, completeJourneys: [TimedJourney], optionsByLeg: [UUID: [LegTripOption]], coverageByLeg: [UUID: LegTimingCoverage], connectionGraph: TimingConnectionGraph) -> JourneyTimingSelection {
         let selectionPolicy = JourneySelectionPolicy()
         let recommendedJourney = context.allowsRecommendation
             ? selectRecommendedJourney(
@@ -86,10 +79,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    private func logRecommendedPath(
-        _ journey: TimedJourney?,
-        firstLegOptions: [LegTripOption]
-    ) {
+    private func logRecommendedPath(_ journey: TimedJourney?, firstLegOptions: [LegTripOption]) {
         guard let journey else {
             print("Recommended path: unavailable (no complete journey)")
             return
@@ -120,11 +110,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    func selectRecommendedJourney(
-        from journeys: [TimedJourney],
-        coverageByLeg: [UUID: LegTimingCoverage],
-        selectionPolicy: JourneySelectionPolicy
-    ) -> TimedJourney? {
+    func selectRecommendedJourney(from journeys: [TimedJourney], coverageByLeg: [UUID: LegTimingCoverage], selectionPolicy: JourneySelectionPolicy) -> TimedJourney? {
         guard let selected = selectionPolicy.selectRecommendation(
             from: journeys
         ) else {
@@ -144,12 +130,7 @@ extension JourneyTimingEngine {
     /// The watched connection is the earliest upcoming service on the next leg
     /// for the user's assumed current trip. It may be physically impossible;
     /// retaining it is what lets a likely-miss warning change on later refreshes.
-    func watchedConnection(
-        currentLegOption: LegTripOption?,
-        queryPlan: TimingQueryPlan,
-        optionsByLeg: [UUID: [LegTripOption]],
-        connectionGraph: TimingConnectionGraph
-    ) -> TransferTiming? {
+    func watchedConnection(currentLegOption: LegTripOption?, queryPlan: TimingQueryPlan, optionsByLeg: [UUID: [LegTripOption]], connectionGraph: TimingConnectionGraph) -> TransferTiming? {
         guard let currentLegOption,
               queryPlan.legs.count > 1 else {
             return nil
@@ -170,9 +151,7 @@ extension JourneyTimingEngine {
         return nil
     }
 
-    func makeRecommendedDeparture(
-        from journey: TimedJourney
-    ) -> RecommendedDeparture {
+    func makeRecommendedDeparture(from journey: TimedJourney) -> RecommendedDeparture {
         RecommendedDeparture(
             departureTime: journey.originDeparture,
             timeSource: journey.legs[0].departureTimeSource,
@@ -182,15 +161,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    func makeTimingUpdate(
-        route: ResolvedUserRoute,
-        context: JourneyTimingContext,
-        refreshSessionId: UUID,
-        generation: UInt64,
-        fetchedAt: Date,
-        predictionSlices: [PredictionSlice],
-        selection: JourneyTimingSelection
-    ) -> JourneyTimingUpdate {
+    func makeTimingUpdate(route: ResolvedUserRoute, context: JourneyTimingContext, refreshSessionId: UUID, generation: UInt64, fetchedAt: Date, predictionSlices: [PredictionSlice], selection: JourneyTimingSelection) -> JourneyTimingUpdate {
         let update = JourneyTimingUpdate(
             resolvedRouteId: route.id,
             context: context,
@@ -212,9 +183,7 @@ extension JourneyTimingEngine {
         return update
     }
 
-    func timingStatus(
-        for selection: JourneyTimingSelection
-    ) -> JourneyTimingStatus {
+    func timingStatus(for selection: JourneyTimingSelection) -> JourneyTimingStatus {
         guard let etaJourney = selection.etaJourney else {
             return .unavailable
         }
@@ -226,10 +195,7 @@ extension JourneyTimingEngine {
         return usesTemporarilyUnavailablePrediction ? .stale : .current
     }
 
-    func timingWarnings(
-        for journey: TimedJourney,
-        coverageByLeg: [UUID: LegTimingCoverage]
-    ) -> [TimingWarning] {
+    func timingWarnings(for journey: TimedJourney, coverageByLeg: [UUID: LegTimingCoverage]) -> [TimingWarning] {
         var warnings: [TimingWarning] = []
 
         for option in journey.legs {
@@ -279,10 +245,7 @@ extension JourneyTimingEngine {
         return warnings
     }
 
-    func appendConsequenceWarning(
-        for transfer: TransferTiming,
-        to warnings: inout [TimingWarning]
-    ) {
+    func appendConsequenceWarning(for transfer: TransferTiming, to warnings: inout [TimingWarning]) {
         if transfer.isLastService {
             appendWarning(
                 .lastService(stationId: transfer.stationId),
@@ -302,10 +265,7 @@ extension JourneyTimingEngine {
         }
     }
 
-    func appendWarning(
-        _ warning: TimingWarning,
-        to warnings: inout [TimingWarning]
-    ) {
+    func appendWarning(_ warning: TimingWarning, to warnings: inout [TimingWarning]) {
         if !warnings.contains(warning) {
             warnings.append(warning)
         }
@@ -313,11 +273,7 @@ extension JourneyTimingEngine {
 
     // MARK: - Existing prediction-state projection
 
-    func buildPredictionSlices(
-        queryPlan: TimingQueryPlan,
-        rawCalls: UnmergedTimingCalls,
-        now: Date
-    ) -> [PredictionSlice] {
+    func buildPredictionSlices(queryPlan: TimingQueryPlan, rawCalls: UnmergedTimingCalls, now: Date) -> [PredictionSlice] {
         queryPlan.predictionTargets.map { target in
             createPredictionSlice(for: target, rawCalls: rawCalls, now: now)
         }
@@ -327,11 +283,7 @@ extension JourneyTimingEngine {
     /// distinct scheduled calls. ETA and recommendations use the merged calls,
     /// never this display-only projection.
     /// The slice ID is the exact ID later matched to PredictionState.
-    func createPredictionSlice(
-        for target: TimingPredictionTargetPlan,
-        rawCalls: UnmergedTimingCalls,
-        now: Date
-    ) -> PredictionSlice {
+    func createPredictionSlice(for target: TimingPredictionTargetPlan, rawCalls: UnmergedTimingCalls, now: Date) -> PredictionSlice {
         let matchingLiveCalls = matchingCalls(
             at: target.endpoint,
             acceptableRouteDirections: target.acceptableRouteDirections,
@@ -397,10 +349,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    func makeTransitPrediction(
-        from call: TripStopTiming,
-        now: Date
-    ) -> TransitPrediction? {
+    func makeTransitPrediction(from call: TripStopTiming, now: Date) -> TransitPrediction? {
         guard let predictionId = call.predictionId ?? call.scheduleId else {
             return nil
         }
@@ -449,11 +398,7 @@ extension JourneyTimingEngine {
 
     // MARK: - Coverage and snapshot projection
 
-    func buildCoverageByLeg(
-        queryPlan: TimingQueryPlan,
-        mergedCalls: [TripStopTiming],
-        optionsByLeg: [UUID: [LegTripOption]]
-    ) -> [UUID: LegTimingCoverage] {
+    func buildCoverageByLeg(queryPlan: TimingQueryPlan, mergedCalls: [TripStopTiming], optionsByLeg: [UUID: [LegTripOption]]) -> [UUID: LegTimingCoverage] {
         Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let originCalls = matchingCalls(
                 at: leg.origin,
@@ -491,16 +436,7 @@ extension JourneyTimingEngine {
         })
     }
 
-    func makeSnapshot(
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext,
-        generation: UInt64,
-        fetchedAt: Date,
-        mergedCalls: [TripStopTiming],
-        optionsByLeg: [UUID: [LegTripOption]],
-        coverageByLeg: [UUID: LegTimingCoverage],
-        selection: JourneyTimingSelection
-    ) -> RouteTimingSnapshot {
+    func makeSnapshot(queryPlan: TimingQueryPlan, context: JourneyTimingContext, generation: UInt64, fetchedAt: Date, mergedCalls: [TripStopTiming], optionsByLeg: [UUID: [LegTripOption]], coverageByLeg: [UUID: LegTimingCoverage], selection: JourneyTimingSelection) -> RouteTimingSnapshot {
         let timingsByTripStop = Dictionary(
             mergedCalls.map { ($0.key, $0) },
             uniquingKeysWith: { current, replacement in

@@ -80,10 +80,7 @@ actor PredictionManager {
     /// leg, even when live predictions exist, and are reused briefly between
     /// prediction refreshes. Filtering and merging remain JourneyTimingEngine's
     /// responsibility.
-    func fetchTimingCalls(
-        for plan: TimingQueryPlan,
-        requestType: MBTARequestType
-    ) async throws -> UnmergedTimingCalls {
+    func fetchTimingCalls(for plan: TimingQueryPlan, requestType: MBTARequestType) async throws -> UnmergedTimingCalls {
         let key = plan.key
 
         if let existingTask = inFlightTimingRequests[key] {

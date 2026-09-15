@@ -21,9 +21,7 @@ struct ConnectionTimingPolicy {
 
     /// This is deliberately independent of the recovery gap. Missing an
     /// infrequent service changes consequence, not physical transfer duration.
-    func preferredReliabilityBuffer(
-        for departingLeg: ResolvedLeg
-    ) -> TimeInterval {
+    func preferredReliabilityBuffer(for departingLeg: ResolvedLeg) -> TimeInterval {
         switch departingLeg.transitType {
         case .commuterRail, .ferry:
             return infrequentServiceReliabilityBuffer
@@ -32,10 +30,7 @@ struct ConnectionTimingPolicy {
         }
     }
 
-    func transferRequirement(
-        from arrivingLeg: ResolvedLeg,
-        to departingLeg: ResolvedLeg
-    ) -> TransferRequirement {
+    func transferRequirement(from arrivingLeg: ResolvedLeg, to departingLeg: ResolvedLeg) -> TransferRequirement {
         let arrivalLocation = CLLocation(
             latitude: arrivingLeg.endStop.latitude,
             longitude: arrivingLeg.endStop.longitude
@@ -55,11 +50,7 @@ struct ConnectionTimingPolicy {
         )
     }
 
-    func isHighConsequence(
-        departure: Date,
-        nextAlternativeDeparture: Date?,
-        isLastService: Bool
-    ) -> Bool {
+    func isHighConsequence(departure: Date, nextAlternativeDeparture: Date?, isLastService: Bool) -> Bool {
         if isLastService {
             return true
         }

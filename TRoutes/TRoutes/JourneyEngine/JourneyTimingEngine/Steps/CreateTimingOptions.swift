@@ -10,12 +10,7 @@ import Foundation
 // MARK: - Step 3: construct options for every leg
 
 extension JourneyTimingEngine {
-    func buildTripOptionsByLeg(
-        queryPlan: TimingQueryPlan,
-        mergedCalls: [TripStopTiming],
-        context: JourneyTimingContext,
-        now: Date
-    ) -> [UUID: [LegTripOption]] {
+    func buildTripOptionsByLeg(queryPlan: TimingQueryPlan, mergedCalls: [TripStopTiming], context: JourneyTimingContext, now: Date) -> [UUID: [LegTripOption]] {
         let optionsByLeg = Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let isInProgressLeg = context.isOnboard
                 && leg.id == context.timingLegId
@@ -34,13 +29,7 @@ extension JourneyTimingEngine {
 
     /// Filters both endpoints, groups destinations by trip, pairs same-trip
     /// calls, rejects invalid pairs, and returns valid options chronologically.
-    func buildTripOptions(
-        for leg: TimingLegPlan,
-        from calls: [TripStopTiming],
-        isInProgressLeg: Bool,
-        onboardTripId: String?,
-        now: Date
-    ) -> [LegTripOption] {
+    func buildTripOptions(for leg: TimingLegPlan, from calls: [TripStopTiming], isInProgressLeg: Bool, onboardTripId: String?, now: Date) -> [LegTripOption] {
         if isInProgressLeg && onboardTripId == nil {
             // Journey progression proves the passenger is onboard, but without
             // a trip identity selecting another trip would be a guess.
@@ -89,11 +78,7 @@ extension JourneyTimingEngine {
         return optionsById.values.sorted { $0.departure < $1.departure }
     }
 
-    func matchingCalls(
-        at endpoint: TimingEndpointPlan,
-        acceptableRouteDirections: Set<TimingRouteDirection>,
-        from calls: [TripStopTiming]
-    ) -> [TripStopTiming] {
+    func matchingCalls(at endpoint: TimingEndpointPlan, acceptableRouteDirections: Set<TimingRouteDirection>, from calls: [TripStopTiming]) -> [TripStopTiming] {
         calls.filter { call in
             endpoint.acceptableStopIds.contains(call.key.stopId)
                 && acceptableRouteDirections.contains(
@@ -105,13 +90,7 @@ extension JourneyTimingEngine {
         }
     }
 
-    func makeLegTripOption(
-        for leg: TimingLegPlan,
-        origin: TripStopTiming,
-        destination: TripStopTiming,
-        isInProgressLeg: Bool,
-        now: Date
-    ) -> LegTripOption? {
+    func makeLegTripOption(for leg: TimingLegPlan, origin: TripStopTiming, destination: TripStopTiming, isInProgressLeg: Bool, now: Date) -> LegTripOption? {
         guard (isInProgressLeg
                ? isUsableCompletedOrigin(origin)
                : isUsableForTravel(origin)),

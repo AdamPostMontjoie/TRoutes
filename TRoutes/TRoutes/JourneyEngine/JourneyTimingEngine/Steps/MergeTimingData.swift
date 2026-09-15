@@ -41,9 +41,7 @@ struct PredictionHistoryReconciliation {
 
 extension JourneyTimingEngine {
     /// Merges prediction and schedule timing for each trip and stop.
-    func mergeScheduleAndPredictionCalls(
-        _ calls: UnmergedTimingCalls
-    ) -> [TripStopTiming] {
+    func mergeScheduleAndPredictionCalls(_ calls: UnmergedTimingCalls) -> [TripStopTiming] {
         let schedulesById = Dictionary(
             calls.scheduleCalls.compactMap { call in
                 call.scheduleId.map { ($0, call) }
@@ -78,10 +76,7 @@ extension JourneyTimingEngine {
         }
     }
 
-    func makeMergedStopCall(
-        schedule: TripStopTiming?,
-        prediction: TripStopTiming
-    ) -> TripStopTiming {
+    func makeMergedStopCall(schedule: TripStopTiming?, prediction: TripStopTiming) -> TripStopTiming {
         guard let schedule else { return prediction }
 
         let availability: StopCallAvailability =
@@ -114,13 +109,7 @@ extension JourneyTimingEngine {
     /// Reconciles a successful current response with previous live observations.
     /// This is intentionally separate from request caching: its only purpose is
     /// to interpret a prediction that was present and then disappeared.
-    func reconcilePredictionHistory(
-        currentCalls: [TripStopTiming],
-        previousObservations: [TimingCallObservationKey: PredictionObservation],
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext,
-        now: Date
-    ) -> PredictionHistoryReconciliation {
+    func reconcilePredictionHistory(currentCalls: [TripStopTiming], previousObservations: [TimingCallObservationKey: PredictionObservation], queryPlan: TimingQueryPlan, context: JourneyTimingContext, now: Date) -> PredictionHistoryReconciliation {
         var calls: [TripStopTiming] = []
         var observations: [TimingCallObservationKey: PredictionObservation] = [:]
         var seenKeys = Set<TimingCallObservationKey>()
@@ -232,11 +221,7 @@ extension JourneyTimingEngine {
         return call
     }
 
-    func callForMissingPrediction(
-        scheduleCall: TripStopTiming?,
-        observation: PredictionObservation,
-        now: Date
-    ) -> TripStopTiming? {
+    func callForMissingPrediction(scheduleCall: TripStopTiming?, observation: PredictionObservation, now: Date) -> TripStopTiming? {
         let lastLiveCall = observation.lastLiveCall
         let lastPredictedEvent = predictionEventTime(for: lastLiveCall)
 
@@ -263,21 +248,14 @@ extension JourneyTimingEngine {
         return scheduleCall
     }
 
-    func historicalOverlay(
-        scheduleCall: TripStopTiming?,
-        liveCall: TripStopTiming,
-        availability: StopCallAvailability
-    ) -> TripStopTiming {
+    func historicalOverlay(scheduleCall: TripStopTiming?, liveCall: TripStopTiming, availability: StopCallAvailability) -> TripStopTiming {
         let merged = scheduleCall.map {
             makeMergedStopCall(schedule: $0, prediction: liveCall)
         } ?? liveCall
         return copy(merged, availability: availability)
     }
 
-    func copy(
-        _ call: TripStopTiming,
-        availability: StopCallAvailability
-    ) -> TripStopTiming {
+    func copy(_ call: TripStopTiming, availability: StopCallAvailability) -> TripStopTiming {
         TripStopTiming(
             key: call.key,
             routeId: call.routeId,
@@ -299,12 +277,7 @@ extension JourneyTimingEngine {
         call.predicted?.departure ?? call.predicted?.arrival
     }
 
-    func shouldRetain(
-        observation: PredictionObservation,
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext,
-        now: Date
-    ) -> Bool {
+    func shouldRetain(observation: PredictionObservation, queryPlan: TimingQueryPlan, context: JourneyTimingContext, now: Date) -> Bool {
         if isOnboardCurrentLegCall(
             observation.lastLiveCall,
             queryPlan: queryPlan,
@@ -326,10 +299,7 @@ extension JourneyTimingEngine {
             <= historyPolicy.retentionAfterEvent
     }
 
-    func isRelevant(
-        _ call: TripStopTiming,
-        to queryPlan: TimingQueryPlan
-    ) -> Bool {
+    func isRelevant(_ call: TripStopTiming, to queryPlan: TimingQueryPlan) -> Bool {
         queryPlan.queriedStopIds.contains(call.key.stopId)
             && queryPlan.acceptableRouteDirections.contains(
                 TimingRouteDirection(
@@ -339,11 +309,7 @@ extension JourneyTimingEngine {
             )
     }
 
-    func isOnboardCurrentLegCall(
-        _ call: TripStopTiming,
-        queryPlan: TimingQueryPlan,
-        context: JourneyTimingContext
-    ) -> Bool {
+    func isOnboardCurrentLegCall(_ call: TripStopTiming, queryPlan: TimingQueryPlan, context: JourneyTimingContext) -> Bool {
         guard case let .onboard(tripId) = context.phase,
               let tripId,
               call.key.tripId == tripId,

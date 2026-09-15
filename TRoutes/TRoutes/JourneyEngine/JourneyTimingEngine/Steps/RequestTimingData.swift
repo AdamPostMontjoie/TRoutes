@@ -10,10 +10,7 @@ import Foundation
 // MARK: - Step 1: request all relevant information
 
 extension JourneyTimingEngine {
-    func remainingLegs(
-        in route: ResolvedUserRoute,
-        startingAt currentLegId: UUID
-    ) throws -> [ResolvedLeg] {
+    func remainingLegs(in route: ResolvedUserRoute, startingAt currentLegId: UUID) throws -> [ResolvedLeg] {
         guard let currentLegIndex = route.legs.firstIndex(where: {
             $0.id == currentLegId
         }) else {
@@ -23,11 +20,7 @@ extension JourneyTimingEngine {
         return Array(route.legs[currentLegIndex...])
     }
 
-    func makeQueryPlan(
-        route: ResolvedUserRoute,
-        remainingLegs: [ResolvedLeg],
-        additionalPredictionStopIds: Set<UUID> = []
-    ) -> TimingQueryPlan {
+    func makeQueryPlan(route: ResolvedUserRoute, remainingLegs: [ResolvedLeg], additionalPredictionStopIds: Set<UUID> = []) -> TimingQueryPlan {
         let legs = remainingLegs.map { leg in
             return TimingLegPlan(
                 id: leg.id,
@@ -80,9 +73,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    private func acceptableRouteDirections(
-        for leg: ResolvedLeg
-    ) -> Set<TimingRouteDirection> {
+    private func acceptableRouteDirections(for leg: ResolvedLeg) -> Set<TimingRouteDirection> {
         let routeIds = Set(leg.acceptableRouteIds).union([leg.mbtaRouteId])
         return Set(routeIds.map { routeId in
             TimingRouteDirection(
@@ -94,9 +85,7 @@ extension JourneyTimingEngine {
 
     /// PredictionManager owns the two network requests, request coalescing, and
     /// schedule cache. The two normalized result sets remain separate here.
-    func requestAllTimingCalls(
-        queryPlan: TimingQueryPlan
-    ) async throws -> UnmergedTimingCalls {
+    func requestAllTimingCalls(queryPlan: TimingQueryPlan) async throws -> UnmergedTimingCalls {
         try await PredictionManager.shared.fetchTimingCalls(
             for: queryPlan,
             requestType: .currentStopPrediction

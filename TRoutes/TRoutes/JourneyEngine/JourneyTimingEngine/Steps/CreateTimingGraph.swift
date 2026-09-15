@@ -18,10 +18,7 @@ struct OptionConnectionKey: Hashable {
 struct TimingConnectionGraph {
     let connectionsByOption: [OptionConnectionKey: TransferTiming]
 
-    func connection(
-        from arrivingOption: LegTripOption,
-        to departingOption: LegTripOption
-    ) -> TransferTiming? {
+    func connection(from arrivingOption: LegTripOption, to departingOption: LegTripOption) -> TransferTiming? {
         connectionsByOption[
             OptionConnectionKey(
                 arrivingOptionId: arrivingOption.id,
@@ -30,10 +27,7 @@ struct TimingConnectionGraph {
         ]
     }
 
-    func feasibleTransfer(
-        from arrivingOption: LegTripOption,
-        to departingOption: LegTripOption
-    ) -> TransferTiming? {
+    func feasibleTransfer(from arrivingOption: LegTripOption, to departingOption: LegTripOption) -> TransferTiming? {
         guard let connection = connection(
             from: arrivingOption,
             to: departingOption
@@ -47,10 +41,7 @@ struct TimingConnectionGraph {
 // MARK: - Step 4: connect adjacent legs
 
 extension JourneyTimingEngine {
-    func connectAdjacentLegs(
-        remainingLegs: [ResolvedLeg],
-        optionsByLeg: [UUID: [LegTripOption]]
-    ) -> TimingConnectionGraph {
+    func connectAdjacentLegs(remainingLegs: [ResolvedLeg], optionsByLeg: [UUID: [LegTripOption]]) -> TimingConnectionGraph {
         guard remainingLegs.count > 1 else {
             print("4/6 Created Timing Graph")
             return TimingConnectionGraph(connectionsByOption: [:])
@@ -111,10 +102,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    func nextAlternativeDeparture(
-        after optionIndex: Int,
-        in options: [LegTripOption]
-    ) -> Date? {
+    func nextAlternativeDeparture(after optionIndex: Int, in options: [LegTripOption]) -> Date? {
         let selectedDeparture = options[optionIndex].departure
         return options.dropFirst(optionIndex + 1)
             .first { $0.departure > selectedDeparture }?

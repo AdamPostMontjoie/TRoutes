@@ -465,9 +465,7 @@ actor JourneyEngine {
         isVehicleSearchActive = false
     }
 
-    private func activeVehicleSearchStop(
-        for journey: JourneyState
-    ) -> ResolvedStop? {
+    private func activeVehicleSearchStop(for journey: JourneyState) -> ResolvedStop? {
         guard isVehicleSearchActive else { return nil }
         guard journey.trackedVehicleId == nil,
               journey.monitoringMode == .surface,
@@ -478,11 +476,7 @@ actor JourneyEngine {
         return currentStop
     }
 
-    private func handleVehicleSearchResult(
-        from update: JourneyTimingUpdate,
-        target: ResolvedStop?,
-        context: JourneyTimingContext
-    ) async {
+    private func handleVehicleSearchResult(from update: JourneyTimingUpdate, target: ResolvedStop?, context: JourneyTimingContext) async {
         guard isVehicleSearchActive,
               let target,
               let journey = activeJourney,
