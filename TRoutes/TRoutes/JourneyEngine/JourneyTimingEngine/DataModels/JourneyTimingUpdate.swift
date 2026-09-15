@@ -7,21 +7,13 @@
 
 import Foundation
 
-/// Predictions for one existing JourneyState prediction target, projected from
-/// the combined route-wide response. Match this ID against
-/// `PredictionState.predictedStop.id` when applying the update.
 struct PredictionSlice: Equatable, Sendable {
     let predictedStopId: UUID
-    /// Up to three chronological board items, prioritizing live calls when
-    /// selecting them and using schedules only to fill empty slots.
-    let predictions: [TransitPrediction]
-    /// Only calls present in the current predictions response. Tracking must not
-    /// treat scheduled filler as an observed vehicle.
+    let displayPredictions: [TransitPrediction]
     let livePredictions: [TransitPrediction]
 }
 
-/// Transient output delivered to JourneyAction. This is not persisted directly;
-/// JourneyAction copies its durable timing fields into JourneyTimingState.
+///Response from JourneyTimingEngine to JourneyEngine
 struct JourneyTimingUpdate: Equatable, Sendable {
     let resolvedRouteId: UUID
     let context: JourneyTimingContext

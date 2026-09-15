@@ -176,7 +176,7 @@ extension JourneyTimingEngine {
             timeSource: journey.legs[0].departureTimeSource,
             destinationArrivalTime: journey.destinationArrival,
             selectedTripIds: journey.legs.map(\.tripId),
-            confidence: journey.confidence
+            sourceComposition: journey.sourceComposition
         )
     }
 
@@ -231,7 +231,7 @@ extension JourneyTimingEngine {
         var warnings: [TimingWarning] = []
 
         for option in journey.legs {
-            if option.confidence == .scheduled {
+            if option.sourceComposition == .scheduled {
                 appendWarning(.scheduleOnly(legId: option.legId), to: &warnings)
             }
 
@@ -355,7 +355,7 @@ extension JourneyTimingEngine {
             .sorted { callSortTime($0) < callSortTime($1) }
 
         var observedLiveTripIds = Set<String>()
-        var observedLiveCalls: [(call: StopCall, prediction: TransitPrediction)] = []
+        var observedLiveCalls: [(call: TripStopTiming, prediction: TransitPrediction)] = []
         for call in sortedLiveCalls {
             guard observedLiveTripIds.insert(call.key.tripId).inserted,
                   let prediction = makeTransitPrediction(
@@ -388,7 +388,7 @@ extension JourneyTimingEngine {
 
         return PredictionSlice(
             predictedStopId: target.id,
-            predictions: selectedCalls
+            displayPredictions: selectedCalls
                 .sorted { callSortTime($0.call) < callSortTime($1.call) }
                 .map { $0.prediction },
             livePredictions: observedLiveCalls.map { $0.prediction }
@@ -396,7 +396,7 @@ extension JourneyTimingEngine {
     }
 
     func makeTransitPrediction(
-        from call: StopCall,
+        from call: TripStopTiming,
         now: Date
     ) -> TransitPrediction? {
         guard let predictionId = call.predictionId ?? call.scheduleId else {
@@ -449,7 +449,7 @@ extension JourneyTimingEngine {
 
     func buildCoverageByLeg(
         queryPlan: TimingQueryPlan,
-        mergedCalls: [StopCall],
+        mergedCalls: [TripStopTiming],
         optionsByLeg: [UUID: [LegTripOption]]
     ) -> [UUID: LegTimingCoverage] {
         Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
@@ -494,7 +494,7 @@ extension JourneyTimingEngine {
         context: JourneyTimingContext,
         generation: UInt64,
         fetchedAt: Date,
-        mergedCalls: [StopCall],
+        mergedCalls: [TripStopTiming],
         optionsByLeg: [UUID: [LegTripOption]],
         coverageByLeg: [UUID: LegTimingCoverage],
         selection: JourneyTimingSelection

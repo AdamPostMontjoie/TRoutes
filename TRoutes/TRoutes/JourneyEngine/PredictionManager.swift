@@ -2,6 +2,8 @@
 //  PredictionManager.swift
 //  TRoutes
 //
+//  Created by Adam Post on 6/19/26.
+//
 
 import Foundation
 import ComposableArchitecture
@@ -23,7 +25,7 @@ actor PredictionManager {
     private var scheduleCache: [String: ScheduleCache] = [:]
 
     struct TimingScheduleCache {
-        let calls: [StopCall]
+        let calls: [TripStopTiming]
         let expiration: Date
     }
     private var timingScheduleCache: [TimingQueryKey: TimingScheduleCache] = [:]
@@ -99,7 +101,7 @@ actor PredictionManager {
                 requestType
             )
 
-            let schedules: [StopCall]
+            let schedules: [TripStopTiming]
             if let cached = timingScheduleCache[key], cached.expiration > now {
                 schedules = cached.calls
             } else {

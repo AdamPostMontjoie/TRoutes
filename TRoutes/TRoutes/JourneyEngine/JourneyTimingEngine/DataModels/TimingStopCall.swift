@@ -12,15 +12,12 @@ enum TimingSource: String, Codable, Sendable {
     case schedule
 }
 
-/// Arrival and departure remain separate because a leg boards using departure
-/// time and reaches its destination using arrival time.
 struct StopTimes: Equatable, Sendable {
     let arrival: Date?
     let departure: Date?
 }
 
-/// Identifies one trip's call at one stop. `stopSequence` distinguishes repeated
-/// visits to the same stop when that information is available.
+/// Identifies a trip's stop occurrence; sequence distinguishes repeats when available.
 struct TripStopKey: Hashable, Sendable {
     let tripId: String
     let stopId: String
@@ -30,25 +27,20 @@ struct TripStopKey: Hashable, Sendable {
 enum StopCallAvailability: String, Sendable {
     case scheduledOnly
     case predicted
-    /// The call had realtime data in a recent snapshot, but is temporarily
-    /// absent from the current prediction response.
+    /// Realtime timing was present recently but is missing now.
     case predictionLost
     case departed
     case canceled
 }
 
-/// The two normalized API result sets before schedule/prediction overlay.
-/// Keeping them separate makes the merge boundary explicit.
+/// Normalized prediction and schedule records before merging.
 struct UnmergedTimingCalls: Equatable, Sendable {
-    let predictionCalls: [StopCall]
-    let scheduleCalls: [StopCall]
+    let predictionCalls: [TripStopTiming]
+    let scheduleCalls: [TripStopTiming]
 }
 
-/// The merged scheduled and real-time facts for one trip at one stop.
-///
-/// A prediction overlays the corresponding schedule when the MBTA supplies a
-/// schedule relationship. Prediction-only added service has no scheduled value.
-struct StopCall: Equatable, Sendable {
+/// Arrival/departure timing from schedule, prediction, or both for one trip at one stop.
+struct TripStopTiming: Equatable, Sendable {
     let key: TripStopKey
     let routeId: String
     let directionId: Int
@@ -82,8 +74,7 @@ struct StopCall: Equatable, Sendable {
             ?? scheduled?.arrival
     }
 
-    /// Uses the same precedence as `effectiveDeparture`, allowing the selected
-    /// recommendation to preserve whether its time was live or scheduled.
+    /// Source of the selected departure time.
     var effectiveDepartureSource: TimingSource? {
         if predicted?.departure != nil || predicted?.arrival != nil {
             return .prediction

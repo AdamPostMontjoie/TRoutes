@@ -10,7 +10,7 @@ import Foundation
 extension JourneyTimingEngine {
     func buildTripOptionsByLeg(
         queryPlan: TimingQueryPlan,
-        mergedCalls: [StopCall],
+        mergedCalls: [TripStopTiming],
         context: JourneyTimingContext,
         now: Date
     ) -> [UUID: [LegTripOption]] {
@@ -34,7 +34,7 @@ extension JourneyTimingEngine {
     /// calls, rejects invalid pairs, and returns valid options chronologically.
     func buildTripOptions(
         for leg: TimingLegPlan,
-        from calls: [StopCall],
+        from calls: [TripStopTiming],
         isInProgressLeg: Bool,
         onboardTripId: String?,
         now: Date
@@ -90,8 +90,8 @@ extension JourneyTimingEngine {
     func matchingCalls(
         at endpoint: TimingEndpointPlan,
         services: Set<TimingRouteDirection>,
-        from calls: [StopCall]
-    ) -> [StopCall] {
+        from calls: [TripStopTiming]
+    ) -> [TripStopTiming] {
         calls.filter { call in
             endpoint.acceptableStopIds.contains(call.key.stopId)
                 && services.contains(
@@ -105,8 +105,8 @@ extension JourneyTimingEngine {
 
     func makeLegTripOption(
         for leg: TimingLegPlan,
-        origin: StopCall,
-        destination: StopCall,
+        origin: TripStopTiming,
+        destination: TripStopTiming,
         isInProgressLeg: Bool,
         now: Date
     ) -> LegTripOption? {
@@ -136,7 +136,7 @@ extension JourneyTimingEngine {
         )
     }
 
-    func isUsableForTravel(_ call: StopCall) -> Bool {
+    func isUsableForTravel(_ call: TripStopTiming) -> Bool {
         switch call.availability {
         case .canceled, .departed:
             return false
@@ -145,11 +145,11 @@ extension JourneyTimingEngine {
         }
     }
 
-    func isUsableCompletedOrigin(_ call: StopCall) -> Bool {
+    func isUsableCompletedOrigin(_ call: TripStopTiming) -> Bool {
         call.availability != .canceled && !isCanceledOrSkipped(call)
     }
 
-    func isCanceledOrSkipped(_ call: StopCall) -> Bool {
+    func isCanceledOrSkipped(_ call: TripStopTiming) -> Bool {
         [call.status, call.scheduleRelationship]
             .compactMap { $0?.lowercased() }
             .contains { value in

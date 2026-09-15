@@ -7,29 +7,28 @@
 
 import Foundation
 
-enum TimingConfidence: String, Codable, Sendable {
+/// Summarizes prediction and schedule availability at leg endpoints.
+enum TimingSourceComposition: String, Codable, Sendable {
     case predicted
     case mixed
     case scheduled
 }
 
-/// One usable same-trip option for traveling from a leg's origin to destination.
-/// The solver constructs this only after both endpoint calls have been matched.
+/// A same-trip timing option between a leg's endpoints.
 struct LegTripOption: Equatable, Sendable, Identifiable {
     let legId: UUID
-    let origin: StopCall
-    let destination: StopCall
+    let origin: TripStopTiming
+    let destination: TripStopTiming
     let departure: Date
     let arrival: Date
     let departureTimeSource: TimingSource
-    let confidence: TimingConfidence
+    let sourceComposition: TimingSourceComposition
 
-    /// Rejects mismatched stop calls here so later journey solving can assume
-    /// that every option is one forward-moving ride on a single service.
+    /// Rejects mismatched trip-stop timings before journey solving.
     init?(
         legId: UUID,
-        origin: StopCall,
-        destination: StopCall
+        origin: TripStopTiming,
+        destination: TripStopTiming
     ) {
         guard origin.key.tripId == destination.key.tripId,
               origin.routeId == destination.routeId,
@@ -50,11 +49,11 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
 
         switch (origin.availability, destination.availability) {
         case (.predicted, .predicted):
-            confidence = .predicted
+            sourceComposition = .predicted
         case (.scheduledOnly, .scheduledOnly):
-            confidence = .scheduled
+            sourceComposition = .scheduled
         default:
-            confidence = .mixed
+            sourceComposition = .mixed
         }
     }
 
@@ -165,11 +164,11 @@ struct TimedJourney: Equatable, Sendable {
         legs[legs.count - 1].arrival
     }
 
-    var confidence: TimingConfidence {
-        if legs.allSatisfy({ $0.confidence == .predicted }) {
+    var sourceComposition: TimingSourceComposition {
+        if legs.allSatisfy({ $0.sourceComposition == .predicted }) {
             return .predicted
         }
-        if legs.allSatisfy({ $0.confidence == .scheduled }) {
+        if legs.allSatisfy({ $0.sourceComposition == .scheduled }) {
             return .scheduled
         }
         return .mixed
@@ -198,7 +197,7 @@ struct RouteTimingSnapshot: Equatable, Sendable {
     let context: JourneyTimingContext
     let generation: UInt64
     let fetchedAt: Date
-    let calls: [TripStopKey: StopCall]
+    let calls: [TripStopKey: TripStopTiming]
     let optionsByLeg: [UUID: [LegTripOption]]
     let coverageByLeg: [UUID: LegTimingCoverage]
     let etaJourney: TimedJourney?

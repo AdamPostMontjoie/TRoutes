@@ -2,11 +2,12 @@
 //  JourneyTimingContext.swift
 //  TRoutes
 //
+//  Created by Adam Post on 9/13/26.
+//
+
 import Foundation
 
-/// The progression facts JourneyTimingEngine needs in order to interpret times.
-/// JourneyEngine derives this from JourneyState; the timing engine never advances
-/// the journey or attempts to infer whether the passenger boarded.
+/// The progression facts JourneyTimingEngine uses in order to interpret times.
 struct JourneyTimingContext: Equatable, Sendable {
     let timingLegId: UUID
     let phase: Phase

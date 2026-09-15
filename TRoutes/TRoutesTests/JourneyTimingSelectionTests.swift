@@ -221,7 +221,7 @@ struct JourneyTimingSelectionTests {
         arrival: Date,
         availability: StopCallAvailability = .predicted
     ) -> LegTripOption? {
-        let origin = StopCall(
+        let origin = TripStopTiming(
             key: TripStopKey(
                 tripId: tripId,
                 stopId: originStopId,
@@ -240,7 +240,7 @@ struct JourneyTimingSelectionTests {
             scheduleRelationship: nil,
             availability: availability
         )
-        let destination = StopCall(
+        let destination = TripStopTiming(
             key: TripStopKey(
                 tripId: tripId,
                 stopId: destinationStopId,

@@ -13,8 +13,8 @@ struct MBTAClient {
     var fetchTransitTimes: @Sendable (any PredictionTarget, [String], MBTARequestType) async throws -> [TransitPrediction]
     var fetchSchedule: @Sendable (any PredictionTarget, MBTARequestType) async throws -> [TransitSchedule]
     // Route-wide journey timing requests: stop IDs, route IDs, request priority
-    var fetchTimingPredictions: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [StopCall]
-    var fetchTimingSchedules: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [StopCall]
+    var fetchTimingPredictions: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [TripStopTiming]
+    var fetchTimingSchedules: @Sendable (_ stopIds: [String], _ routeIds: [String], _ requestType: MBTARequestType) async throws -> [TripStopTiming]
     //form
     var fetchDirections: @Sendable (String, MBTARequestType) async throws -> [TransitDirection]
     var fetchBranches: @Sendable (String, String, MBTARequestType) async throws -> [TransitBranch]
@@ -266,7 +266,7 @@ extension MBTAClient:DependencyKey {
             let predictionResponse = try decoder.decode(PredictionResponse.self, from: data)
             let isoFormatter = ISO8601DateFormatter()
             let now = Date()
-            var calls: [StopCall] = []
+            var calls: [TripStopTiming] = []
 
             for prediction in predictionResponse.data {
                 let arrivalDate = prediction.attributes.arrivalTime.flatMap { isoFormatter.date(from: $0) }
@@ -290,7 +290,7 @@ extension MBTAClient:DependencyKey {
                       let routeId = prediction.relationships.route?.data?.id,
                       let directionId = prediction.attributes.directionId else { continue }
 
-                calls.append(StopCall(
+                calls.append(TripStopTiming(
                     key: TripStopKey(
                         tripId: tripId,
                         stopId: stopId,
@@ -366,7 +366,7 @@ extension MBTAClient:DependencyKey {
                     return nil
                 }
 
-                return StopCall(
+                return TripStopTiming(
                     key: TripStopKey(
                         tripId: tripId,
                         stopId: stopId,

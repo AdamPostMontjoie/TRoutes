@@ -308,11 +308,11 @@ enum JourneyAction: Equatable {
         to predictionState: inout PredictionState
     ) {
         predictionState.cleanArrivedTrains(
-            displayPredictions: slice.predictions,
+            displayPredictions: slice.displayPredictions,
             livePredictions: slice.livePredictions
         )
         let stopId = predictionState.predictedStop.mbtaStopId
-        if slice.predictions.isEmpty {
+        if slice.displayPredictions.isEmpty {
             predictionState.loadingState = .unavailable(
                 stopId: stopId,
                 message: "No times available"
@@ -320,7 +320,7 @@ enum JourneyAction: Equatable {
         } else {
             predictionState.loadingState = .loaded(
                 stopId: stopId,
-                times: slice.predictions.map(\.display)
+                times: slice.displayPredictions.map(\.display)
             )
         }
     }

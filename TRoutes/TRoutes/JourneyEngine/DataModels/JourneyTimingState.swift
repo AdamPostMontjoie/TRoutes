@@ -22,15 +22,14 @@ struct RecommendedDeparture: Equatable, Codable, Sendable {
     let timeSource: TimingSource
     let destinationArrivalTime: Date
     let selectedTripIds: [String]
-    let confidence: TimingConfidence
+    let sourceComposition: TimingSourceComposition
 
     var firstTripId: String? {
         selectedTripIds.first
     }
 }
 
-/// The user-facing classification of the next transfer on the journey's
-/// currently assumed path. The connection retains the facts used to derive it.
+/// The user-facing warning of the next transfer on the journey's currently assumed path.
 enum ConnectionWarning: String, Equatable, Codable, Sendable {
     case none
     case tight
@@ -39,9 +38,7 @@ enum ConnectionWarning: String, Equatable, Codable, Sendable {
     case likelyMiss
 }
 
-/// The small persisted timing summary owned by JourneyState. Raw API observations
-/// and query plans remain inside JourneyTimingEngine. PredictionManager owns
-/// the reusable schedule cache.
+/// The small persisted timing summary owned by JourneyState.
 struct JourneyTimingState: Equatable, Codable, Sendable {
     var status: JourneyTimingStatus = .idle
     var refreshSessionId: UUID?

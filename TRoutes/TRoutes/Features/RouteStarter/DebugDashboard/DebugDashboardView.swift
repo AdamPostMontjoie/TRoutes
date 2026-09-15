@@ -177,7 +177,7 @@ struct DebugDashboardView: View {
                     recommendation.selectedTripIds.joined(separator: ", ")
                 )
             )
-            rows.append(("Confidence", recommendation.confidence.rawValue))
+            rows.append(("Timing sources", recommendation.sourceComposition.rawValue))
         } else {
             rows.append(("Recommendation", "nil"))
         }
