@@ -5,11 +5,11 @@ enum JourneyCommand: Equatable {
     case executeExit(stopId:String)//user has left the stop
     case missedVehicle(stopId: String)//we missed the train
     case confirmDeparture(stopId: String)//w
-    case handleNewPredictions(predictionResults:[TransitPrediction])
+    case journeyTimingUpdate(update:JourneyTimingUpdate)
     case refreshTimes(stopId: String, isUserInitiated: Bool)
     case locationAuthorizationDenied
     case monitoringFailed(stopId: String, error: locationError, message: String? = nil)
-    case handleVehicleSearchResult(vehicleId: String, tripId: String)
+    case vehicleSearchResult(vehicleId: String, tripId: String)
 }
 
 ///Determines JourneyCommand Validity, Runs JourneyAction, and emits JourneyEffects
@@ -46,12 +46,18 @@ struct JourneyCommandValidator {
                 }
                 
                 
-                effects.append(contentsOf: JourneyAction.departFromStop.reduce(state: &state))
-                
-                // If we exited without a tracked vehicle on surface, start searching
-                if state.trackedVehicleId == nil && state.monitoringMode == .surface {
+                let departureEffects = JourneyAction.departFromStop.reduce(
+                    state: &state
+                )
+
+                // JourneyEngine owns vehicle recovery. Put this effect before
+                // the timing refresh so that refresh can include the current
+                // progression stop in its otherwise route-wide request.
+                if state.trackedVehicleId == nil
+                    && state.monitoringMode == .surface {
                     effects.append(.searchForVehicle)
                 }
+                effects.append(contentsOf: departureEffects)
                 
                 return effects
             } else {
@@ -78,7 +84,7 @@ struct JourneyCommandValidator {
                 )
                 
                 effects.append(.monitorStop(currentStop))
-                effects.append(.fetchPredictions)
+                effects.append(.updateJourneyTiming)
             } else if state.movementStatus == .enRoute {
                 effects.append(contentsOf: JourneyAction.backtrackToStop.reduce(state: &state))
             } else {
@@ -86,13 +92,25 @@ struct JourneyCommandValidator {
             }
             return effects
         
-        case let .handleNewPredictions(predictions):
-            return JourneyAction.handleNewPredictions.reduce(state: &state, predictions:predictions)
+        case let .journeyTimingUpdate(update):
+            let isNewRefreshSession = update.refreshSessionId
+                != state.timingState.refreshSessionId
+            guard update.resolvedRouteId == state.route.id,
+                  update.context == state.timingContext,
+                  isNewRefreshSession
+                    || update.generation > state.timingState.generation else {
+                return []
+            }
+
+            return JourneyAction.handleJourneyTimingUpdate.reduce(
+                state: &state,
+                timingUpdate: update
+            )
             
             //determine to emit updatetrackedvehicle effect
         case let .refreshTimes(stopId: id, isUserInitiated: isUserInitiated):
             if let currentStop = state.currentStop, currentStop.acceptableStopIds.contains(id) {
-                return JourneyAction.evaluatePredictionRefresh.reduce(state: &state, isManual: isUserInitiated)
+                return JourneyAction.evaluateTimingRefresh.reduce(state: &state, isManual: isUserInitiated)
             }
             return []
             
@@ -118,9 +136,12 @@ struct JourneyCommandValidator {
                 "monitoring failed for \(stopId): \(error)"
             }
             return [.sendNotification(notificationMessage, user: userMessage)]
-            
-        case let .handleVehicleSearchResult(vehicleId, tripId):
-            guard state.monitoringMode == .surface, state.trackedVehicleId == nil else { return [] }
+
+        case let .vehicleSearchResult(vehicleId, tripId):
+            guard state.monitoringMode == .surface,
+                  state.trackedVehicleId == nil else {
+                return []
+            }
             state.trackedVehicleId = vehicleId
             state.trackedTripId = tripId
             return [
@@ -154,7 +175,7 @@ struct JourneyCommandValidator {
                 loadingState: .loading(stopId: currentStop.mbtaStopId)
             )
             effects.append(.monitorStop(currentStop))
-            effects.append(.fetchPredictions)
+            effects.append(.updateJourneyTiming)
         } else {
             effects.append(contentsOf: JourneyAction.backtrackToStop.reduce(state: &state))
         }

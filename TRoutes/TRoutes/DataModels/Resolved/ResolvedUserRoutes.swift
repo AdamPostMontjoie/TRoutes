@@ -22,14 +22,13 @@ struct ResolvedStop:Equatable, Codable, Identifiable, PredictionTarget {
     var stopName: String
     var longitude: Double
     var latitude: Double
-    var address: String // display on review feature
+    var address: String
     var acceptableStopIds: [String]
     var journeyRole: JourneyStopRole = .boarding
     var monitoringMode:MonitoringMode
     var transitType: GTFSTransitType
     var overlapsWithNext: Bool
     var stopType: StopType
-    
     var predictionRouteId: String { mbtaRouteId }
     var predictionStopIds: [String] { acceptableStopIds.isEmpty ? [mbtaStopId] : acceptableStopIds }
     var predictionDirectionId: Int { mbtaDirectionId }

@@ -16,6 +16,9 @@ struct JourneyState: Equatable, Codable {
     var legIndex:Int = 0
     var movementStatus: MovementStatus = .enRoute
     
+    // Timing State
+    var timingState = JourneyTimingState()
+
     //Prediction State
     var activeLegPrediction: PredictionState? = nil
     var transferLegPrediction: PredictionState? = nil
@@ -45,6 +48,60 @@ struct JourneyState: Equatable, Codable {
             return nil
         }
         return legOrder[legIndex]
+    }
+
+    /// Translates JourneyEngine's progression state into the smaller context
+    /// needed for timing. In particular, `.enRoute` alone is not proof that the
+    /// passenger is onboard because a new journey starts en route to boarding.
+    var timingContext: JourneyTimingContext? {
+        guard let currentStop, !isEndOfJourney else { return nil }
+
+        switch currentStop.journeyRole {
+        case .boarding:
+            guard let currentLeg else { return nil }
+            let phase: JourneyTimingContext.Phase
+            if movementStatus == .atStop {
+                phase = .atBoardingStop
+            } else if legIndex > 0 {
+                phase = .transferring
+            } else {
+                phase = .approachingBoarding
+            }
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: phase
+            )
+
+        case .intermediate:
+            guard let currentLeg else { return nil }
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: .onboard(tripId: trackedTripId)
+            )
+
+        case .transfer:
+            if movementStatus == .enRoute {
+                guard let currentLeg else { return nil }
+                return JourneyTimingContext(
+                    timingLegId: currentLeg.id,
+                    phase: .onboard(tripId: trackedTripId)
+                )
+            }
+
+            let nextLegIndex = legIndex + 1
+            guard legOrder.indices.contains(nextLegIndex) else { return nil }
+            return JourneyTimingContext(
+                timingLegId: legOrder[nextLegIndex].id,
+                phase: .transferring
+            )
+
+        case .final:
+            guard movementStatus == .enRoute, let currentLeg else { return nil }
+            return JourneyTimingContext(
+                timingLegId: currentLeg.id,
+                phase: .onboard(tripId: trackedTripId)
+            )
+        }
     }
 
     func acceptableRouteIds(for stop: ResolvedStop) -> [String] {
@@ -105,6 +162,7 @@ struct JourneyState: Equatable, Codable {
         case stopIndex
         case legIndex
         case movementStatus
+        case timingState
         case activeLegPrediction
         case transferLegPrediction
         case monitoringMode
@@ -124,6 +182,7 @@ struct JourneyState: Equatable, Codable {
         stopIndex = try container.decode(Int.self, forKey: .stopIndex)
         legIndex = try container.decode(Int.self, forKey: .legIndex)
         movementStatus = try container.decode(MovementStatus.self, forKey: .movementStatus)
+        timingState = try container.decodeIfPresent(JourneyTimingState.self, forKey: .timingState) ?? JourneyTimingState()
         activeLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .activeLegPrediction)
         transferLegPrediction = try container.decodeIfPresent(PredictionState.self, forKey: .transferLegPrediction)
         monitoringMode = try container.decode(MonitoringMode.self, forKey: .monitoringMode)
@@ -197,8 +256,8 @@ struct PredictionState: Equatable, Codable {
     var arrivedTrains: [ArrivedTrain] = []
     var lastObservedPredictions: [TransitPrediction] = []
     
-    mutating func cleanArrivedTrains(newPredictions: [TransitPrediction]) {
-        let newTripIds = Set(newPredictions.compactMap { $0.tripId })
+    mutating func cleanArrivedTrains(displayPredictions: [TransitPrediction], livePredictions: [TransitPrediction]) {
+        let newTripIds = Set(livePredictions.compactMap { $0.tripId })
         for oldPrediction in lastObservedPredictions {
             guard let tripId = oldPrediction.tripId else { continue }
             if !newTripIds.contains(tripId) {
@@ -214,7 +273,7 @@ struct PredictionState: Equatable, Codable {
             }
         }
         arrivedTrains.removeAll { Date().timeIntervalSince($0.arrivedAt) > 180 }
-        lastObservedPredictions = newPredictions
+        lastObservedPredictions = displayPredictions
     }
 }
 

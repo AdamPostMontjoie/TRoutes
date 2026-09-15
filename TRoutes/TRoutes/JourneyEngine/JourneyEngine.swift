@@ -36,12 +36,12 @@ actor JourneyEngine {
     private var locationListeningTask: Task<Void, Never>?
     private var undergroundListeningTask: Task<Void, Never>?
     private var motionListeningTask: Task<Void, Never>?
-    private var predictionRefreshTask: Task<Void, Never>?
-    private var vehicleSearchTask: Task<Void, Never>?
+    private var timingRefreshTask: Task<Void, Never>?
+    private var isVehicleSearchActive = false
     private var loadingTask: Task<Void, Never>?
     private var routeEndTimerTask: Task<Void, Never>?
     private var lastManualRefresh: Date?
-    private var lastPredictionFetchTime: Date?
+    private var lastTimingRefreshTime: Date?
     
     //journey
     private var activeJourney:JourneyState?
@@ -276,9 +276,12 @@ actor JourneyEngine {
                 print("JourneyEngine effect: registerRegion for \(stop.mbtaStopId)")
                 await monitorNextStop(stop: stop)
                 
-            case .fetchPredictions:
-                print("JourneyEngine effect: fetchPredictions")
-                await fetchPredictions()
+            case .updateJourneyTiming:
+                print("JourneyEngine effect: updateJourneyTiming")
+                lastTimingRefreshTime = Date()
+                // Timing is advisory. Do not hold up tracking-critical effects
+                // while its network snapshot is being collected.
+                Task { await self.fetchJourneyTiming() }
                 
             case let .sendNotification(debug, user):
                 print("JourneyEngine effect: sendNotification - \(debug)")
@@ -296,6 +299,9 @@ actor JourneyEngine {
                 await endRoute()
             
             case let .updateTrackedVehicle(vehicleId, tripId):
+                if vehicleId != nil {
+                    stopVehicleSearch()
+                }
                 guard self.activeJourney?.monitoringMode == .underground else {
                     continue
                 }
@@ -323,7 +329,7 @@ actor JourneyEngine {
                 if tripId != self.matchedPath?.tripId {
                     await self.updateLivePath(tripId: tripId)
                 }
-                
+
             case .searchForVehicle:
                 print("JourneyEngine effect: searchForVehicle")
                 startVehicleSearch()
@@ -399,9 +405,9 @@ actor JourneyEngine {
         }
     }
     
-    // MARK: - MBTA API & Predictions
-    
-    func manualRefreshPredictions() async {
+    // MARK: - Journey Timing
+
+    func manualRefreshTiming() async {
         guard let stopId = self.activeJourney?.currentStop?.mbtaStopId else { return }
 
         // Debounce: prevent spamming refresh
@@ -414,16 +420,84 @@ actor JourneyEngine {
         await self.validateJourneyCommand(.refreshTimes(stopId: stopId, isUserInitiated: true))
     }
     
-    private func fetchPredictions() async {
-        lastPredictionFetchTime = Date()
-        
-        guard let currentPredictionState = self.activeJourney?.currentPredictionState else { return }
+    private func fetchJourneyTiming() async {
+        guard
+            let journey = self.activeJourney,
+            let context = journey.timingContext
+        else { return }
+        let vehicleSearchStop = activeVehicleSearchStop(for: journey)
+        let additionalPredictionStopIds = vehicleSearchStop.map {
+            Set([$0.id])
+        } ?? []
         do {
-            let results = try await PredictionManager.shared.fetchPredictionsWithFallback(for: currentPredictionState, requestType: .currentStopPrediction)
-            await validateJourneyCommand(.handleNewPredictions(predictionResults: results))
-        } catch {
-            handleVehicleFetchError(error: error)
+            let update = try await JourneyTimingEngine.shared.refreshJourneyTiming(
+                route: journey.route,
+                context: context,
+                additionalPredictionStopIds: additionalPredictionStopIds
+            )
+            await validateJourneyCommand(.journeyTimingUpdate(update: update))
+            await handleVehicleSearchResult(
+                from: update,
+                target: vehicleSearchStop,
+                context: context
+            )
         }
+        catch {
+            // A timing failure must not affect journey progression or tracking.
+            print("JourneyEngine timing refresh failed: \(error)")
+        }
+    }
+
+    // MARK: - Vehicle Search
+
+    private func startVehicleSearch() {
+        guard let journey = activeJourney,
+              journey.trackedVehicleId == nil,
+              journey.monitoringMode == .surface,
+              journey.currentStop != nil else {
+            isVehicleSearchActive = false
+            return
+        }
+        isVehicleSearchActive = true
+    }
+
+    private func stopVehicleSearch() {
+        isVehicleSearchActive = false
+    }
+
+    private func activeVehicleSearchStop(for journey: JourneyState) -> ResolvedStop? {
+        guard isVehicleSearchActive else { return nil }
+        guard journey.trackedVehicleId == nil,
+              journey.monitoringMode == .surface,
+              let currentStop = journey.currentStop else {
+            stopVehicleSearch()
+            return nil
+        }
+        return currentStop
+    }
+
+    private func handleVehicleSearchResult(from update: JourneyTimingUpdate, target: ResolvedStop?, context: JourneyTimingContext) async {
+        guard isVehicleSearchActive,
+              let target,
+              let journey = activeJourney,
+              journey.timingContext == context,
+              journey.currentStop?.id == target.id,
+              journey.trackedVehicleId == nil,
+              journey.monitoringMode == .surface,
+              let slice = update.predictionSlices.first(where: {
+                  $0.predictedStopId == target.id
+              }),
+              let prediction = slice.livePredictions.first(where: {
+                  $0.vehicleId != nil && $0.tripId != nil
+              }),
+              let vehicleId = prediction.vehicleId,
+              let tripId = prediction.tripId else {
+            return
+        }
+
+        await validateJourneyCommand(
+            .vehicleSearchResult(vehicleId: vehicleId, tripId: tripId)
+        )
     }
     
     private func handleVehicleFetchError(error: Error){
@@ -441,63 +515,15 @@ actor JourneyEngine {
         }
     }
     
-    // MARK: - Vehicle Search
-    
-    private func startVehicleSearch() {
-        stopVehicleSearch()
-        vehicleSearchTask = Task {
-            while !Task.isCancelled {
-                guard let journey = self.activeJourney,
-                      journey.trackedVehicleId == nil,
-                      journey.monitoringMode == .surface,
-                      let currentStop = journey.currentStop else {
-                    return
-                }
-                
-                let searchPredictionState = PredictionState(
-                    predictedStop: currentStop,
-                    predictedStopType: .boarding,
-                    acceptableRouteIds: journey.acceptableRouteIds(for: currentStop),
-                    loadingState: .loading(stopId: currentStop.mbtaStopId)
-                )
-                
-                do {
-                    let results = try await PredictionManager.shared.fetchPredictionsWithFallback(
-                        for: searchPredictionState,
-                        requestType: .currentStopPrediction
-                    )
-                    
-                    if let first = results.first(where: { $0.vehicleId != nil && $0.tripId != nil }),
-                       let vehicleId = first.vehicleId,
-                       let tripId = first.tripId {
-                        print("JourneyEngine: Vehicle search found vehicle: \(vehicleId) trip: \(tripId)")
-                        await self.validateJourneyCommand(.handleVehicleSearchResult(vehicleId: vehicleId, tripId: tripId))
-                        return
-                    }
-                } catch {
-                    print("JourneyEngine: Vehicle search error: \(error.localizedDescription)")
-                }
-                
-                print("JourneyEngine: Vehicle search found no vehicle. Retrying in 30 seconds.")
-                try? await Task.sleep(for: .seconds(30))
-            }
-        }
-    }
-    
-    private func stopVehicleSearch() {
-        vehicleSearchTask?.cancel()
-        vehicleSearchTask = nil
-    }
-    
     // MARK: - State Publishing Helpers
     
-    private func managePredictionTimer(for journey: JourneyState) {
-        if journey.activeLegPrediction != nil || journey.transferLegPrediction != nil {
-            if predictionRefreshTask == nil {
-                startPredictionRefreshTimer()
+    private func manageTimingRefreshTimer(for journey: JourneyState) {
+        if journey.timingContext != nil {
+            if timingRefreshTask == nil {
+                startTimingRefreshTimer()
             }
         } else {
-            stopPredictionRefreshTimer()
+            stopTimingRefreshTimer()
         }
     }
     
@@ -510,7 +536,7 @@ actor JourneyEngine {
         self.activeJourney = journeyToSave
     
         userDefaultsClient.saveActiveJourney(journeyToSave)
-        managePredictionTimer(for: journeyToSave)
+        manageTimingRefreshTimer(for: journeyToSave)
         
         for continuation in journeyUpdateContinuations.values {
             continuation.yield(.activeJourneyChanged(journeyToSave))
@@ -519,7 +545,7 @@ actor JourneyEngine {
     
     private func clearActiveJourneyAndPublish() {
         userDefaultsClient.clearActiveJourney()
-        stopPredictionRefreshTimer()
+        stopTimingRefreshTimer()
         for continuation in journeyUpdateContinuations.values {
             continuation.yield(.activeJourneyChanged(nil))
         }
@@ -535,10 +561,10 @@ actor JourneyEngine {
     func endRoute() async {
         print("JourneyEngine ending route")
         clearActiveJourneyAndPublish()
-        stopPredictionRefreshTimer()
+        stopTimingRefreshTimer()
         stopVehicleSearch()
         
-        lastPredictionFetchTime = nil
+        lastTimingRefreshTime = nil
         routeEndTimerTask?.cancel()
         routeEndTimerTask = nil
         
@@ -554,16 +580,16 @@ actor JourneyEngine {
         await UndergroundManager.shared.killManager()
         await MotionManager.shared.stopCommands()
         await LiveActivityManager.shared.endActivity()
-        await PredictionManager.shared.clearScheduleCache()
+        await JourneyTimingEngine.shared.resetJourneyTiming()
     }
     
     // MARK: - Timers
     
-    private func startPredictionRefreshTimer() {
-        stopPredictionRefreshTimer()
-        predictionRefreshTask = Task {
+    private func startTimingRefreshTimer() {
+        stopTimingRefreshTimer()
+        timingRefreshTask = Task {
             while !Task.isCancelled {
-                let timeSinceLastFetch = lastPredictionFetchTime.map { Date().timeIntervalSince($0) } ?? 15.0
+                let timeSinceLastFetch = lastTimingRefreshTime.map { Date().timeIntervalSince($0) } ?? 15.0
                 let timeToWait = max(0, 15.0 - timeSinceLastFetch)
                 
                 try? await Task.sleep(nanoseconds: UInt64(timeToWait * 1_000_000_000))
@@ -577,9 +603,9 @@ actor JourneyEngine {
         }
     }
     
-    private func stopPredictionRefreshTimer() {
-        predictionRefreshTask?.cancel()
-        predictionRefreshTask = nil
+    private func stopTimingRefreshTimer() {
+        timingRefreshTask?.cancel()
+        timingRefreshTask = nil
     }
     
     ///Kills Journey in case user never leaves area
