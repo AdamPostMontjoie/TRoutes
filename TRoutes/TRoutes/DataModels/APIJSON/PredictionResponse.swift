@@ -13,6 +13,8 @@ struct PredictionResponse: Codable {
 
 struct TransitPrediction: Codable, Equatable, Hashable, Sendable {
     let display: String
+    let arrivalDate: Date?
+    let departureDate: Date?
     let vehicleId: String?
     let predictionId: String
     let tripId: String?

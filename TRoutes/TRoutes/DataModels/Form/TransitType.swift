@@ -11,11 +11,11 @@ enum RouteFetchStrategy {
 }
 
 enum TransitType: String, Codable, CaseIterable {
+    
     case redLine = "Red Line"
     case orangeLine = "Orange Line"
     case blueLine = "Blue Line"
     case mattapan = "Mattapan Trolley"
-    
     case greenLine = "Green Line"
     case commuterRail = "Commuter Rail"
     case bus = "MBTA Bus"

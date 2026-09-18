@@ -16,7 +16,6 @@ struct PinnedStop: Equatable, Codable, Identifiable, PredictionTarget {
     var stopName: String
     var transitType: TransitType
     var directionDestinations: [String]
-    
     var predictionRouteId: String { routeId }
     var predictionStopIds: [String] { [stationId] } // Use stationId to get all platforms
     var predictionDirectionId: Int { directionId }
