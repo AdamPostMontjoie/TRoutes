@@ -6,7 +6,6 @@
 //
 import CoreMotion
 import ComposableArchitecture
-import UserNotifications
 
 public enum MotionState: String, Sendable {
     case walking = "Walking"
@@ -34,6 +33,7 @@ actor MotionManager {
     
     @Shared(.isDebugEnabled) var isDebugEnabled = true
     @Shared(.isMotionEventsEnabled) var isMotionEventsEnabled = true
+    @Dependency(\.notificationsClient) var notificationsClient
     
     // MARK: - Jolt Detection State
     //
@@ -158,7 +158,7 @@ actor MotionManager {
     // It processes raw accelerometer data through 4 steps to determine
     // if the user is experiencing a train departure.
     
-    private func processAccelerometerData(x rawX: Double, y rawY: Double, z rawZ: Double) {
+    private func processAccelerometerData(x rawX: Double, y rawY: Double, z rawZ: Double) async {
         
         // ──────────────────────────────────────────────────────────────────
         // LOW-PASS VECTOR AVERAGING — Eliminate Walking Noise
@@ -268,13 +268,7 @@ actor MotionManager {
                 commandStreamContinuation?.yield(.executeExit(stopId: stopId))
             }
             
-            let content = UNMutableNotificationContent()
-            content.title = "DEPARTURE DETECTED!"
-            content.body = "MotionManager triggered a departure."
-            content.sound = .default
-            
-            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request)
+            await notificationsClient.debugNotification("MotionManager triggered a departure.")
         }
         
         // MARK: - Classify State

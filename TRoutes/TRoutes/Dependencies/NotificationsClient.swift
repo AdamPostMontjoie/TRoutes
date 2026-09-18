@@ -34,6 +34,7 @@ extension NotificationsClient: DependencyKey {
             content.title = "T Routes Debug"
             content.body = log
             content.sound = .default
+            content.interruptionLevel = .timeSensitive
 
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
@@ -61,6 +62,7 @@ extension NotificationsClient: DependencyKey {
             content.title = "T Routes"
             content.body = message
             content.sound = .default
+            content.interruptionLevel = .timeSensitive
             
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
