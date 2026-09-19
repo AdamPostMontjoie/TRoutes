@@ -22,6 +22,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
     let departure: Date
     let arrival: Date
     let departureTimeSource: TimingSource
+    let arrivalTimeSource: TimingSource
     let sourceComposition: TimingSourceComposition
 
     /// Rejects mismatched trip-stop timings before journey solving.
@@ -36,6 +37,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
               let departure = origin.effectiveDeparture,
               let departureTimeSource = origin.effectiveDepartureSource,
               let arrival = destination.effectiveArrival,
+              let arrivalTimeSource = destination.effectiveArrivalSource,
               arrival >= departure else {
             return nil
         }
@@ -46,6 +48,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
         self.departure = departure
         self.arrival = arrival
         self.departureTimeSource = departureTimeSource
+        self.arrivalTimeSource = arrivalTimeSource
 
         switch (origin.availability, destination.availability) {
         case (.predicted, .predicted):
@@ -198,5 +201,5 @@ struct RouteTimingSnapshot: Equatable, Sendable {
     let coverageByLeg: [UUID: LegTimingCoverage]
     let etaJourney: TimedJourney?
     let recommendedJourney: TimedJourney?
-    let connection: TransferTiming?
+    let monitoredConnection: JourneyConnectionTiming?
 }

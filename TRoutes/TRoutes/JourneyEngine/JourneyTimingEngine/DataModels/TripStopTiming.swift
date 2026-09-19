@@ -84,4 +84,15 @@ struct TripStopTiming: Equatable, Sendable {
         }
         return nil
     }
+
+    /// Source of the selected arrival time.
+    var effectiveArrivalSource: TimingSource? {
+        if predicted?.arrival != nil || predicted?.departure != nil {
+            return .prediction
+        }
+        if scheduled?.arrival != nil || scheduled?.departure != nil {
+            return .schedule
+        }
+        return nil
+    }
 }

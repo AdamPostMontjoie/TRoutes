@@ -425,12 +425,14 @@ struct JourneyTimingWiringTests {
             refreshSessionId: sessionId,
             generation: generation,
             fetchedAt: Date(timeIntervalSince1970: 1_000),
-            status: .current,
             predictionSlices: slices,
-            recommendedDeparture: nil,
-            currentLegArrival: nil,
-            destinationArrival: nil,
-            connection: nil
+            timing: JourneyTimingPlan(
+                status: .current,
+                selectedItinerary: nil,
+                currentLeg: nil,
+                recommendedDeparture: nil,
+                monitoredConnection: nil
+            )
         )
     }
 

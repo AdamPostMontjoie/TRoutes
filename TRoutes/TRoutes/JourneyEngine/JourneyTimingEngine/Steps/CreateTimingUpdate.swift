@@ -11,7 +11,7 @@ struct JourneyTimingSelection {
     let etaJourney: TimedJourney?
     let recommendedJourney: TimedJourney?
     let currentLegOption: LegTripOption?
-    let connection: TransferTiming?
+    let monitoredConnection: JourneyConnectionTiming?
 }
 
 // MARK: - Step 6: select and project timing state
@@ -62,8 +62,8 @@ extension JourneyTimingEngine {
             etaJourney = nil
         }
 
-        let connection = context.showsConnectionWarning
-            ? watchedConnection(
+        let monitoredConnection = context.showsConnectionWarning
+            ? makeMonitoredConnection(
                 currentLegOption: currentLegOption,
                 queryPlan: queryPlan,
                 optionsByLeg: optionsByLeg,
@@ -75,7 +75,7 @@ extension JourneyTimingEngine {
             etaJourney: etaJourney,
             recommendedJourney: recommendedJourney,
             currentLegOption: currentLegOption,
-            connection: connection
+            monitoredConnection: monitoredConnection
         )
     }
 
@@ -130,7 +130,7 @@ extension JourneyTimingEngine {
     /// The watched connection is the earliest upcoming service on the next leg
     /// for the user's assumed current trip. It may be physically impossible;
     /// retaining it is what lets a likely-miss warning change on later refreshes.
-    func watchedConnection(currentLegOption: LegTripOption?, queryPlan: TimingQueryPlan, optionsByLeg: [UUID: [LegTripOption]], connectionGraph: TimingConnectionGraph) -> TransferTiming? {
+    func makeMonitoredConnection(currentLegOption: LegTripOption?, queryPlan: TimingQueryPlan, optionsByLeg: [UUID: [LegTripOption]], connectionGraph: TimingConnectionGraph) -> JourneyConnectionTiming? {
         guard let currentLegOption,
               queryPlan.legs.count > 1 else {
             return nil
@@ -145,19 +145,84 @@ extension JourneyTimingEngine {
                 from: currentLegOption,
                 to: option
             ) {
-                return connection
+                return makeJourneyConnectionTiming(
+                    from: connection,
+                    arrivingOption: currentLegOption,
+                    departingOption: option
+                )
             }
         }
         return nil
     }
 
     func makeRecommendedDeparture(from journey: TimedJourney) -> RecommendedDeparture {
-        RecommendedDeparture(
-            departureTime: journey.originDeparture,
-            timeSource: journey.legs[0].departureTimeSource,
-            destinationArrivalTime: journey.destinationArrival,
-            selectedTripIds: journey.legs.map(\.tripId),
-            sourceComposition: journey.sourceComposition
+        let firstLeg = journey.legs[0]
+        return RecommendedDeparture(
+            resolvedLegId: firstLeg.legId,
+            tripId: firstLeg.tripId,
+            departureTime: firstLeg.departure,
+            timeSource: firstLeg.departureTimeSource
+        )
+    }
+
+    func makeJourneyLegTiming(from option: LegTripOption) -> JourneyLegTiming {
+        JourneyLegTiming(
+            resolvedLegId: option.legId,
+            tripId: option.tripId,
+            routeId: option.routeId,
+            directionId: option.origin.directionId,
+            originStopId: option.origin.key.stopId,
+            destinationStopId: option.destination.key.stopId,
+            departure: option.departure,
+            arrival: option.arrival,
+            departureSource: option.departureTimeSource,
+            arrivalSource: option.arrivalTimeSource
+        )
+    }
+
+    func makeJourneyConnectionTiming(from connection: TransferTiming, arrivingOption: LegTripOption, departingOption: LegTripOption) -> JourneyConnectionTiming {
+        JourneyConnectionTiming(
+            arrivingLegId: connection.arrivingLegId,
+            arrivingTripId: arrivingOption.tripId,
+            departingLegId: connection.departingLegId,
+            departingTripId: departingOption.tripId,
+            stationId: connection.stationId,
+            arrivingStopId: arrivingOption.destination.key.stopId,
+            departingStopId: departingOption.origin.key.stopId,
+            arrival: connection.arrival,
+            departure: connection.departure,
+            minimumTransferDuration: connection.requirement.minimumTransferTime,
+            preferredReliabilityBuffer: connection.requirement.preferredReliabilityBuffer,
+            nextAlternativeDeparture: connection.nextAlternativeDeparture,
+            isHighConsequence: connection.isHighConsequence,
+            isLastService: connection.isLastService,
+            warning: connection.warning
+        )
+    }
+
+    func makeJourneyTimingItinerary(from journey: TimedJourney) -> JourneyTimingItinerary {
+        let connections = journey.transfers.enumerated().map { index, connection in
+            makeJourneyConnectionTiming(
+                from: connection,
+                arrivingOption: journey.legs[index],
+                departingOption: journey.legs[index + 1]
+            )
+        }
+        return JourneyTimingItinerary(
+            legs: journey.legs.map(makeJourneyLegTiming),
+            connections: connections
+        )
+    }
+
+    func makeJourneyTimingPlan(from selection: JourneyTimingSelection, context: JourneyTimingContext) -> JourneyTimingPlan {
+        JourneyTimingPlan(
+            status: timingStatus(for: selection),
+            selectedItinerary: selection.etaJourney.map(makeJourneyTimingItinerary),
+            currentLeg: context.allowsRecommendation
+                ? nil
+                : selection.currentLegOption.map(makeJourneyLegTiming),
+            recommendedDeparture: selection.recommendedJourney.map(makeRecommendedDeparture),
+            monitoredConnection: selection.monitoredConnection
         )
     }
 
@@ -168,16 +233,11 @@ extension JourneyTimingEngine {
             refreshSessionId: refreshSessionId,
             generation: generation,
             fetchedAt: fetchedAt,
-            status: timingStatus(for: selection),
             predictionSlices: predictionSlices,
-            recommendedDeparture: selection.recommendedJourney.map(
-                makeRecommendedDeparture
-            ),
-            currentLegArrival: context.allowsRecommendation
-                ? nil
-                : selection.currentLegOption?.arrival,
-            destinationArrival: selection.etaJourney?.destinationArrival,
-            connection: selection.connection
+            timing: makeJourneyTimingPlan(
+                from: selection,
+                context: context
+            )
         )
         print("6/6 Created Timing Update")
         return update
@@ -454,7 +514,7 @@ extension JourneyTimingEngine {
             coverageByLeg: coverageByLeg,
             etaJourney: selection.etaJourney,
             recommendedJourney: selection.recommendedJourney,
-            connection: selection.connection
+            monitoredConnection: selection.monitoredConnection
         )
     }
 }

@@ -1,0 +1,124 @@
+//
+//  JourneyTimingPlan.swift
+//  TRoutes
+//
+
+import Foundation
+
+enum JourneyTimingStatus: String, Codable, Sendable {
+    case idle
+    case loading
+    case current
+    case stale
+    case unavailable
+}
+
+/// The departure JourneyTimingEngine recommends before initial boarding.
+struct RecommendedDeparture: Equatable, Codable, Sendable {
+    let resolvedLegId: UUID
+    let tripId: String
+    let departureTime: Date
+    let timeSource: TimingSource
+}
+
+/// The user-facing warning for a connection opportunity.
+enum ConnectionWarning: String, Equatable, Codable, Sendable {
+    case none
+    case tight
+    case highConsequence
+    case tightHighConsequence
+    case likelyMiss
+}
+
+/// One selected trip between a resolved leg's endpoints.
+struct JourneyLegTiming: Equatable, Codable, Sendable, Identifiable {
+    let resolvedLegId: UUID
+    let tripId: String
+    let routeId: String
+    let directionId: Int
+    let originStopId: String
+    let destinationStopId: String
+    let departure: Date
+    let arrival: Date
+    let departureSource: TimingSource
+    let arrivalSource: TimingSource
+
+    var id: UUID {
+        resolvedLegId
+    }
+}
+
+/// Timing, reliability, and consequence facts for one connection opportunity.
+struct JourneyConnectionTiming: Equatable, Codable, Sendable {
+    let arrivingLegId: UUID
+    let arrivingTripId: String
+    let departingLegId: UUID
+    let departingTripId: String
+    let stationId: String
+    let arrivingStopId: String
+    let departingStopId: String
+    let arrival: Date
+    let departure: Date
+    let minimumTransferDuration: TimeInterval
+    let preferredReliabilityBuffer: TimeInterval
+    let nextAlternativeDeparture: Date?
+    let isHighConsequence: Bool
+    let isLastService: Bool
+    let warning: ConnectionWarning
+
+    var physicalSlack: TimeInterval {
+        departure.timeIntervalSince(arrival) - minimumTransferDuration
+    }
+
+    var bufferSlack: TimeInterval {
+        physicalSlack - preferredReliabilityBuffer
+    }
+
+    var platformWaitDuration: TimeInterval {
+        max(0, physicalSlack)
+    }
+
+    var isPhysicallyPossible: Bool {
+        physicalSlack > 0
+    }
+
+    func isSameConnection(as other: JourneyConnectionTiming) -> Bool {
+        arrivingLegId == other.arrivingLegId
+            && arrivingTripId == other.arrivingTripId
+            && departingLegId == other.departingLegId
+            && departingTripId == other.departingTripId
+    }
+}
+
+/// The complete feasible path currently producing the displayed ETA.
+struct JourneyTimingItinerary: Equatable, Codable, Sendable {
+    let legs: [JourneyLegTiming]
+    let connections: [JourneyConnectionTiming]
+
+    var destinationArrival: Date? {
+        legs.last?.arrival
+    }
+}
+
+/// One route-wide timing result accepted and presented as a unit.
+struct JourneyTimingPlan: Equatable, Codable, Sendable {
+    let status: JourneyTimingStatus
+    let selectedItinerary: JourneyTimingItinerary?
+
+    /// The leg currently producing the leg ETA after initial boarding. It can
+    /// remain available when no complete feasible itinerary exists.
+    let currentLeg: JourneyLegTiming?
+    let recommendedDeparture: RecommendedDeparture?
+
+    /// The immediate connection being monitored. It may be earlier than the
+    /// connection selected for ETA, or exist when no feasible itinerary does.
+    let monitoredConnection: JourneyConnectionTiming?
+
+    var currentLegArrival: Date? {
+        currentLeg?.arrival
+    }
+
+    var destinationArrival: Date? {
+        selectedItinerary?.destinationArrival
+    }
+}

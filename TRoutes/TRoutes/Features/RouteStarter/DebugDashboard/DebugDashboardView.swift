@@ -146,19 +146,31 @@ struct DebugDashboardView: View {
         }
     }
 
-    private func timingRows(
-        _ timingState: JourneyTimingState
-    ) -> [(String, String)] {
+    private func timingRows(_ timingState: JourneyTimingState) -> [(String, String)] {
+        let timing = timingState.timing
         var rows: [(String, String)] = [
-            ("Status", timingState.status.rawValue),
+            ("Status", timing?.status.rawValue ?? JourneyTimingStatus.idle.rawValue),
             ("Session", timingState.refreshSessionId?.uuidString ?? "nil"),
             ("Generation", "\(timingState.generation)"),
-            ("Updated", dateText(timingState.updatedAt)),
-            ("Current leg ETA", dateText(timingState.currentLegArrival)),
-            ("Journey ETA", dateText(timingState.destinationArrival))
+            ("Updated", dateText(timingState.updatedAt))
         ]
 
-        if let recommendation = timingState.recommendedDeparture {
+        guard let timing else {
+            rows.append(("Timing plan", "nil"))
+            return rows
+        }
+
+        rows.append(("Current leg ETA", dateText(timing.currentLegArrival)))
+        rows.append(("Journey ETA", dateText(timing.destinationArrival)))
+
+        if let currentLeg = timing.currentLeg {
+            rows.append(("Current leg trip", "\(currentLeg.tripId) • \(currentLeg.routeId)/\(currentLeg.directionId) • \(currentLeg.originStopId) → \(currentLeg.destinationStopId)"))
+            rows.append(("Current leg timing", "\(dateText(currentLeg.departure)) (\(currentLeg.departureSource.rawValue)) → \(dateText(currentLeg.arrival)) (\(currentLeg.arrivalSource.rawValue))"))
+        } else {
+            rows.append(("Current leg trip", "nil"))
+        }
+
+        if let recommendation = timing.recommendedDeparture {
             rows.append(
                 (
                     "Recommendation",
@@ -167,34 +179,76 @@ struct DebugDashboardView: View {
             )
             rows.append(
                 (
-                    "Recommended ETA",
-                    dateText(recommendation.destinationArrivalTime)
+                    "Recommended trip",
+                    "\(recommendation.tripId) • leg \(recommendation.resolvedLegId.uuidString)"
                 )
             )
-            rows.append(
-                (
-                    "Recommended trips",
-                    recommendation.selectedTripIds.joined(separator: ", ")
-                )
-            )
-            rows.append(("Timing sources", recommendation.sourceComposition.rawValue))
         } else {
             rows.append(("Recommendation", "nil"))
         }
 
-        if let connection = timingState.connection {
-            rows.append(("Warning", connection.warning.rawValue))
+        if let itinerary = timing.selectedItinerary {
+            rows.append(("Selected itinerary", "\(itinerary.legs.count) leg(s) • \(itinerary.connections.count) connection(s)"))
+            for (index, leg) in itinerary.legs.enumerated() {
+                rows.append(
+                    (
+                        "Leg \(index + 1)",
+                        "\(leg.tripId) • \(leg.routeId)/\(leg.directionId) • \(leg.originStopId) → \(leg.destinationStopId)"
+                    )
+                )
+                rows.append(
+                    (
+                        "Leg \(index + 1) timing",
+                        "\(dateText(leg.departure)) (\(leg.departureSource.rawValue)) → \(dateText(leg.arrival)) (\(leg.arrivalSource.rawValue))"
+                    )
+                )
+            }
+            for (index, connection) in itinerary.connections.enumerated() {
+                rows.append(
+                    (
+                        "Connection \(index + 1)",
+                        "\(connection.arrivingTripId) → \(connection.departingTripId) • \(connection.arrivingStopId) → \(connection.departingStopId)"
+                    )
+                )
+                rows.append(
+                    (
+                        "Connection \(index + 1) timing",
+                        "\(dateText(connection.arrival)) → \(dateText(connection.departure)) • transfer \(durationText(connection.minimumTransferDuration)) • wait \(durationText(connection.platformWaitDuration))"
+                    )
+                )
+                rows.append(
+                    (
+                        "Connection \(index + 1) risk",
+                        "\(connection.warning.rawValue) • physical \(durationText(connection.physicalSlack)) • buffer \(durationText(connection.bufferSlack))"
+                    )
+                )
+            }
+        } else {
+            rows.append(("Selected itinerary", "nil"))
+        }
+
+        if let connection = timing.monitoredConnection {
+            let selectedConnection = timing.selectedItinerary?.connections.first
+            let isSelectedForETA = selectedConnection.map {
+                $0.isSameConnection(as: connection)
+            } ?? false
             rows.append(
                 (
-                    "Connection",
-                    "\(dateText(connection.arrival)) → \(dateText(connection.departure))"
+                    "Monitored",
+                    "\(connection.arrivingTripId) → \(connection.departingTripId) • selected for ETA: \(isSelectedForETA)"
                 )
             )
             rows.append(
-                ("Physical slack", durationText(connection.physicalSlack))
+                (
+                    "Monitored timing",
+                    "\(dateText(connection.arrival)) → \(dateText(connection.departure)) • \(connection.arrivingStopId) → \(connection.departingStopId)"
+                )
             )
             rows.append(
-                ("Buffer slack", durationText(connection.bufferSlack))
+                (
+                    "Monitored risk",
+                    "\(connection.warning.rawValue) • physical \(durationText(connection.physicalSlack)) • buffer \(durationText(connection.bufferSlack))"
+                )
             )
             rows.append(
                 ("High consequence", connection.isHighConsequence ? "true" : "false")
@@ -207,7 +261,7 @@ struct DebugDashboardView: View {
                 )
             )
         } else {
-            rows.append(("Warning", "none"))
+            rows.append(("Monitored", "nil"))
         }
 
         return rows

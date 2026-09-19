@@ -14,7 +14,7 @@ struct JourneyTimingSelectionTests {
                 etaJourney: nil,
                 recommendedJourney: nil,
                 currentLegOption: nil,
-                connection: nil
+                monitoredConnection: nil
             )
         )
 
@@ -42,7 +42,7 @@ struct JourneyTimingSelectionTests {
                 etaJourney: journey,
                 recommendedJourney: nil,
                 currentLegOption: option,
-                connection: nil
+                monitoredConnection: nil
             )
         )
 
@@ -132,8 +132,8 @@ struct JourneyTimingSelectionTests {
         #expect(selection.recommendedJourney == nil)
         #expect(selection.currentLegOption?.tripId == "OL-1")
         #expect(selection.etaJourney?.destinationArrival == viableTrip.arrival)
-        #expect(selection.connection?.departure == missedTrip.departure)
-        #expect(selection.connection?.warning == .likelyMiss)
+        #expect(selection.monitoredConnection?.departure == missedTrip.departure)
+        #expect(selection.monitoredConnection?.warning == .likelyMiss)
     }
 
     @Test func approachingStopChoosesLatestBufferedFeederForSameArrival() async throws {
@@ -209,7 +209,7 @@ struct JourneyTimingSelectionTests {
 
         #expect(selection.recommendedJourney?.legs.first?.tripId == "OL-2")
         #expect(selection.etaJourney == selection.recommendedJourney)
-        #expect(selection.connection == nil)
+        #expect(selection.monitoredConnection == nil)
     }
 
     private func makeOption(

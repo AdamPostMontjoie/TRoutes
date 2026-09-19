@@ -249,14 +249,10 @@ enum JourneyAction: Equatable {
     private func handleJourneyTimingUpdate(state: inout JourneyState, update: JourneyTimingUpdate?) -> [JourneyEffect] {
         guard let update else { return [] }
 
-        state.timingState.status = update.status
         state.timingState.refreshSessionId = update.refreshSessionId
         state.timingState.generation = update.generation
         state.timingState.updatedAt = update.fetchedAt
-        state.timingState.recommendedDeparture = update.recommendedDeparture
-        state.timingState.currentLegArrival = update.currentLegArrival
-        state.timingState.destinationArrival = update.destinationArrival
-        state.timingState.connection = update.connection
+        state.timingState.timing = update.timing
 
         let previousVehicleId = state.trackedVehicleId
         let previousTripId = state.trackedTripId
