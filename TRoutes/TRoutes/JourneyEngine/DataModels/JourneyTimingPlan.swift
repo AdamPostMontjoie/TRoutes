@@ -28,6 +28,19 @@ enum ConnectionWarning: String, Equatable, Codable, Sendable {
     case highConsequence
     case tightHighConsequence
     case likelyMiss
+
+    var notificationUrgency: Int {
+        switch self {
+        case .none:
+            return 0
+        case .tight, .highConsequence:
+            return 1
+        case .tightHighConsequence:
+            return 2
+        case .likelyMiss:
+            return 3
+        }
+    }
 }
 
 /// One selected trip between a resolved leg's endpoints.
@@ -117,11 +130,18 @@ struct JourneyTimingPlan: Equatable, Codable, Sendable {
 
     //when will this leg get to the end?
     var currentLegArrival: NoticeTime? {
-        return NoticeTime(time:currentLeg?.arrival, source: currentLeg?.arrivalTimingSource)
+        NoticeTime(time: currentLeg?.arrival, source: currentLeg?.arrivalTimingSource)
     }
     //when will the intended transfer depart the stop we board?
     var nextLegDeparture: NoticeTime? {
-        return NoticeTime(time: monitoredConnection?.departure, source: monitoredConnection?.departingTimingSource)
+        guard let monitoredConnection else { return nil }
+        let selectedLeg = selectedItinerary?.legs.first {
+            $0.resolvedLegId == monitoredConnection.departingLegId
+        }
+        return NoticeTime(
+            time: selectedLeg?.departure ?? monitoredConnection.departure,
+            source: selectedLeg?.departureTimingSource ?? monitoredConnection.departingTimingSource
+        )
     }
     var connectionWarning: ConnectionWarning? {
         monitoredConnection?.warning

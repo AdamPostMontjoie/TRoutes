@@ -160,12 +160,12 @@ struct DebugDashboardView: View {
             return rows
         }
 
-        rows.append(("Current leg ETA", dateText(timing.currentLegArrival)))
+        rows.append(("Current leg ETA", dateText(timing.currentLegArrival?.time)))
         rows.append(("Journey ETA", dateText(timing.destinationArrival)))
 
         if let currentLeg = timing.currentLeg {
             rows.append(("Current leg trip", "\(currentLeg.tripId) • \(currentLeg.routeId)/\(currentLeg.directionId) • \(currentLeg.originStopId) → \(currentLeg.destinationStopId)"))
-            rows.append(("Current leg timing", "\(dateText(currentLeg.departure)) (\(currentLeg.departureSource.rawValue)) → \(dateText(currentLeg.arrival)) (\(currentLeg.arrivalSource.rawValue))"))
+            rows.append(("Current leg timing", "\(dateText(currentLeg.departure)) (\(currentLeg.departureTimingSource.rawValue)) → \(dateText(currentLeg.arrival)) (\(currentLeg.arrivalTimingSource.rawValue))"))
         } else {
             rows.append(("Current leg trip", "nil"))
         }
@@ -199,7 +199,7 @@ struct DebugDashboardView: View {
                 rows.append(
                     (
                         "Leg \(index + 1) timing",
-                        "\(dateText(leg.departure)) (\(leg.departureSource.rawValue)) → \(dateText(leg.arrival)) (\(leg.arrivalSource.rawValue))"
+                        "\(dateText(leg.departure)) (\(leg.departureTimingSource.rawValue)) → \(dateText(leg.arrival)) (\(leg.arrivalTimingSource.rawValue))"
                     )
                 )
             }

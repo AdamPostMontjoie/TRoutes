@@ -176,8 +176,8 @@ extension JourneyTimingEngine {
             destinationStopId: option.destination.key.stopId,
             departure: option.departure,
             arrival: option.arrival,
-            departureSource: option.departureTimeSource,
-            arrivalSource: option.arrivalTimeSource
+            departureTimingSource: option.departureTimeSource,
+            arrivalTimingSource: option.arrivalTimeSource
         )
     }
 

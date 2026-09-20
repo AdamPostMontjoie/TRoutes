@@ -58,7 +58,7 @@ enum JourneyAction: Equatable {
                 }
                 effects.append(.monitorStop(stop))
             }
-            effects.append(.sendNotification("entered \(stop.stopName)"))
+            effects.append(.sendDebugNotification("entered \(stop.stopName)"))
             return effects
             
         case let .transfer(overlapsNext):
@@ -67,10 +67,17 @@ enum JourneyAction: Equatable {
                 state.transferLegPrediction = nil
                 return [
                     // .updateJourneyTiming,
-                    .sendNotification("entered \(stop.stopName)")
+                    .sendDebugNotification("entered \(stop.stopName)")
                 ]
             }
-            
+
+            let transferNotice = state.timingState.timing.flatMap {
+                BoardingNoticeDetails(
+                    recommendation: nil,
+                    timingPlan: $0,
+                    legs: state.legOrder
+                )
+            }
             let previousMonitoringMode = state.monitoringMode
             guard let nextStop = state.advanceToNextStop() else {
                 return []
@@ -84,13 +91,17 @@ enum JourneyAction: Equatable {
                 loadingState: .loading(stopId: nextStop.mbtaStopId)
             )
             state.transferLegPrediction = nil
-            return effectsForNextStop(
+            var effects = effectsForNextStop(
                 nextStop,
+                state: state,
                 previousMonitoringMode: previousMonitoringMode,
                 updateTiming: state.timingContext != nil,
-                message: "transfered to \(nextStop.stopName)",
-                userMessage: "Transfer here!"
+                message: "transfered to \(nextStop.stopName)"
             )
+            if let transferNotice {
+                effects.append(.createNotification(intent: .transferNow(transferNotice)))
+            }
+            return effects
             
         case .intermediate:
             state.activeLegPrediction = nil
@@ -108,13 +119,14 @@ enum JourneyAction: Equatable {
 //            if state.timingContext != nil {
 //                effects.append(.updateJourneyTiming)
 //            }
-            effects.append(.sendNotification("entered \(stop.stopName)"))
+            effects.append(.sendDebugNotification("entered \(stop.stopName)"))
             return effects
             
         case .final:
             return [
                 .scheduleEndRoute(seconds: 60),
-                .sendNotification("entered \(stop.stopName)", user: "You have arrived at your destination")
+                .sendDebugNotification("entered \(stop.stopName)"),
+                .createNotification(intent: .arrivedAtDestination(stop.stopName))
             ]
         }
     }
@@ -137,6 +149,7 @@ enum JourneyAction: Equatable {
             prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
+                state: state,
                 previousMonitoringMode: previousMonitoringMode,
                 updateTiming: state.timingContext != nil,
                 message: "left \(stop.mbtaStopId)"
@@ -144,7 +157,7 @@ enum JourneyAction: Equatable {
             
         case let .transfer(overlapsNext):
             guard !overlapsNext else {
-                return [.sendNotification("left \(stop.stopName)")]//
+                return [.sendDebugNotification("left \(stop.stopName)")]//
             }
             
             let previousMonitoringMode = state.monitoringMode
@@ -155,6 +168,7 @@ enum JourneyAction: Equatable {
             prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
+                state: state,
                 previousMonitoringMode: previousMonitoringMode,
                 updateTiming: state.timingContext != nil,
                 message: "left \(stop.stopName)"
@@ -168,6 +182,7 @@ enum JourneyAction: Equatable {
             prepareTransferPredictionState(state: &state, nextStop: nextStop)
             return effectsForNextStop(
                 nextStop,
+                state: state,
                 previousMonitoringMode: previousMonitoringMode,
                 updateTiming: state.timingContext != nil,
                 message: "left \(stop.stopName)"
@@ -175,7 +190,7 @@ enum JourneyAction: Equatable {
         case .final:
             return [
                 .endRoute,
-                .createNotification(intent: .arrivedAtDestination("You have arrived at your destination!"))
+                .sendDebugNotification("Journey complete")
             ]
         }
     }
@@ -224,7 +239,7 @@ enum JourneyAction: Equatable {
         }
         effects.append(.monitorStop(prevStop))
         effects.append(.updateJourneyTiming)
-        effects.append(.sendNotification("Backtracked to \(prevStop.stopName)"))
+        effects.append(.sendDebugNotification("Backtracked to \(prevStop.stopName)"))
         return effects
     }
     
@@ -284,38 +299,61 @@ enum JourneyAction: Equatable {
         //Effect assignments
         var effects: [JourneyEffect] = []
         
-        //Send recommendation if first snapshot and recommendation exists
-        if (previousTiming?.recommendedDeparture == nil && update.timing.recommendedDeparture != nil)
-            || (previousTiming?.recommendedDeparture?.tripId != update.timing.recommendedDeparture?.tripId)
-        {
-            if let recommendation = update.timing.recommendedDeparture,
-               let details = BoardingNoticeDetails(
-                   recommendation: recommendation,
-                   timingPlan: update.timing,
-                   legs: state.legOrder
-               ) {
-                effects.append(.createNotification(intent: .departureRecommendation(details)))
-            }
+        //Send the initial recommendation once for a multi-leg journey.
+        if state.legOrder.count > 1,
+           previousTiming?.recommendedDeparture == nil,
+           let recommendation = update.timing.recommendedDeparture,
+           let details = BoardingNoticeDetails(
+               recommendation: recommendation,
+               timingPlan: update.timing,
+               legs: state.legOrder
+           ) {
+            effects.append(.createNotification(intent: .departureRecommendation(details)))
         }
-        //Only send on connection update that doesn't coincide with change in position status
-        //if a user has not changed legs, but warning status has become more difficult, notify
-        //will be contained inside BoardNowNotice or ArrivalNotice if appear at same time
-        else if update.timing.connectionWarning != nil {
-            if let monitoredConnection = update.timing.monitoredConnection
-                {
-                let previousWarning = previousTiming?.monitoredConnection.flatMap {
-                    $0.isSameConnection(as: monitoredConnection) ? $0.warning : nil
+
+        //A new connection is explained by the progression notification. Only
+        //an independently changing assessment reaches this notification path.
+        if let previousConnection = previousTiming?.monitoredConnection,
+           let currentConnection = update.timing.monitoredConnection,
+           previousConnection.isSameConnection(as: currentConnection) {
+            let urgencyIncreased = currentConnection.warning.notificationUrgency
+                > previousConnection.warning.notificationUrgency
+            let becameTightHighConsequence = currentConnection.warning == .tightHighConsequence
+                && urgencyIncreased
+            let becameNotifiableLikelyMiss = currentConnection.warning == .likelyMiss
+                && previousConnection.warning != .likelyMiss
+                && (currentConnection.isHighConsequence || previousConnection.isHighConsequence)
+
+            let selectedConnection = update.timing.selectedItinerary?.connections.contains {
+                $0.isSameConnection(as: currentConnection)
+            } == true
+            let updatedEta = update.timing.destinationArrival
+            let previousEta = previousTiming?.destinationArrival
+            let etaImproved = updatedEta.map { newEta in
+                previousEta.map { newEta < $0 } ?? true
+            } ?? false
+            let recoveredSelectedConnection = previousConnection.warning == .likelyMiss
+                && currentConnection.warning.notificationUrgency
+                    < previousConnection.warning.notificationUrgency
+                && selectedConnection
+                && etaImproved
+
+            if becameTightHighConsequence
+                || becameNotifiableLikelyMiss
+                || recoveredSelectedConnection {
+                let departingLeg = state.legOrder.first {
+                    $0.id == currentConnection.departingLegId
                 }
-                let previouslyExpectedDeparture = previousTiming?.nextLegDeparture
-                let previouslyExptectedEta = previousTiming?.destinationArrival
-                
-                let updatedDeparture = update.timing.nextLegDeparture
-                let updatedEta = update.timing.destinationArrival
-                let departingLeg = state.legOrder.first(where: { $0.id == update.timing.monitoredConnection?.departingLegId})
-                
-                guard let connectionWarningDetails = ConnectionWarningChangedDetails(departure:updatedDeparture, eta:updatedEta, previousDeparture:previouslyExpectedDeparture, previousEta:previouslyExptectedEta, departingLeg:departingLeg, warning:update.timing.connectionWarning) else {}
-                effects.append(.createNotification(intent: .connectionWarningChanged(connectionWarningDetails)))
-                
+                let details = ConnectionWarningChangedDetails(
+                    departure: update.timing.nextLegDeparture,
+                    eta: updatedEta,
+                    previousDeparture: previousTiming?.nextLegDeparture,
+                    previousEta: previousEta,
+                    departingLeg: departingLeg,
+                    previousWarning: previousConnection.warning,
+                    warning: currentConnection.warning
+                )
+                effects.append(.createNotification(intent: .connectionWarningChanged(details)))
             }
         }
        
@@ -349,13 +387,7 @@ enum JourneyAction: Equatable {
         }
     }
     
-    private func effectsForNextStop(
-        _ nextStop: ResolvedStop,
-        previousMonitoringMode: MonitoringMode,
-        updateTiming: Bool,
-        message: String,
-        userMessage: String? = nil
-    ) -> [JourneyEffect] {
+    private func effectsForNextStop(_ nextStop: ResolvedStop, state: JourneyState, previousMonitoringMode: MonitoringMode, updateTiming: Bool, message: String) -> [JourneyEffect] {
         var effects: [JourneyEffect] = []
         if nextStop.monitoringMode != previousMonitoringMode {
             effects.append(.switchMonitoringMode(nextStop.monitoringMode))
@@ -364,16 +396,32 @@ enum JourneyAction: Equatable {
         if updateTiming {
             effects.append(.updateJourneyTiming)
         }
-        var nextStopUserMessage = userMessage
-        if userMessage == nil {
-            if nextStop.journeyRole == .final {
-                nextStopUserMessage = "Your destination \(nextStop.stopName) is the next stop!"
-            } else if case .transfer = nextStop.journeyRole {
-                nextStopUserMessage = "Get ready to transfer! \(nextStop.stopName) is next."
+
+        if let timingPlan = state.timingState.timing,
+           let resolvedLeg = state.currentLeg,
+           let legTiming = timingPlan.currentLeg?.resolvedLegId == resolvedLeg.id
+                ? timingPlan.currentLeg
+                : timingPlan.selectedItinerary?.legs.first(where: { $0.resolvedLegId == resolvedLeg.id }) {
+            if nextStop.journeyRole == .final,
+               let details = UpcomingArrivalNoticeDetails(
+                   legTiming: legTiming,
+                   connectionTiming: nil,
+                   legs: state.legOrder
+               ) {
+                effects.append(.createNotification(intent: .destinationNext(details)))
+            } else if case .transfer = nextStop.journeyRole,
+                      let connection = timingPlan.monitoredConnection,
+                      connection.arrivingLegId == legTiming.resolvedLegId,
+                      let details = UpcomingArrivalNoticeDetails(
+                          legTiming: legTiming,
+                          connectionTiming: connection,
+                          legs: state.legOrder
+                      ) {
+                effects.append(.createNotification(intent: .transferApproaching(details)))
             }
         }
-    
-        effects.append(.sendNotification(message, user: nextStopUserMessage))
+
+        effects.append(.sendDebugNotification(message))
         return effects
     }
 
@@ -391,7 +439,7 @@ enum JourneyEffect: Equatable {
     case monitorStop(ResolvedStop) //2
     case updateJourneyTiming
     
-    case sendNotification(_ debug: String, user: String? = nil)
+    case sendDebugNotification(String)
     case createNotification(intent:JourneyNotificationIntent)
     case scheduleEndRoute(seconds: Int)
     case endRoute

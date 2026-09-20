@@ -91,7 +91,7 @@ actor JourneyEngine {
             )
             
             saveActiveJourneyAndPublish(reconciledJourney)
-            await sendNotification(debug: "Journey Engine Reconciled Position Successfully")
+            await sendDebugNotification("Journey Engine Reconciled Position Successfully")
             
             
             switch reconciledJourney.monitoringMode {
@@ -215,8 +215,6 @@ actor JourneyEngine {
         await StopLiveActivityManager.shared.end()
         let journey = JourneyState(route: route)
         saveActiveJourneyAndPublish(journey)
-        let destinationName = route.legs.last?.endStop.stopName ?? "your destination"
-        await sendNotification(debug: "Tracking started", user: "Tracking started for your trip to \(destinationName)")
         if let firstStop = journey.currentStop {
             if firstStop.monitoringMode == .surface {
                 await startListeningToLocationEvents()
@@ -283,9 +281,9 @@ actor JourneyEngine {
                 // while its network snapshot is being collected.
                 Task { await self.fetchJourneyTiming() }
                 
-            case let .sendNotification(debug, user):
-                print("JourneyEngine effect: sendNotification - \(debug)")
-                await sendNotification(debug: debug, user: user)
+            case let .sendDebugNotification(message):
+                print("JourneyEngine effect: sendDebugNotification - \(message)")
+           //     await sendDebugNotification(message)
                 
             case let .switchMonitoringMode(mode):
                 await switchMonitoringMode(newMode: mode)
@@ -553,11 +551,8 @@ actor JourneyEngine {
         }
     }
     
-    func sendNotification(debug: String, user: String? = nil) async {
-        await notificationsClient.debugNotification(debug)
-        if let user = user {
-            await notificationsClient.userNotification(user)
-        }
+    func sendDebugNotification(_ message: String) async {
+        await notificationsClient.debugNotification(message)
     }
     
     func endRoute() async {
