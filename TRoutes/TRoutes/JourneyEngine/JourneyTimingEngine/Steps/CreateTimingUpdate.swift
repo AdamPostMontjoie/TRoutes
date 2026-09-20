@@ -64,6 +64,7 @@ extension JourneyTimingEngine {
 
         let monitoredConnection = context.showsConnectionWarning
             ? makeMonitoredConnection(
+                
                 currentLegOption: currentLegOption,
                 queryPlan: queryPlan,
                 optionsByLeg: optionsByLeg,
@@ -135,7 +136,7 @@ extension JourneyTimingEngine {
               queryPlan.legs.count > 1 else {
             return nil
         }
-
+        
         let nextLeg = queryPlan.legs[1]
         let nextOptions = (optionsByLeg[nextLeg.id] ?? []).sorted {
             $0.departure < $1.departure
@@ -188,9 +189,12 @@ extension JourneyTimingEngine {
             departingTripId: departingOption.tripId,
             stationId: connection.stationId,
             arrivingStopId: arrivingOption.destination.key.stopId,
+            
             departingStopId: departingOption.origin.key.stopId,
             arrival: connection.arrival,
+            arrivingTimingSource: arrivingOption.arrivalTimeSource,
             departure: connection.departure,
+            departingTimingSource:departingOption.departureTimeSource,
             minimumTransferDuration: connection.requirement.minimumTransferTime,
             preferredReliabilityBuffer: connection.requirement.preferredReliabilityBuffer,
             nextAlternativeDeparture: connection.nextAlternativeDeparture,

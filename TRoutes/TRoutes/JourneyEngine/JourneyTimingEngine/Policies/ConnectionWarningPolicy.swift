@@ -11,7 +11,6 @@ import Foundation
 /// connection into the one warning category presented to the user.
 struct ConnectionWarningPolicy {
     // MARK: - Warning policy to validate against journey scenarios
-
     func warning(for connection: TransferTiming) -> ConnectionWarning {
         guard connection.isPhysicallyPossible else { return .likelyMiss }
 

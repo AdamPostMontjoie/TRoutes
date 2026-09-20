@@ -38,10 +38,10 @@ struct JourneyLegTiming: Equatable, Codable, Sendable, Identifiable {
     let directionId: Int
     let originStopId: String
     let destinationStopId: String
-    let departure: Date
-    let arrival: Date
-    let departureSource: TimingSource
-    let arrivalSource: TimingSource
+    let departure: Date //When we depart startstop on leg
+    let arrival: Date //When we arrive at endstop on leg
+    let departureTimingSource: TimingSource
+    let arrivalTimingSource: TimingSource
 
     var id: UUID {
         resolvedLegId
@@ -58,7 +58,9 @@ struct JourneyConnectionTiming: Equatable, Codable, Sendable {
     let arrivingStopId: String
     let departingStopId: String
     let arrival: Date
+    let arrivingTimingSource: TimingSource
     let departure: Date
+    let departingTimingSource:TimingSource
     let minimumTransferDuration: TimeInterval
     let preferredReliabilityBuffer: TimeInterval
     let nextAlternativeDeparture: Date?
@@ -94,7 +96,7 @@ struct JourneyConnectionTiming: Equatable, Codable, Sendable {
 struct JourneyTimingItinerary: Equatable, Codable, Sendable {
     let legs: [JourneyLegTiming]
     let connections: [JourneyConnectionTiming]
-
+    
     var destinationArrival: Date? {
         legs.last?.arrival
     }
@@ -109,13 +111,20 @@ struct JourneyTimingPlan: Equatable, Codable, Sendable {
     /// remain available when no complete feasible itinerary exists.
     let currentLeg: JourneyLegTiming?
     let recommendedDeparture: RecommendedDeparture?
-
-    /// The immediate connection being monitored. It may be earlier than the
-    /// connection selected for ETA, or exist when no feasible itinerary does.
+    
+    /// The immediate connection being monitored.
     let monitoredConnection: JourneyConnectionTiming?
 
-    var currentLegArrival: Date? {
-        currentLeg?.arrival
+    //when will this leg get to the end?
+    var currentLegArrival: NoticeTime? {
+        return NoticeTime(time:currentLeg?.arrival, source: currentLeg?.arrivalTimingSource)
+    }
+    //when will the intended transfer depart the stop we board?
+    var nextLegDeparture: NoticeTime? {
+        return NoticeTime(time: monitoredConnection?.departure, source: monitoredConnection?.departingTimingSource)
+    }
+    var connectionWarning: ConnectionWarning? {
+        monitoredConnection?.warning
     }
 
     var destinationArrival: Date? {

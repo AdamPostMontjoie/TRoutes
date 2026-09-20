@@ -333,6 +333,8 @@ actor JourneyEngine {
             case .searchForVehicle:
                 print("JourneyEngine effect: searchForVehicle")
                 startVehicleSearch()
+            case .createNotification(intent: let intent):
+                await NotificationManager.shared.createNotification(intent: intent)
             }
         }
     }

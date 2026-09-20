@@ -47,6 +47,7 @@ enum JourneyAction: Equatable {
                 acceptableRouteIds: state.acceptableRouteIds(for: stop),
                 loadingState: .loading(stopId: stop.mbtaStopId)
             )
+            //clears recommendation
             var effects: [JourneyEffect] = [.updateJourneyTiming]
             
             // Look ahead to see if the next stop requires a different monitoring mode,
@@ -65,7 +66,7 @@ enum JourneyAction: Equatable {
                 state.activeLegPrediction = nil
                 state.transferLegPrediction = nil
                 return [
-                    .updateJourneyTiming,
+                    // .updateJourneyTiming,
                     .sendNotification("entered \(stop.stopName)")
                 ]
             }
@@ -104,9 +105,9 @@ enum JourneyAction: Equatable {
                 }
                 effects.append(.monitorStop(stop))
             }
-            if state.timingContext != nil {
-                effects.append(.updateJourneyTiming)
-            }
+//            if state.timingContext != nil {
+//                effects.append(.updateJourneyTiming)
+//            }
             effects.append(.sendNotification("entered \(stop.stopName)"))
             return effects
             
@@ -143,7 +144,7 @@ enum JourneyAction: Equatable {
             
         case let .transfer(overlapsNext):
             guard !overlapsNext else {
-                return [.sendNotification("left \(stop.stopName)")]
+                return [.sendNotification("left \(stop.stopName)")]//
             }
             
             let previousMonitoringMode = state.monitoringMode
@@ -174,7 +175,7 @@ enum JourneyAction: Equatable {
         case .final:
             return [
                 .endRoute,
-                .sendNotification("Journey complete!")
+                .createNotification(intent: .arrivedAtDestination("You have arrived at your destination!"))
             ]
         }
     }
@@ -248,17 +249,20 @@ enum JourneyAction: Equatable {
 
     private func handleJourneyTimingUpdate(state: inout JourneyState, update: JourneyTimingUpdate?) -> [JourneyEffect] {
         guard let update else { return [] }
-
+        
+        
+        let previousVehicleId = state.trackedVehicleId
+        let previousTripId = state.trackedTripId
+        //Previous timing state
+        let previousTiming = state.timingState.timing
+        
+        
         state.timingState.refreshSessionId = update.refreshSessionId
         state.timingState.generation = update.generation
         state.timingState.updatedAt = update.fetchedAt
         state.timingState.timing = update.timing
 
-        let previousVehicleId = state.trackedVehicleId
-        let previousTripId = state.trackedTripId
-
-        if var activePrediction = state.activeLegPrediction,
-           let slice = update.predictionSlices.first(where: {
+        if var activePrediction = state.activeLegPrediction, let slice = update.predictionSlices.first(where: {
                $0.predictedStopId == activePrediction.predictedStop.id
            }) {
             applyPredictionSlice(slice, to: &activePrediction)
@@ -271,17 +275,51 @@ enum JourneyAction: Equatable {
             state.activeLegPrediction = activePrediction
         }
 
-        if var transferPrediction = state.transferLegPrediction,
-           let slice = update.predictionSlices.first(where: {
+        if var transferPrediction = state.transferLegPrediction, let slice = update.predictionSlices.first(where: {
                $0.predictedStopId == transferPrediction.predictedStop.id
            }) {
             applyPredictionSlice(slice, to: &transferPrediction)
             state.transferLegPrediction = transferPrediction
         }
-
+        //Effect assignments
         var effects: [JourneyEffect] = []
-        if state.trackedVehicleId != previousVehicleId
-            || state.trackedTripId != previousTripId {
+        
+        //Send recommendation if first snapshot and recommendation exists
+        if (previousTiming?.recommendedDeparture == nil && update.timing.recommendedDeparture != nil)
+            || (previousTiming?.recommendedDeparture?.tripId != update.timing.recommendedDeparture?.tripId)
+        {
+            if let recommendation = update.timing.recommendedDeparture,
+               let details = BoardingNoticeDetails(
+                   recommendation: recommendation,
+                   timingPlan: update.timing,
+                   legs: state.legOrder
+               ) {
+                effects.append(.createNotification(intent: .departureRecommendation(details)))
+            }
+        }
+        //Only send on connection update that doesn't coincide with change in position status
+        //if a user has not changed legs, but warning status has become more difficult, notify
+        //will be contained inside BoardNowNotice or ArrivalNotice if appear at same time
+        else if update.timing.connectionWarning != nil {
+            if let monitoredConnection = update.timing.monitoredConnection
+                {
+                let previousWarning = previousTiming?.monitoredConnection.flatMap {
+                    $0.isSameConnection(as: monitoredConnection) ? $0.warning : nil
+                }
+                let previouslyExpectedDeparture = previousTiming?.nextLegDeparture
+                let previouslyExptectedEta = previousTiming?.destinationArrival
+                
+                let updatedDeparture = update.timing.nextLegDeparture
+                let updatedEta = update.timing.destinationArrival
+                let departingLeg = state.legOrder.first(where: { $0.id == update.timing.monitoredConnection?.departingLegId})
+                
+                guard let connectionWarningDetails = ConnectionWarningChangedDetails(departure:updatedDeparture, eta:updatedEta, previousDeparture:previouslyExpectedDeparture, previousEta:previouslyExptectedEta, departingLeg:departingLeg, warning:update.timing.connectionWarning) else {}
+                effects.append(.createNotification(intent: .connectionWarningChanged(connectionWarningDetails)))
+                
+            }
+        }
+       
+        if state.trackedVehicleId != previousVehicleId || state.trackedTripId != previousTripId {
             effects.append(
                 .updateTrackedVehicle(
                     vehicleId: state.trackedVehicleId,
@@ -354,6 +392,7 @@ enum JourneyEffect: Equatable {
     case updateJourneyTiming
     
     case sendNotification(_ debug: String, user: String? = nil)
+    case createNotification(intent:JourneyNotificationIntent)
     case scheduleEndRoute(seconds: Int)
     case endRoute
     
