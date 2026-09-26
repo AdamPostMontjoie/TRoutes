@@ -88,7 +88,7 @@ actor NotificationManager {
             message = "Transfer to the \(service)."
         }
 
-        if let timing = boardingTimingDescription(details) {
+        if let timing = timingDescription(details.boardingTime) {
             message += " \(sentence(timing))."
         }
         return appendingWarning(details.connectionWarning, to: message)
@@ -138,8 +138,8 @@ actor NotificationManager {
 
         if recovered {
             var message = "Your connection to the \(service) is possible again."
-            if let departure = timingDescription(details.departure, event: .departure) {
-                message += " \(sentence(departure))."
+            if let boarding = timingDescription(details.boardingTime) {
+                message += " \(sentence(boarding))."
             }
             if let destinationArrival = details.destinationArrival {
                 message += " Expected arrival at \(clockDescription(for: destinationArrival))."
@@ -154,8 +154,8 @@ actor NotificationManager {
         switch warning {
         case .tight:
             var message = "Your connection to the \(service) is now tight."
-            if let departure = timingDescription(details.departure, event: .departure) {
-                message += " \(sentence(departure))."
+            if let boarding = timingDescription(details.boardingTime) {
+                message += " \(sentence(boarding))."
             }
             return message
 
@@ -164,22 +164,22 @@ actor NotificationManager {
 
         case .tightHighConsequence:
             var message = "Move quickly for the \(service). This connection is tight, and missing it means a long wait."
-            if let departure = timingDescription(details.departure, event: .departure) {
-                message += " \(sentence(departure))."
+            if let boarding = timingDescription(details.boardingTime) {
+                message += " \(sentence(boarding))."
             }
             return message
 
         case .likelyMiss:
             var message = "You’re unlikely to make the \(service)"
-            if let oldDeparture = timingDescription(details.oldTime, event: .departure) {
-                message += " \(oldDeparture)."
+            if let previousBoarding = timingDescription(details.previousBoardingTime) {
+                message += " \(previousBoarding)."
             } else {
                 message += "."
             }
 
             if details.journeyRemainsPossible {
-                if let replacementDeparture = timingDescription(details.departure, event: .departure) {
-                    message += " Your ETA now uses the \(service) \(replacementDeparture)."
+                if let replacementBoarding = timingDescription(details.boardingTime) {
+                    message += " Your ETA now uses the \(service) \(replacementBoarding)."
                 }
                 if let destinationArrival = details.destinationArrival {
                     message += " Expected arrival at \(clockDescription(for: destinationArrival))."
@@ -194,29 +194,18 @@ actor NotificationManager {
         }
     }
 
-    private func boardingTimingDescription(_ details: BoardingNoticeDetails) -> String? {
-        if let arrival = timingDescription(details.arrivalTime, event: .arrival) {
-            return arrival
-        }
-        return timingDescription(details.departureTime, event: .departure)
-    }
+    private func timingDescription(_ selectedTime: SelectedStopTime?) -> String? {
+        guard let selectedTime else { return nil }
 
-    private func timingDescription(_ noticeTime: NoticeTime?, event: TimingEvent) -> String? {
-        guard let time = noticeTime?.time else { return nil }
-
-        switch (event, noticeTime?.source) {
+        switch (selectedTime.event, selectedTime.source) {
         case (.arrival, .prediction):
-            return "arriving \(relativeDescription(for: time))"
+            return "arriving \(relativeDescription(for: selectedTime.time))"
         case (.departure, .prediction):
-            return "expected to depart \(relativeDescription(for: time))"
+            return "expected to depart \(relativeDescription(for: selectedTime.time))"
         case (.arrival, .schedule):
-            return "scheduled to arrive at \(clockDescription(for: time))"
+            return "scheduled to arrive at \(clockDescription(for: selectedTime.time))"
         case (.departure, .schedule):
-            return "scheduled to depart at \(clockDescription(for: time))"
-        case (.arrival, nil):
-            return "arriving at \(clockDescription(for: time))"
-        case (.departure, nil):
-            return "departing at \(clockDescription(for: time))"
+            return "scheduled to depart at \(clockDescription(for: selectedTime.time))"
         }
     }
 
@@ -266,14 +255,10 @@ actor NotificationManager {
 
     private func appendingWarning(_ warning: ConnectionWarning, to message: String) -> String {
         switch warning {
-        case .none:
+        case .none, .tight, .highConsequence:
             return message
-        case .tight:
-            return "\(message) This connection may be tight."
-        case .highConsequence:
-            return "\(message) The next service is much later."
         case .tightHighConsequence:
-            return "\(message) This connection may be tight, and missing it means a long wait."
+            return "\(message) There may be a tight connection, and missing it means a long wait."
         case .likelyMiss:
             return "\(message) You’re unlikely to make this connection."
         }

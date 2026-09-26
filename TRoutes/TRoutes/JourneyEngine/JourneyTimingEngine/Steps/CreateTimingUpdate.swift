@@ -101,7 +101,7 @@ extension JourneyTimingEngine {
                 journey.originDeparture.timeIntervalSince($0) / 60
             )
         } ?? "nil"
-        let source = journey.legs[0].departureTimeSource == .prediction
+        let source = journey.legs[0].boardingTime.source == .prediction
             ? "predicted"
             : "scheduled"
         let trips = journey.legs.map(\.tripId).joined(separator: " → ")
@@ -161,9 +161,7 @@ extension JourneyTimingEngine {
         return RecommendedDeparture(
             resolvedLegId: firstLeg.legId,
             tripId: firstLeg.tripId,
-            departureTime: firstLeg.departure,
-            timeSource: firstLeg.departureTimeSource,
-            boardingEvent: firstLeg.boardingEvent
+            boardingTime: firstLeg.boardingTime
         )
     }
 
@@ -175,10 +173,8 @@ extension JourneyTimingEngine {
             directionId: option.origin.directionId,
             originStopId: option.origin.key.stopId,
             destinationStopId: option.destination.key.stopId,
-            departure: option.departure,
-            arrival: option.arrival,
-            departureTimingSource: option.departureTimeSource,
-            arrivalTimingSource: option.arrivalTimeSource
+            boardingTime: option.boardingTime,
+            arrivalTime: option.arrivalTime
         )
     }
 
@@ -194,9 +190,7 @@ extension JourneyTimingEngine {
             departingStopId: departingOption.origin.key.stopId,
             arrival: connection.arrival,
             arrivingTimingSource: arrivingOption.arrivalTimeSource,
-            departure: connection.departure,
-            departingTimingSource:departingOption.departureTimeSource,
-            boardingEvent: departingOption.boardingEvent,
+            boardingTime: departingOption.boardingTime,
             minimumTransferDuration: connection.requirement.minimumTransferTime,
             preferredReliabilityBuffer: connection.requirement.preferredReliabilityBuffer,
             nextAlternativeDeparture: connection.nextAlternativeDeparture,

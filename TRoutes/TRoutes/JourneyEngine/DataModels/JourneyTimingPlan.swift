@@ -13,13 +13,11 @@ enum JourneyTimingStatus: String, Codable, Sendable {
     case unavailable
 }
 
-/// The departure JourneyTimingEngine recommends before initial boarding.
+/// The selected first-leg service time recommended before initial boarding.
 struct RecommendedDeparture: Equatable, Codable, Sendable {
     let resolvedLegId: UUID
     let tripId: String
-    let departureTime: Date
-    let timeSource: TimingSource
-    let boardingEvent: TimingEvent
+    let boardingTime: SelectedStopTime
 }
 
 /// The user-facing warning for a connection opportunity.
@@ -52,13 +50,23 @@ struct JourneyLegTiming: Equatable, Codable, Sendable, Identifiable {
     let directionId: Int
     let originStopId: String
     let destinationStopId: String
-    let departure: Date //When we depart startstop on leg
-    let arrival: Date //When we arrive at endstop on leg
-    let departureTimingSource: TimingSource
-    let arrivalTimingSource: TimingSource
+    let boardingTime: SelectedStopTime
+    let arrivalTime: SelectedStopTime
 
     var id: UUID {
         resolvedLegId
+    }
+
+    var departure: Date {
+        boardingTime.time
+    }
+
+    var arrival: Date {
+        arrivalTime.time
+    }
+
+    var arrivalTimingSource: TimingSource {
+        arrivalTime.source
     }
 }
 
@@ -73,15 +81,17 @@ struct JourneyConnectionTiming: Equatable, Codable, Sendable {
     let departingStopId: String
     let arrival: Date
     let arrivingTimingSource: TimingSource
-    let departure: Date
-    let departingTimingSource:TimingSource
-    let boardingEvent: TimingEvent
+    let boardingTime: SelectedStopTime
     let minimumTransferDuration: TimeInterval
     let preferredReliabilityBuffer: TimeInterval
     let nextAlternativeDeparture: Date?
     let isHighConsequence: Bool
     let isLastService: Bool
     let warning: ConnectionWarning
+
+    var departure: Date {
+        boardingTime.time
+    }
 
     var physicalSlack: TimeInterval {
         departure.timeIntervalSince(arrival) - minimumTransferDuration
@@ -130,20 +140,17 @@ struct JourneyTimingPlan: Equatable, Codable, Sendable {
     /// The immediate connection being monitored.
     let monitoredConnection: JourneyConnectionTiming?
 
-    //when will this leg get to the end?
-    var currentLegArrival: NoticeTime? {
-        NoticeTime(time: currentLeg?.arrival, source: currentLeg?.arrivalTimingSource)
+    /// The current leg's selected end-stop time, if that leg has timing.
+    var currentLegArrival: SelectedStopTime? {
+        currentLeg?.arrivalTime
     }
-    //when will the intended transfer depart the stop we board?
-    var nextLegDeparture: NoticeTime? {
+    //The selected next-leg service, or the monitored service when no complete path is available.
+    var nextLegBoardingTime: SelectedStopTime? {
         guard let monitoredConnection else { return nil }
         let selectedLeg = selectedItinerary?.legs.first {
             $0.resolvedLegId == monitoredConnection.departingLegId
         }
-        return NoticeTime(
-            time: selectedLeg?.departure ?? monitoredConnection.departure,
-            source: selectedLeg?.departureTimingSource ?? monitoredConnection.departingTimingSource
-        )
+        return selectedLeg?.boardingTime ?? monitoredConnection.boardingTime
     }
     var connectionWarning: ConnectionWarning? {
         monitoredConnection?.warning

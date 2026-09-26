@@ -344,9 +344,9 @@ enum JourneyAction: Equatable {
                     $0.id == currentConnection.departingLegId
                 }
                 let details = ConnectionWarningChangedDetails(
-                    departure: update.timing.nextLegDeparture,
+                    boardingTime: update.timing.nextLegBoardingTime,
                     eta: updatedEta,
-                    previousDeparture: previousTiming?.nextLegDeparture,
+                    previousBoardingTime: previousTiming?.nextLegBoardingTime,
                     previousEta: previousEta,
                     departingLeg: departingLeg,
                     previousWarning: previousConnection.warning,

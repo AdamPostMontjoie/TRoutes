@@ -7,34 +7,29 @@
 
 import Foundation
 
-struct NoticeTime: Equatable, Sendable {
-    let time: Date?
-    let source: TimingSource?
-}
-
 //Information for updated Warnings
 struct ConnectionWarningChangedDetails: Equatable, Sendable {
     let stopName: String? //what stop were we switching to?
     let departingRouteId: String? //the next leg we're switching to at connection
     let transitType: TransitType? //what vehicle is next leg using?
     
-    let departure: NoticeTime? //when is next leg departing?
+    let boardingTime: SelectedStopTime?
     let destinationArrival: Date? //overall ETA
     
-    let oldTime:NoticeTime? //when was train supposed to arrive or depart?
+    let previousBoardingTime: SelectedStopTime?
     let oldArrival: Date? //when were we originally gonna arrive at destination??
     let previousWarning: ConnectionWarning?
     let warning: ConnectionWarning?
 
     let journeyRemainsPossible:Bool
 
-    init(departure: NoticeTime?, eta: Date?, previousDeparture: NoticeTime?, previousEta: Date?, departingLeg: ResolvedLeg?, previousWarning: ConnectionWarning?, warning: ConnectionWarning?) {
-        self.departure = departure
+    init(boardingTime: SelectedStopTime?, eta: Date?, previousBoardingTime: SelectedStopTime?, previousEta: Date?, departingLeg: ResolvedLeg?, previousWarning: ConnectionWarning?, warning: ConnectionWarning?) {
+        self.boardingTime = boardingTime
         self.destinationArrival = eta
         self.departingRouteId = departingLeg?.mbtaRouteId
         self.stopName = departingLeg?.startStop.stopName
         self.transitType = departingLeg?.transitType
-        self.oldTime = previousDeparture
+        self.previousBoardingTime = previousBoardingTime
         self.oldArrival = previousEta
         self.previousWarning = previousWarning
         self.warning = warning
@@ -56,8 +51,7 @@ struct BoardingNoticeDetails: Equatable, Sendable {
     let previousStopName: String? //what stop are we coming from (does not exist on intial boarding)
     let boardingStopName: String //what stop are we going to?
     
-    let arrivalTime: NoticeTime? //(8 min, predicted)
-    let departureTime: NoticeTime?// fallback (8:12 AM, scheduled)
+    let boardingTime: SelectedStopTime?
     
     //Adds warning message if applicable
     let connectionWarning: ConnectionWarning
@@ -82,9 +76,7 @@ struct BoardingNoticeDetails: Equatable, Sendable {
             self.directionDestination = boardingLeg.transitDirection?.destination ?? boardingLeg.endStop.stopName
             self.previousStopName = nil
             self.boardingStopName = boardingLeg.startStop.stopName
-            let serviceTime = NoticeTime(time: recommendation.departureTime, source: recommendation.timeSource)
-            self.arrivalTime = recommendation.boardingEvent == .arrival ? serviceTime : nil
-            self.departureTime = recommendation.boardingEvent == .departure ? serviceTime : nil
+            self.boardingTime = recommendation.boardingTime
             self.connectionWarning = connection?.warning ?? .none
             self.recommendation = recommendation
             return
@@ -102,9 +94,7 @@ struct BoardingNoticeDetails: Equatable, Sendable {
         self.directionDestination = boardingLeg.transitDirection?.destination ?? boardingLeg.endStop.stopName
         self.previousStopName = arrivingLeg.endStop.stopName
         self.boardingStopName = boardingLeg.startStop.stopName
-        let serviceTime = NoticeTime(time: connection.departure, source: connection.departingTimingSource)
-        self.arrivalTime = connection.boardingEvent == .arrival ? serviceTime : nil
-        self.departureTime = connection.boardingEvent == .departure ? serviceTime : nil
+        self.boardingTime = connection.boardingTime
         self.connectionWarning = connection.warning
         self.recommendation = nil
     }
@@ -116,8 +106,7 @@ struct BoardingNoticeDetails: Equatable, Sendable {
         self.directionDestination = leg.transitDirection?.destination ?? leg.endStop.stopName
         self.previousStopName = nil
         self.boardingStopName = leg.startStop.stopName
-        self.arrivalTime = nil
-        self.departureTime = nil
+        self.boardingTime = nil
         self.connectionWarning = .none
         self.recommendation = nil
     }
@@ -155,7 +144,10 @@ struct UpcomingArrivalNoticeDetails: Equatable, Sendable {
         self.routeId = legTiming.routeId
         self.directionDestination = leg.transitDirection?.destination ?? leg.endStop.stopName
         self.stopName = leg.endStop.stopName
-        self.arrival = legTiming.arrivalTimingSource == .prediction ? legTiming.arrival : nil
+        self.arrival = legTiming.arrivalTime.source == .prediction
+            && legTiming.arrivalTime.event == .arrival
+            ? legTiming.arrival
+            : nil
 
         if let connectionTiming {
             guard let transferLeg = legs.first(where: { $0.id == connectionTiming.departingLegId }) else {

@@ -12,9 +12,16 @@ enum TimingSource: String, Codable, Sendable {
     case schedule
 }
 
-enum TimingEvent: String, Codable, Sendable {
+enum StopEventKind: String, Codable, Sendable {
     case arrival
     case departure
+}
+
+/// One selected arrival or departure time, including where that time came from.
+struct SelectedStopTime: Equatable, Codable, Sendable {
+    let time: Date
+    let source: TimingSource
+    let event: StopEventKind
 }
 
 struct StopTimes: Equatable, Sendable {
@@ -63,50 +70,46 @@ struct TripStopTiming: Equatable, Sendable {
     let scheduleRelationship: String?
     let availability: StopCallAvailability
 
-    /// Arrival is preferred at a leg destination.
+    /// Arrival is preferred at a leg destination; departure is used if absent.
+    var selectedArrivalTime: SelectedStopTime? {
+        if let time = predicted?.arrival {
+            return SelectedStopTime(time: time, source: .prediction, event: .arrival)
+        }
+        if let time = predicted?.departure {
+            return SelectedStopTime(time: time, source: .prediction, event: .departure)
+        }
+        if let time = scheduled?.arrival {
+            return SelectedStopTime(time: time, source: .schedule, event: .arrival)
+        }
+        if let time = scheduled?.departure {
+            return SelectedStopTime(time: time, source: .schedule, event: .departure)
+        }
+        return nil
+    }
+
     var effectiveArrival: Date? {
-        predicted?.arrival
-            ?? predicted?.departure
-            ?? scheduled?.arrival
-            ?? scheduled?.departure
+        selectedArrivalTime?.time
     }
 
-    /// Departure is preferred at a leg origin.
+    /// Displays arrival before departure for predictions, vice versa for schedules
+    var selectedBoardingTime: SelectedStopTime? {
+        if let time = predicted?.arrival {
+            return SelectedStopTime(time: time, source: .prediction, event: .arrival)
+        }
+        if let time = predicted?.departure {
+            return SelectedStopTime(time: time, source: .prediction, event: .departure)
+        }
+        if let time = scheduled?.departure {
+            return SelectedStopTime(time: time, source: .schedule, event: .departure)
+        }
+        if let time = scheduled?.arrival {
+            return SelectedStopTime(time: time, source: .schedule, event: .arrival)
+        }
+        return nil
+    }
+
     var effectiveDeparture: Date? {
-        predicted?.departure
-            ?? predicted?.arrival
-            ?? scheduled?.departure
-            ?? scheduled?.arrival
+        selectedBoardingTime?.time
     }
 
-    /// Source of the selected departure time.
-    var effectiveDepartureSource: TimingSource? {
-        if predicted?.departure != nil || predicted?.arrival != nil {
-            return .prediction
-        }
-        if scheduled?.departure != nil || scheduled?.arrival != nil {
-            return .schedule
-        }
-        return nil
-    }
-
-    /// Which stop event supplied the time used for boarding.
-    var effectiveDepartureEvent: TimingEvent? {
-        if predicted?.departure != nil { return .departure }
-        if predicted?.arrival != nil { return .arrival }
-        if scheduled?.departure != nil { return .departure }
-        if scheduled?.arrival != nil { return .arrival }
-        return nil
-    }
-
-    /// Source of the selected arrival time.
-    var effectiveArrivalSource: TimingSource? {
-        if predicted?.arrival != nil || predicted?.departure != nil {
-            return .prediction
-        }
-        if scheduled?.arrival != nil || scheduled?.departure != nil {
-            return .schedule
-        }
-        return nil
-    }
 }
