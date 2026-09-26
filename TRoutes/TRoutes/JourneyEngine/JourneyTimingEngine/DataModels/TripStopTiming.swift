@@ -12,6 +12,11 @@ enum TimingSource: String, Codable, Sendable {
     case schedule
 }
 
+enum TimingEvent: String, Codable, Sendable {
+    case arrival
+    case departure
+}
+
 struct StopTimes: Equatable, Sendable {
     let arrival: Date?
     let departure: Date?
@@ -82,6 +87,15 @@ struct TripStopTiming: Equatable, Sendable {
         if scheduled?.departure != nil || scheduled?.arrival != nil {
             return .schedule
         }
+        return nil
+    }
+
+    /// Which stop event supplied the time used for boarding.
+    var effectiveDepartureEvent: TimingEvent? {
+        if predicted?.departure != nil { return .departure }
+        if predicted?.arrival != nil { return .arrival }
+        if scheduled?.departure != nil { return .departure }
+        if scheduled?.arrival != nil { return .arrival }
         return nil
     }
 

@@ -19,6 +19,7 @@ struct RecommendedDeparture: Equatable, Codable, Sendable {
     let tripId: String
     let departureTime: Date
     let timeSource: TimingSource
+    let boardingEvent: TimingEvent
 }
 
 /// The user-facing warning for a connection opportunity.
@@ -74,6 +75,7 @@ struct JourneyConnectionTiming: Equatable, Codable, Sendable {
     let arrivingTimingSource: TimingSource
     let departure: Date
     let departingTimingSource:TimingSource
+    let boardingEvent: TimingEvent
     let minimumTransferDuration: TimeInterval
     let preferredReliabilityBuffer: TimeInterval
     let nextAlternativeDeparture: Date?

@@ -83,8 +83,8 @@ struct BoardingNoticeDetails: Equatable, Sendable {
             self.previousStopName = nil
             self.boardingStopName = boardingLeg.startStop.stopName
             let serviceTime = NoticeTime(time: recommendation.departureTime, source: recommendation.timeSource)
-            self.arrivalTime = recommendation.timeSource == .prediction ? serviceTime : nil
-            self.departureTime = recommendation.timeSource == .schedule ? serviceTime : nil
+            self.arrivalTime = recommendation.boardingEvent == .arrival ? serviceTime : nil
+            self.departureTime = recommendation.boardingEvent == .departure ? serviceTime : nil
             self.connectionWarning = connection?.warning ?? .none
             self.recommendation = recommendation
             return
@@ -103,8 +103,8 @@ struct BoardingNoticeDetails: Equatable, Sendable {
         self.previousStopName = arrivingLeg.endStop.stopName
         self.boardingStopName = boardingLeg.startStop.stopName
         let serviceTime = NoticeTime(time: connection.departure, source: connection.departingTimingSource)
-        self.arrivalTime = connection.departingTimingSource == .prediction ? serviceTime : nil
-        self.departureTime = connection.departingTimingSource == .schedule ? serviceTime : nil
+        self.arrivalTime = connection.boardingEvent == .arrival ? serviceTime : nil
+        self.departureTime = connection.boardingEvent == .departure ? serviceTime : nil
         self.connectionWarning = connection.warning
         self.recommendation = nil
     }

@@ -42,8 +42,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct TRoutes: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     let notificationDelegate = NotificationDelegate()
-        
+    @Dependency(\.notificationsClient) var notificationsClient
+    
     init() {
         // Attach the delegate on boot
         UNUserNotificationCenter.current().delegate = notificationDelegate
@@ -57,6 +59,10 @@ struct TRoutes: App {
         WindowGroup {
             RootView(store:TRoutes.store)
             
+        }.onChange(of: scenePhase, initial: true) { _, newPhase in
+            if newPhase == .active {
+                notificationsClient.clearDeliveredNotifications()
+            }
         }
         
     }

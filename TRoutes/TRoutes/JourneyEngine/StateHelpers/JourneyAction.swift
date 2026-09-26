@@ -299,16 +299,15 @@ enum JourneyAction: Equatable {
         //Effect assignments
         var effects: [JourneyEffect] = []
         
-        //Send the initial recommendation once for a multi-leg journey.
-        if state.legOrder.count > 1,
-           previousTiming?.recommendedDeparture == nil,
+        //Send the initial departure once a recommendation is available.
+        if previousTiming?.recommendedDeparture == nil,
            let recommendation = update.timing.recommendedDeparture,
            let details = BoardingNoticeDetails(
                recommendation: recommendation,
                timingPlan: update.timing,
                legs: state.legOrder
            ) {
-            effects.append(.createNotification(intent: .departureRecommendation(details)))
+            effects.append(.createNotification(intent: .departureRecommendation(details, isSingleLine: state.legOrder.count == 1)))
         }
 
         //A new connection is explained by the progression notification. Only

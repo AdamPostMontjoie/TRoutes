@@ -8,7 +8,7 @@ import ComposableArchitecture
 import Foundation
 
 enum JourneyNotificationIntent: Equatable, Sendable {
-    case departureRecommendation(BoardingNoticeDetails)
+    case departureRecommendation(BoardingNoticeDetails, isSingleLine: Bool)
     case transferApproaching(UpcomingArrivalNoticeDetails)
     case transferNow(BoardingNoticeDetails)
     case destinationNext(UpcomingArrivalNoticeDetails)
@@ -27,25 +27,32 @@ actor NotificationManager {
     func createNotification(intent: JourneyNotificationIntent) async {
         let message: String
         let title:String
+        let isTimeSensitive: Bool
         switch intent {
-        case let .departureRecommendation(details):
-            title = "Departure"
+        case let .departureRecommendation(details, isSingleLine):
+            title = isSingleLine ? "Departure" : "Recommendation"
             message = boardingMessage(details, isRecommendation: true)
+            isTimeSensitive = false
         case let .transferApproaching(details):
             title = "Approaching Transfer"
             message = transferApproachingMessage(details)
+            isTimeSensitive = true
         case let .transferNow(details):
             title = "Transfer Now!"
             message = boardingMessage(details, isRecommendation: false)
+            isTimeSensitive = true
         case let .destinationNext(details):
             title = "Approaching Destination"
             message = destinationNextMessage(details)
+            isTimeSensitive = true
         case let .arrivedAtDestination(destinationName):
             title = "Arrived At Destination"
             message = "You have arrived at \(destinationName)."
+            isTimeSensitive = false
         case let .connectionWarningChanged(details):
             title = "Warning"
             message = connectionWarningChangedMessage(details)
+            isTimeSensitive = true
         case let .missedVehicle(details):
             let service = serviceDescription(
                 routeId: details.routeId,
@@ -54,12 +61,14 @@ actor NotificationManager {
             )
             title = "Missed"
             message = "Looks like you missed the \(service) at \(details.boardingStopName). Recalculating your departure and ETA."
+            isTimeSensitive = false
         case .trackingDegraded:
             title = "Error"
             message = "GPS signal was lost or is inaccurate. Journey tracking may be degraded."
+            isTimeSensitive = false
         }
 
-        await notificationsClient.userNotification(title, message)
+        await notificationsClient.userNotification(title, message, isTimeSensitive)
     }
 
     private func boardingMessage(_ details: BoardingNoticeDetails, isRecommendation: Bool) -> String {
@@ -71,7 +80,7 @@ actor NotificationManager {
         var message: String
 
         if isRecommendation {
-            message = "Recommendation: Board the \(service) at \(details.boardingStopName)."
+            message = "Board the \(service) at \(details.boardingStopName)."
         } else if let previousStopName = details.previousStopName,
                   previousStopName != details.boardingStopName {
             message = "Transfer to \(details.boardingStopName) for the \(service)."
@@ -86,11 +95,9 @@ actor NotificationManager {
     }
 
     private func transferApproachingMessage(_ details: UpcomingArrivalNoticeDetails) -> String {
-        var message: String
+        var message = "Your transfer at \(details.stopName) is the next stop."
         if let arrival = details.arrival {
-            message = "Arrive at \(details.stopName) \(relativeDescription(for: arrival))."
-        } else {
-            message = "\(details.stopName) is the next stop."
+            message += " Expected arrival \(relativeDescription(for: arrival))."
         }
 
         if let transferRouteId = details.transferRouteId,
@@ -290,10 +297,5 @@ actor NotificationManager {
     private func sentence(_ text: String) -> String {
         guard let first = text.first else { return text }
         return first.uppercased() + text.dropFirst()
-    }
-
-    private enum TimingEvent {
-        case arrival
-        case departure
     }
 }

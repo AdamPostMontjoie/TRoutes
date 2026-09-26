@@ -162,7 +162,8 @@ extension JourneyTimingEngine {
             resolvedLegId: firstLeg.legId,
             tripId: firstLeg.tripId,
             departureTime: firstLeg.departure,
-            timeSource: firstLeg.departureTimeSource
+            timeSource: firstLeg.departureTimeSource,
+            boardingEvent: firstLeg.boardingEvent
         )
     }
 
@@ -195,6 +196,7 @@ extension JourneyTimingEngine {
             arrivingTimingSource: arrivingOption.arrivalTimeSource,
             departure: connection.departure,
             departingTimingSource:departingOption.departureTimeSource,
+            boardingEvent: departingOption.boardingEvent,
             minimumTransferDuration: connection.requirement.minimumTransferTime,
             preferredReliabilityBuffer: connection.requirement.preferredReliabilityBuffer,
             nextAlternativeDeparture: connection.nextAlternativeDeparture,

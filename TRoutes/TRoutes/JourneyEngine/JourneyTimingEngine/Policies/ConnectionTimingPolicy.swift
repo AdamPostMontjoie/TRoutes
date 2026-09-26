@@ -18,6 +18,7 @@ struct ConnectionTimingPolicy {
     private let infrequentServiceReliabilityBuffer: TimeInterval = 5 * 60
     private let longRecoveryThreshold: TimeInterval = 60 * 60
     private let assumedWalkingSpeedMetersPerSecond = 1.4
+    private let additionalTransferWalkingTime: TimeInterval = 60
 
     /// This is deliberately independent of the recovery gap. Missing an
     /// infrequent service changes consequence, not physical transfer duration.
@@ -42,7 +43,7 @@ struct ConnectionTimingPolicy {
         let walkingDistance = arrivalLocation.distance(from: departureLocation)
 
         return TransferRequirement(
-            minimumTransferTime: walkingDistance
+            minimumTransferTime: additionalTransferWalkingTime + walkingDistance
                 / assumedWalkingSpeedMetersPerSecond,
             preferredReliabilityBuffer: preferredReliabilityBuffer(
                 for: departingLeg

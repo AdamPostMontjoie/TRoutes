@@ -22,6 +22,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
     let departure: Date
     let arrival: Date
     let departureTimeSource: TimingSource
+    let boardingEvent: TimingEvent
     let arrivalTimeSource: TimingSource
     let sourceComposition: TimingSourceComposition
 
@@ -36,6 +37,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
               origin.directionId == destination.directionId,
               let departure = origin.effectiveDeparture,
               let departureTimeSource = origin.effectiveDepartureSource,
+              let boardingEvent = origin.effectiveDepartureEvent,
               let arrival = destination.effectiveArrival,
               let arrivalTimeSource = destination.effectiveArrivalSource,
               arrival >= departure else {
@@ -48,6 +50,7 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
         self.departure = departure
         self.arrival = arrival
         self.departureTimeSource = departureTimeSource
+        self.boardingEvent = boardingEvent
         self.arrivalTimeSource = arrivalTimeSource
 
         switch (origin.availability, destination.availability) {
