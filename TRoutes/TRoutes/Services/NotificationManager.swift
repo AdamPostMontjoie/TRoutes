@@ -265,7 +265,7 @@ actor NotificationManager {
     }
 
     private func relativeDescription(for date: Date) -> String {
-        let minutes = Int(ceil(date.timeIntervalSinceNow / 60))
+        let minutes = TransitCountdown.minutes(until: date, from: Date())
         if minutes <= 0 {
             return "now"
         }

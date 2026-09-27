@@ -424,11 +424,7 @@ extension JourneyTimingEngine {
             if isBoarding {
                 display = "Boarding"
             } else if let eventTime = times?.arrival ?? times?.departure {
-                let minutes = Calendar.current.dateComponents(
-                    [.minute],
-                    from: now,
-                    to: eventTime
-                ).minute ?? 0
+                let minutes = TransitCountdown.minutes(until: eventTime, from: now)
                 display = minutes <= 0 ? "Arriving" : "\(minutes) min"
             } else {
                 return nil
