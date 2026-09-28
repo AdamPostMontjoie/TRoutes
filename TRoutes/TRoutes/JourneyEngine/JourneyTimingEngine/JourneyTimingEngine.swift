@@ -65,6 +65,7 @@ actor JourneyTimingEngine {
         let optionsByLeg = buildTripOptionsByLeg(
             queryPlan: queryPlan,
             mergedCalls: mergedCalls,
+            currentPredictionCalls: unmergedCalls.predictionCalls,
             context: context,
             now: fetchedAt
         )

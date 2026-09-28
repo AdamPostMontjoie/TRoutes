@@ -31,7 +31,7 @@ struct JourneyPredictionSliceTests {
         #expect(slice.displayPredictions.allSatisfy { $0.display.contains("min") })
     }
 
-    @Test func twoLiveCallsFillWithOneDistinctSchedule() async {
+    @Test func twoLiveCallsFillWithScheduleAfterLastPrediction() async {
         let raw = UnmergedTimingCalls(
             predictionCalls: [
                 call("live-1", minutesAway: 5, source: .prediction),
@@ -41,7 +41,10 @@ struct JourneyPredictionSliceTests {
                 call("live-1", minutesAway: 7, source: .schedule),
                 call("wrong-direction", minutesAway: 8, source: .schedule, direction: 1),
                 call("canceled", minutesAway: 9, source: .schedule, status: "Canceled"),
+                call("before-live", minutesAway: 3, source: .schedule),
                 call("schedule-1", minutesAway: 10, source: .schedule),
+                call("at-cutoff", minutesAway: 15, source: .schedule),
+                call("live-2", minutesAway: 25, source: .schedule),
                 call("schedule-2", minutesAway: 20, source: .schedule)
             ]
         )
@@ -50,11 +53,11 @@ struct JourneyPredictionSliceTests {
             for: target(), rawCalls: raw, now: now
         )
 
-        #expect(slice.displayPredictions.map(\.tripId) == ["live-1", "schedule-1", "live-2"])
+        #expect(slice.displayPredictions.map(\.tripId) == ["live-1", "live-2", "schedule-2"])
         #expect(slice.livePredictions.map(\.tripId) == ["live-1", "live-2"])
         #expect(slice.displayPredictions[0].display.contains("min"))
-        #expect(!slice.displayPredictions[1].display.contains("min"))
-        #expect(slice.displayPredictions[2].display.contains("min"))
+        #expect(slice.displayPredictions[1].display.contains("min"))
+        #expect(!slice.displayPredictions[2].display.contains("min"))
     }
 
     @Test func noLiveCallsUseOnlyFutureSchedulesUpToThree() async {

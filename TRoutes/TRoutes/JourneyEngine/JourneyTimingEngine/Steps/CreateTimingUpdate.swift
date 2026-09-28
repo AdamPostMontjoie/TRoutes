@@ -340,8 +340,8 @@ extension JourneyTimingEngine {
     }
 
     /// Takes current live calls first, then fills the remaining board slots with
-    /// distinct scheduled calls. ETA and recommendations use the merged calls,
-    /// never this display-only projection.
+    /// distinct scheduled calls after the last prediction. ETA and recommendations
+    /// use the merged calls, never this display-only projection.
     /// The slice ID is the exact ID later matched to PredictionState.
     func createPredictionSlice(for target: TimingPredictionTargetPlan, rawCalls: UnmergedTimingCalls, now: Date) -> PredictionSlice {
         let matchingLiveCalls = matchingCalls(
@@ -349,23 +349,22 @@ extension JourneyTimingEngine {
             acceptableRouteDirections: target.acceptableRouteDirections,
             from: rawCalls.predictionCalls
         )
-        // A current prediction for a trip supersedes its schedule even if that
-        // prediction is canceled or no longer boardable.
-        let predictedTripIds = Set(matchingLiveCalls.map(\.key.tripId))
         let sortedLiveCalls = matchingLiveCalls
             .filter { $0.predictionId != nil && $0.predicted != nil }
             .filter { isUsableForTravel($0) }
             .filter { ($0.effectiveDeparture ?? .distantPast) >= now }
             .sorted { callSortTime($0) < callSortTime($1) }
-        let sortedScheduleCalls = matchingCalls(
-            at: target.endpoint,
-            acceptableRouteDirections: target.acceptableRouteDirections,
-            from: rawCalls.scheduleCalls
+        let sortedScheduleCalls = filterScheduledBoardingCalls(
+            matchingCalls(
+                at: target.endpoint,
+                acceptableRouteDirections: target.acceptableRouteDirections,
+                from: rawCalls.scheduleCalls
+            )
+                .filter { $0.scheduleId != nil && $0.scheduled != nil }
+                .filter { isUsableForTravel($0) }
+                .filter { ($0.effectiveDeparture ?? .distantPast) >= now },
+            currentPredictions: matchingLiveCalls
         )
-            .filter { $0.scheduleId != nil && $0.scheduled != nil }
-            .filter { isUsableForTravel($0) }
-            .filter { ($0.effectiveDeparture ?? .distantPast) >= now }
-            .filter { !predictedTripIds.contains($0.key.tripId) }
             .sorted { callSortTime($0) < callSortTime($1) }
 
         var observedLiveTripIds = Set<String>()

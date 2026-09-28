@@ -10,13 +10,14 @@ import Foundation
 // MARK: - Step 3: construct options for every leg
 
 extension JourneyTimingEngine {
-    func buildTripOptionsByLeg(queryPlan: TimingQueryPlan, mergedCalls: [TripStopTiming], context: JourneyTimingContext, now: Date) -> [UUID: [LegTripOption]] {
+    func buildTripOptionsByLeg(queryPlan: TimingQueryPlan, mergedCalls: [TripStopTiming], currentPredictionCalls: [TripStopTiming], context: JourneyTimingContext, now: Date) -> [UUID: [LegTripOption]] {
         let optionsByLeg = Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let isInProgressLeg = context.isOnboard
                 && leg.id == context.timingLegId
             let options = buildTripOptions(
                 for: leg,
                 from: mergedCalls,
+                currentPredictionCalls: currentPredictionCalls,
                 isInProgressLeg: isInProgressLeg,
                 onboardTripId: isInProgressLeg ? context.onboardTripId : nil,
                 now: now
@@ -29,7 +30,7 @@ extension JourneyTimingEngine {
 
     /// Filters both endpoints, groups destinations by trip, pairs same-trip
     /// calls, rejects invalid pairs, and returns valid options chronologically.
-    func buildTripOptions(for leg: TimingLegPlan, from calls: [TripStopTiming], isInProgressLeg: Bool, onboardTripId: String?, now: Date) -> [LegTripOption] {
+    func buildTripOptions(for leg: TimingLegPlan, from calls: [TripStopTiming], currentPredictionCalls: [TripStopTiming], isInProgressLeg: Bool, onboardTripId: String?, now: Date) -> [LegTripOption] {
         if isInProgressLeg && onboardTripId == nil {
             // Journey progression proves the passenger is onboard, but without
             // a trip identity selecting another trip would be a guess.
@@ -51,6 +52,16 @@ extension JourneyTimingEngine {
             destinationCalls = destinationCalls.filter {
                 $0.key.tripId == onboardTripId
             }
+        }
+        if !isInProgressLeg {
+            originCalls = filterScheduledBoardingCalls(
+                originCalls,
+                currentPredictions: matchingCalls(
+                    at: leg.origin,
+                    acceptableRouteDirections: leg.acceptableRouteDirections,
+                    from: currentPredictionCalls
+                )
+            )
         }
         let destinationsByTrip = Dictionary(
             grouping: destinationCalls,
@@ -76,6 +87,25 @@ extension JourneyTimingEngine {
         }
 
         return optionsById.values.sorted { $0.departure < $1.departure }
+    }
+
+    /// Callers scope both inputs to the same boarding stop and allowed services.
+    /// Predictions replace their trip's schedule and cover every service through
+    /// the last predicted boarding time; later schedules remain usable.
+    func filterScheduledBoardingCalls(_ calls: [TripStopTiming], currentPredictions: [TripStopTiming]) -> [TripStopTiming] {
+        let predictedTripIds = Set(currentPredictions.map(\.key.tripId))
+        let lastPredictedBoardingTime = currentPredictions
+            .filter { isUsableForTravel($0) }
+            .compactMap { $0.predicted?.arrival ?? $0.predicted?.departure }
+            .max()
+
+        return calls.filter { call in
+            guard let boardingTime = call.selectedBoardingTime,
+                  boardingTime.source == .schedule else { return true }
+            guard !predictedTripIds.contains(call.key.tripId) else { return false }
+            guard let lastPredictedBoardingTime else { return true }
+            return boardingTime.time > lastPredictedBoardingTime
+        }
     }
 
     func matchingCalls(at endpoint: TimingEndpointPlan, acceptableRouteDirections: Set<TimingRouteDirection>, from calls: [TripStopTiming]) -> [TripStopTiming] {
