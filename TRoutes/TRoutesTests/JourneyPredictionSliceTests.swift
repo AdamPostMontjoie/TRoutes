@@ -10,6 +10,30 @@ import Testing
 struct JourneyPredictionSliceTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
+    @Test func countdownRoundsElapsedSecondsToNearestMinute() {
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(29), from: now) == 0)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(30), from: now) == 1)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(61), from: now) == 1)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(90), from: now) == 2)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(-30), from: now) == 0)
+    }
+
+    @Test func predictionDisplayUsesSharedCountdown() async {
+        let eventTime = now.addingTimeInterval(61)
+        let prediction = TripStopTiming(
+            key: TripStopKey(tripId: "trip", stopId: "boarding", stopSequence: 1),
+            routeId: "route", directionId: 0, vehicleId: "vehicle",
+            headsign: "Destination", isLastTrip: nil,
+            scheduleId: nil, predictionId: "prediction",
+            scheduled: nil, predicted: StopTimes(arrival: eventTime, departure: nil),
+            status: nil, scheduleRelationship: nil, availability: .predicted
+        )
+
+        let display = await JourneyTimingEngine.shared.makeTransitPrediction(from: prediction, now: now)?.display
+
+        #expect(display == "1 min")
+    }
+
     @Test func threeLiveCallsDoNotUseSchedules() async {
         let live = [
             call("live-3", minutesAway: 15, source: .prediction),

@@ -12,6 +12,20 @@ struct JourneyTimingSelection {
     let recommendedJourney: TimedJourney?
     let currentLegOption: LegTripOption?
     let monitoredConnection: JourneyConnectionTiming?
+    let nextUpcomingDeparture: Date?
+
+    init(etaJourney: TimedJourney?, recommendedJourney: TimedJourney?, currentLegOption: LegTripOption?, monitoredConnection: JourneyConnectionTiming?, nextUpcomingDeparture: Date? = nil) {
+        self.etaJourney = etaJourney
+        self.recommendedJourney = recommendedJourney
+        self.currentLegOption = currentLegOption
+        self.monitoredConnection = monitoredConnection
+        self.nextUpcomingDeparture = nextUpcomingDeparture
+    }
+
+    var recommendsLaterDeparture: Bool {
+        guard let recommendedJourney, let nextUpcomingDeparture else { return false }
+        return recommendedJourney.originDeparture > nextUpcomingDeparture
+    }
 }
 
 // MARK: - Step 6: select and project timing state
@@ -76,7 +90,8 @@ extension JourneyTimingEngine {
             etaJourney: etaJourney,
             recommendedJourney: recommendedJourney,
             currentLegOption: currentLegOption,
-            monitoredConnection: monitoredConnection
+            monitoredConnection: monitoredConnection,
+            nextUpcomingDeparture: firstLegOptions.map(\.departure).min()
         )
     }
 
@@ -221,7 +236,9 @@ extension JourneyTimingEngine {
             currentLeg: context.allowsRecommendation
                 ? nil
                 : selection.currentLegOption.map(makeJourneyLegTiming),
-            recommendedDeparture: selection.recommendedJourney.map(makeRecommendedDeparture),
+            recommendedDeparture: selection.recommendsLaterDeparture
+                ? selection.recommendedJourney.map(makeRecommendedDeparture)
+                : nil,
             monitoredConnection: selection.monitoredConnection
         )
     }

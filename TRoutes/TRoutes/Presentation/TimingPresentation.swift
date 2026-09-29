@@ -14,7 +14,11 @@ struct ConnectionWarningChangedDetails: Equatable, Sendable {
     let transitType: TransitType? //what vehicle is next leg using?
     
     let boardingTime: SelectedStopTime?
+    let monitoredBoardingTime: SelectedStopTime
     let destinationArrival: Date? //overall ETA
+    let availableTime: TimeInterval
+    let nextAlternativeDeparture: Date?
+    let isLastService: Bool
     
     let previousBoardingTime: SelectedStopTime?
     let oldArrival: Date? //when were we originally gonna arrive at destination??
@@ -23,9 +27,13 @@ struct ConnectionWarningChangedDetails: Equatable, Sendable {
 
     let journeyRemainsPossible:Bool
 
-    init(boardingTime: SelectedStopTime?, eta: Date?, previousBoardingTime: SelectedStopTime?, previousEta: Date?, departingLeg: ResolvedLeg?, previousWarning: ConnectionWarning?, warning: ConnectionWarning?) {
+    init(boardingTime: SelectedStopTime?, monitoredConnection: JourneyConnectionTiming, eta: Date?, previousBoardingTime: SelectedStopTime?, previousEta: Date?, departingLeg: ResolvedLeg?, previousWarning: ConnectionWarning?, warning: ConnectionWarning?) {
         self.boardingTime = boardingTime
+        self.monitoredBoardingTime = monitoredConnection.boardingTime
         self.destinationArrival = eta
+        self.availableTime = monitoredConnection.physicalSlack
+        self.nextAlternativeDeparture = monitoredConnection.nextAlternativeDeparture
+        self.isLastService = monitoredConnection.isLastService
         self.departingRouteId = departingLeg?.mbtaRouteId
         self.stopName = departingLeg?.startStop.stopName
         self.transitType = departingLeg?.transitType

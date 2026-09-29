@@ -50,8 +50,9 @@ actor NotificationManager {
             message = "You have arrived at \(destinationName)."
             isTimeSensitive = false
         case let .connectionWarningChanged(details):
-            title = "Warning"
-            message = connectionWarningChangedMessage(details)
+            let notice = connectionWarningChangedNotice(details)
+            title = notice.title
+            message = notice.detail
             isTimeSensitive = true
         case let .missedVehicle(details):
             let service = serviceDescription(
@@ -126,8 +127,7 @@ actor NotificationManager {
         return message
     }
 
-    private func connectionWarningChangedMessage(_ details: ConnectionWarningChangedDetails) -> String {
-        let service = connectionServiceDescription(details)
+    private func connectionWarningChangedNotice(_ details: ConnectionWarningChangedDetails) -> JourneyPresentationState.TimingMessage {
         let recovered: Bool
         if let previousWarning = details.previousWarning,
            let warning = details.warning {
@@ -137,61 +137,43 @@ actor NotificationManager {
         }
 
         if recovered {
-            var message = "Your connection to the \(service) is possible again."
+            var message = "Your original connection is possible again."
             if let boarding = timingDescription(details.boardingTime) {
                 message += " \(sentence(boarding))."
             }
             if let destinationArrival = details.destinationArrival {
                 message += " Expected arrival at \(clockDescription(for: destinationArrival))."
             }
-            return message
+            return JourneyPresentationState.TimingMessage(title: "Connection restored", detail: message)
         }
 
         guard let warning = details.warning else {
-            return "Your connection to the \(service) has improved."
+            return JourneyPresentationState.TimingMessage(title: "Connection updated", detail: "Your connection has improved.")
         }
 
-        switch warning {
-        case .tight:
-            var message = "Your connection to the \(service) is now tight."
-            if let boarding = timingDescription(details.boardingTime) {
-                message += " \(sentence(boarding))."
-            }
-            return message
-
-        case .highConsequence:
-            return "Your connection to the \(service) has a long wait before the next service."
-
-        case .tightHighConsequence:
-            var message = "Move quickly for the \(service). This connection is tight, and missing it means a long wait."
-            if let boarding = timingDescription(details.boardingTime) {
-                message += " \(sentence(boarding))."
-            }
-            return message
-
-        case .likelyMiss:
-            var message = "You’re unlikely to make the \(service)"
-            if let previousBoarding = timingDescription(details.previousBoardingTime) {
-                message += " \(previousBoarding)."
-            } else {
-                message += "."
-            }
-
-            if details.journeyRemainsPossible {
-                if let replacementBoarding = timingDescription(details.boardingTime) {
-                    message += " Your ETA now uses the \(service) \(replacementBoarding)."
-                }
-                if let destinationArrival = details.destinationArrival {
-                    message += " Expected arrival at \(clockDescription(for: destinationArrival))."
-                }
-            } else {
-                message += " An updated ETA isn’t available yet."
-            }
-            return message
-
-        case .none:
-            return "Your connection to the \(service) has improved."
+        let routeName: String
+        if let routeId = details.departingRouteId,
+           let transitType = details.transitType {
+            routeName = RoutePresentation(routeId: routeId, transitType: transitType).badgeText
+        } else {
+            routeName = "connecting service"
         }
+        let monitoredDeparture = details.monitoredBoardingTime.time
+        let replacement = details.journeyRemainsPossible
+            && details.boardingTime?.time != monitoredDeparture
+            ? details.boardingTime?.time
+            : nil
+        return JourneyPresentationState.warningMessage(
+            warning: warning,
+            routeName: routeName,
+            stopName: details.stopName ?? "your transfer",
+            boardingTime: monitoredDeparture,
+            availableTime: details.availableTime,
+            nextAlternativeDeparture: details.nextAlternativeDeparture,
+            isLastService: details.isLastService,
+            replacementDeparture: replacement,
+            replacementArrival: details.destinationArrival
+        ) ?? JourneyPresentationState.TimingMessage(title: "Connection updated", detail: "Your connection has improved.")
     }
 
     private func timingDescription(_ selectedTime: SelectedStopTime?) -> String? {
@@ -239,28 +221,16 @@ actor NotificationManager {
         return "\(base) toward \(directionDestination)"
     }
 
-    private func connectionServiceDescription(_ details: ConnectionWarningChangedDetails) -> String {
-        guard let routeId = details.departingRouteId,
-              let transitType = details.transitType else {
-            return "connecting service"
-        }
-        let service = serviceDescription(
-            routeId: routeId,
-            transitType: transitType,
-            directionDestination: nil
-        )
-        guard let stopName = details.stopName else { return service }
-        return "\(service) at \(stopName)"
-    }
-
     private func appendingWarning(_ warning: ConnectionWarning, to message: String) -> String {
         switch warning {
-        case .none, .tight, .highConsequence:
+        case .none, .tight:
             return message
+        case .highConsequence:
+            return "\(message) Missing this connection means a long wait."
         case .tightHighConsequence:
-            return "\(message) There may be a tight connection, and missing it means a long wait."
+            return "\(message) Move quickly; missing this connection means a long wait."
         case .likelyMiss:
-            return "\(message) You’re unlikely to make this connection."
+            return "\(message) Current estimates leave too little time for this connection."
         }
     }
 

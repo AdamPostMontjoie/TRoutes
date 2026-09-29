@@ -212,6 +212,79 @@ struct JourneyTimingSelectionTests {
         #expect(selection.monitoredConnection == nil)
     }
 
+    @Test func earlierPossibleTightJourneyBeatsLaterBufferedJourney() throws {
+        let now = Date(timeIntervalSince1970: 30_000)
+        let feeder = try #require(makeOption(
+            legId: UUID(), tripId: "OL", originStopId: "origin",
+            destinationStopId: "transfer", departure: now.addingTimeInterval(3 * 60),
+            arrival: now.addingTimeInterval(23 * 60)
+        ))
+        let earlyTrain = try #require(makeOption(
+            legId: UUID(), tripId: "CR-early", originStopId: "transfer",
+            destinationStopId: "destination", departure: now.addingTimeInterval(27 * 60),
+            arrival: now.addingTimeInterval(60 * 60)
+        ))
+        let laterTrain = try #require(makeOption(
+            legId: earlyTrain.legId, tripId: "CR-later", originStopId: "transfer",
+            destinationStopId: "destination", departure: now.addingTimeInterval(40 * 60),
+            arrival: now.addingTimeInterval(75 * 60)
+        ))
+        let requirement = TransferRequirement(minimumTransferTime: 3 * 60, preferredReliabilityBuffer: 5 * 60)
+        let tightConnection = makeConnection(from: feeder, to: earlyTrain, requirement: requirement, nextAlternativeDeparture: laterTrain.departure)
+        let bufferedConnection = makeConnection(from: feeder, to: laterTrain, requirement: requirement, nextAlternativeDeparture: nil)
+        let tightJourney = try #require(TimedJourney(legs: [feeder, earlyTrain], transfers: [tightConnection], warnings: []))
+        let bufferedJourney = try #require(TimedJourney(legs: [feeder, laterTrain], transfers: [bufferedConnection], warnings: []))
+
+        #expect(tightConnection.isPhysicallyPossible)
+        #expect(!tightConnection.meetsReliabilityBuffer)
+        #expect(bufferedConnection.meetsReliabilityBuffer)
+        #expect(JourneySelectionPolicy().selectRecommendation(from: [bufferedJourney, tightJourney]) == tightJourney)
+    }
+
+    @Test func selectedBoardingTimeKeepsSourceAndEventTogether() throws {
+        let now = Date(timeIntervalSince1970: 40_000)
+        let arrivalOnly = TripStopTiming(
+            key: TripStopKey(tripId: "arrival-only", stopId: "origin", stopSequence: 1),
+            routeId: "route", directionId: 0, vehicleId: nil, headsign: nil,
+            isLastTrip: nil, scheduleId: "schedule", predictionId: "prediction",
+            scheduled: StopTimes(arrival: nil, departure: now.addingTimeInterval(2 * 60)),
+            predicted: StopTimes(arrival: now, departure: nil), status: nil,
+            scheduleRelationship: nil, availability: .predicted
+        )
+        let predictionOption = try #require(makeOption(
+            legId: UUID(), tripId: "prediction", originStopId: "origin",
+            destinationStopId: "destination", departure: now,
+            arrival: now.addingTimeInterval(10 * 60)
+        ))
+
+        #expect(arrivalOnly.selectedBoardingTime == SelectedStopTime(time: now, source: .prediction, event: .arrival))
+        #expect(predictionOption.boardingTime == SelectedStopTime(time: now, source: .prediction, event: .arrival))
+    }
+
+    @Test func selectedArrivalTimeRecordsTheActualEndpointEvent() {
+        let now = Date(timeIntervalSince1970: 45_000)
+        let predictedArrival = TripStopTiming(
+            key: TripStopKey(tripId: "trip", stopId: "destination", stopSequence: 2),
+            routeId: "route", directionId: 0, vehicleId: nil, headsign: nil,
+            isLastTrip: nil, scheduleId: "schedule", predictionId: "prediction",
+            scheduled: StopTimes(arrival: now.addingTimeInterval(60), departure: nil),
+            predicted: StopTimes(arrival: now, departure: now.addingTimeInterval(30)),
+            status: nil, scheduleRelationship: nil, availability: .predicted
+        )
+        let predictedDeparture = TripStopTiming(
+            key: predictedArrival.key, routeId: predictedArrival.routeId,
+            directionId: predictedArrival.directionId, vehicleId: nil,
+            headsign: nil, isLastTrip: nil, scheduleId: "schedule",
+            predictionId: "prediction",
+            scheduled: predictedArrival.scheduled,
+            predicted: StopTimes(arrival: nil, departure: now.addingTimeInterval(30)),
+            status: nil, scheduleRelationship: nil, availability: .predicted
+        )
+
+        #expect(predictedArrival.selectedArrivalTime == SelectedStopTime(time: now, source: .prediction, event: .arrival))
+        #expect(predictedDeparture.selectedArrivalTime == SelectedStopTime(time: now.addingTimeInterval(30), source: .prediction, event: .departure))
+    }
+
     private func makeOption(
         legId: UUID,
         tripId: String,
