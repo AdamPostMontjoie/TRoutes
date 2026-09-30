@@ -10,6 +10,23 @@ import Foundation
 // MARK: - Step 3: construct options for every leg
 
 extension JourneyTimingEngine {
+    func retainingConfirmedOnboardOrigin(in calls: [TripStopTiming], previousOptions: [LegTripOption], leg: TimingLegPlan, tripId: String) -> [TripStopTiming] {
+        guard let origin = previousOptions.first(where: { $0.tripId == tripId })?.origin,
+              !matchingCalls(
+                at: leg.origin,
+                acceptableRouteDirections: leg.acceptableRouteDirections,
+                from: [origin]
+              ).isEmpty,
+              !matchingCalls(
+                at: leg.origin,
+                acceptableRouteDirections: leg.acceptableRouteDirections,
+                from: calls
+              ).contains(where: { $0.key.tripId == tripId }) else {
+            return calls
+        }
+        return calls + [origin]
+    }
+
     func buildTripOptionsByLeg(queryPlan: TimingQueryPlan, mergedCalls: [TripStopTiming], currentPredictionCalls: [TripStopTiming], context: JourneyTimingContext, now: Date) -> [UUID: [LegTripOption]] {
         let optionsByLeg = Dictionary(uniqueKeysWithValues: queryPlan.legs.map { leg in
             let isInProgressLeg = context.isOnboard
