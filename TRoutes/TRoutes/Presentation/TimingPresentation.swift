@@ -7,6 +7,17 @@
 
 import Foundation
 
+extension JourneyTimingPlan {
+    /// The connection the rider is taking, or the watched service when no
+    /// complete journey can be selected.
+    func notificationConnection(arrivingLegId: UUID) -> JourneyConnectionTiming? {
+        if let selectedItinerary {
+            return selectedItinerary.connections.first { $0.arrivingLegId == arrivingLegId }
+        }
+        return monitoredConnection?.arrivingLegId == arrivingLegId ? monitoredConnection : nil
+    }
+}
+
 //Information for updated Warnings
 struct ConnectionWarningChangedDetails: Equatable, Sendable {
     let stopName: String? //what stop were we switching to?
@@ -90,7 +101,11 @@ struct BoardingNoticeDetails: Equatable, Sendable {
             return
         }
 
-        guard let connection = timingPlan.monitoredConnection,
+        let arrivingLegId = timingPlan.currentLeg?.resolvedLegId
+            ?? timingPlan.selectedItinerary?.legs.first?.resolvedLegId
+            ?? timingPlan.monitoredConnection?.arrivingLegId
+        guard let arrivingLegId,
+              let connection = timingPlan.notificationConnection(arrivingLegId: arrivingLegId),
               let arrivingLeg = legs.first(where: { $0.id == connection.arrivingLegId }),
               let boardingLeg = legs.first(where: { $0.id == connection.departingLegId }) else {
             return nil
@@ -141,6 +156,11 @@ struct UpcomingArrivalNoticeDetails: Equatable, Sendable {
     let transferRouteId:String?
     
     let connectionWarning:ConnectionWarning
+
+    func arrivalWorthMentioning(relativeTo now: Date) -> Date? {
+        guard let arrival, arrival.timeIntervalSince(now) > 60 else { return nil }
+        return arrival
+    }
 
     init?(legTiming: JourneyLegTiming, connectionTiming: JourneyConnectionTiming?, legs: [ResolvedLeg]) {
         guard let leg = legs.first(where: { $0.id == legTiming.resolvedLegId }) else {

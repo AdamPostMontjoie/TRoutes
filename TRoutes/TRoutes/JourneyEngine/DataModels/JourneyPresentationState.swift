@@ -163,10 +163,10 @@ struct JourneyPresentationState: Equatable, Codable {
         }
     }
 
-    private static func inAppWarningMessage(for journey: JourneyState, relativeTo now: Date) -> TimingMessage? {
+    private static func inAppWarningMessage(for journey: JourneyState, timing: JourneyTimingPlan?, relativeTo now: Date) -> TimingMessage? {
         guard let context = journey.timingContext,
               context.showsConnectionWarning,
-              let timing = journey.timingState.timing else { return nil }
+              let timing else { return nil }
 
         let connection: JourneyConnectionTiming?
         if let itinerary = timing.selectedItinerary {
@@ -285,20 +285,24 @@ struct JourneyPresentationState: Equatable, Codable {
             return
         }
 
-        let hidesUnconfirmedOnboardTiming = journey.timingContext?.isOnboard == true
-            && journey.timingContext?.onboardTripId == nil
-        let timing = hidesUnconfirmedOnboardTiming ? nil : journey.timingState.timing
+        let context = journey.timingContext
+        let hidesUnconfirmedOnboardTiming = context?.isOnboard == true
+            && context?.onboardTripId == nil
+        let matchingTiming = context.flatMap { current in
+            journey.timingState.timing.flatMap { $0.context == current ? $0 : nil }
+        }
+        let timing = hidesUnconfirmedOnboardTiming ? nil : matchingTiming
         let now = Date()
         self.journeyArrival = timing?.destinationArrival
-        if hidesUnconfirmedOnboardTiming {
-            self.etaStatusText = nil
-        } else {
-            switch journey.timingState.status {
+        if let timing {
+            switch timing.status {
             case .idle, .current: self.etaStatusText = nil
             case .loading: self.etaStatusText = "Finding journey ETA"
             case .stale: self.etaStatusText = "Updating live times"
             case .unavailable: self.etaStatusText = "Journey ETA unavailable"
             }
+        } else {
+            self.etaStatusText = nil
         }
         let legArrival = timing?.currentLegArrival?.time
             ?? timing?.selectedItinerary?.legs.first?.arrival
@@ -314,8 +318,7 @@ struct JourneyPresentationState: Equatable, Codable {
         } else {
             self.departureRecommendation = nil
         }
-        self.timingWarning = hidesUnconfirmedOnboardTiming
-            ? nil : Self.inAppWarningMessage(for: journey, relativeTo: now)
+        self.timingWarning = Self.inAppWarningMessage(for: journey, timing: timing, relativeTo: now)
         self.timingSteps = timing?.selectedItinerary.map {
             Self.timingSteps(for: $0, legs: journey.legOrder)
         } ?? []

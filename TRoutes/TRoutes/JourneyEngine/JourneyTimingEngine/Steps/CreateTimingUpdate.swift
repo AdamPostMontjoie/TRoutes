@@ -239,7 +239,8 @@ extension JourneyTimingEngine {
             recommendedDeparture: selection.recommendsLaterDeparture
                 ? selection.recommendedJourney.map(makeRecommendedDeparture)
                 : nil,
-            monitoredConnection: selection.monitoredConnection
+            monitoredConnection: selection.monitoredConnection,
+            context: context
         )
     }
 

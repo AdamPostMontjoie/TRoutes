@@ -97,7 +97,7 @@ actor NotificationManager {
 
     private func transferApproachingMessage(_ details: UpcomingArrivalNoticeDetails) -> String {
         var message = "Your transfer at \(details.stopName) is the next stop."
-        if let arrival = details.arrival {
+        if let arrival = details.arrivalWorthMentioning(relativeTo: Date()) {
             message += " Expected arrival \(relativeDescription(for: arrival))."
         }
 
@@ -121,7 +121,7 @@ actor NotificationManager {
 
     private func destinationNextMessage(_ details: UpcomingArrivalNoticeDetails) -> String {
         var message = "Your destination, \(details.stopName), is next."
-        if let arrival = details.arrival {
+        if let arrival = details.arrivalWorthMentioning(relativeTo: Date()) {
             message += " Expected arrival \(relativeDescription(for: arrival))."
         }
         return message

@@ -139,6 +139,8 @@ struct JourneyTimingPlan: Equatable, Codable, Sendable {
     
     /// The immediate connection being monitored.
     let monitoredConnection: JourneyConnectionTiming?
+    /// The journey phase used for this plan; older saved plans have no stamp.
+    var context: JourneyTimingContext? = nil
 
     /// The current leg's selected end-stop time, if that leg has timing.
     var currentLegArrival: SelectedStopTime? {

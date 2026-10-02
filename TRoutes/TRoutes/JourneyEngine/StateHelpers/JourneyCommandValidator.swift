@@ -72,6 +72,8 @@ struct JourneyCommandValidator {
                 let details = BoardingNoticeDetails(leg: resolvedLeg)
                 effects.append(.createNotification(intent: .missedVehicle(details)))
             }
+            state.trackedVehicleId = nil
+            state.trackedTripId = nil
             effects.append(.resetTrackingState)
             
             if state.currentStop?.acceptableStopIds.contains(id) == true,
@@ -169,7 +171,9 @@ struct JourneyCommandValidator {
             }
             return []
         }
-        
+
+        state.trackedVehicleId = nil
+        state.trackedTripId = nil
         var effects: [JourneyEffect] = [.resetTrackingState]
         
         if state.movementStatus == .atStop,

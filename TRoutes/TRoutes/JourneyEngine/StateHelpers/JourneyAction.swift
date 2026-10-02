@@ -71,10 +71,17 @@ enum JourneyAction: Equatable {
                 ]
             }
 
-            let transferNotice = state.timingState.timing.flatMap {
-                BoardingNoticeDetails(
+            let transferNotice: BoardingNoticeDetails? = state.timingState.timing.flatMap { timingPlan in
+                guard let arrivingLegId = state.currentLeg?.id,
+                      let trackedTripId = state.trackedTripId,
+                      timingPlan.status != .idle,
+                      timingPlan.context == JourneyTimingContext(
+                          timingLegId: arrivingLegId,
+                          phase: .onboard(tripId: trackedTripId)
+                      ) else { return nil }
+                return BoardingNoticeDetails(
                     recommendation: nil,
-                    timingPlan: $0,
+                    timingPlan: timingPlan,
                     legs: state.legOrder
                 )
             }
@@ -310,31 +317,32 @@ enum JourneyAction: Equatable {
             effects.append(.createNotification(intent: .departureRecommendation(details, isSingleLine: state.legOrder.count == 1)))
         }
 
-        //A new connection is explained by the progression notification. Only
-        //an independently changing assessment reaches this notification path.
-        if let previousConnection = previousTiming?.monitoredConnection,
-           let currentConnection = update.timing.monitoredConnection,
-           previousConnection.isSameConnection(as: currentConnection) {
+        //Notify when the selected connection becomes urgent, or when no
+        //feasible journey remains and the watched service is at risk.
+        if let previousTiming,
+           previousTiming.context == update.context,
+           let previousConnection = previousTiming.notificationConnection(arrivingLegId: update.context.timingLegId),
+           let currentConnection = update.timing.notificationConnection(arrivingLegId: update.context.timingLegId) {
+            let sameConnection = previousConnection.isSameConnection(as: currentConnection)
             let urgencyIncreased = currentConnection.warning.notificationUrgency
                 > previousConnection.warning.notificationUrgency
             let becameTightHighConsequence = currentConnection.warning == .tightHighConsequence
-                && urgencyIncreased
+                && (sameConnection ? urgencyIncreased : previousConnection.warning != .tightHighConsequence)
             let becameNotifiableLikelyMiss = currentConnection.warning == .likelyMiss
-                && previousConnection.warning != .likelyMiss
                 && (currentConnection.isHighConsequence || previousConnection.isHighConsequence)
+                && ((sameConnection && previousConnection.warning != .likelyMiss)
+                    || (previousTiming.selectedItinerary != nil && update.timing.selectedItinerary == nil))
 
-            let selectedConnection = update.timing.selectedItinerary?.connections.contains {
-                $0.isSameConnection(as: currentConnection)
-            } == true
             let updatedEta = update.timing.destinationArrival
-            let previousEta = previousTiming?.destinationArrival
+            let previousEta = previousTiming.destinationArrival
             let etaImproved = updatedEta.map { newEta in
                 previousEta.map { newEta < $0 } ?? true
             } ?? false
-            let recoveredSelectedConnection = previousConnection.warning == .likelyMiss
+            let recoveredSelectedConnection = sameConnection
+                && previousConnection.warning == .likelyMiss
                 && currentConnection.warning.notificationUrgency
                     < previousConnection.warning.notificationUrgency
-                && selectedConnection
+                && update.timing.selectedItinerary != nil
                 && etaImproved
 
             if becameTightHighConsequence
@@ -344,10 +352,10 @@ enum JourneyAction: Equatable {
                     $0.id == currentConnection.departingLegId
                 }
                 let details = ConnectionWarningChangedDetails(
-                    boardingTime: update.timing.nextLegBoardingTime,
+                    boardingTime: currentConnection.boardingTime,
                     monitoredConnection: currentConnection,
                     eta: updatedEta,
-                    previousBoardingTime: previousTiming?.nextLegBoardingTime,
+                    previousBoardingTime: previousConnection.boardingTime,
                     previousEta: previousEta,
                     departingLeg: departingLeg,
                     previousWarning: previousConnection.warning,
@@ -398,6 +406,7 @@ enum JourneyAction: Equatable {
         }
 
         if let timingPlan = state.timingState.timing,
+           timingPlan.context == state.timingContext,
            let resolvedLeg = state.currentLeg,
            let legTiming = timingPlan.currentLeg?.resolvedLegId == resolvedLeg.id
                 ? timingPlan.currentLeg
@@ -410,8 +419,7 @@ enum JourneyAction: Equatable {
                ) {
                 effects.append(.createNotification(intent: .destinationNext(details)))
             } else if case .transfer = nextStop.journeyRole,
-                      let connection = timingPlan.monitoredConnection,
-                      connection.arrivingLegId == legTiming.resolvedLegId,
+                      let connection = timingPlan.notificationConnection(arrivingLegId: legTiming.resolvedLegId),
                       let details = UpcomingArrivalNoticeDetails(
                           legTiming: legTiming,
                           connectionTiming: connection,
