@@ -121,7 +121,6 @@ extension MBTAClient:DependencyKey {
                 let displayFormatter = DateFormatter()
                 displayFormatter.timeStyle = .short
                 
-                let calendarComparator = Calendar.current
                 let now = Date()
                 var seenVehicleIds = Set<String>()
                 var upcomingTimes: [TransitPrediction] = []
@@ -142,7 +141,7 @@ extension MBTAClient:DependencyKey {
                             display = "Boarding"
                         } else if let date = arrivalDate ?? departureDate, date >= now {
                             // 2. If no status, calculate the "minutes away" countdown
-                            let minutesAway = calendarComparator.dateComponents([.minute], from: now, to: date).minute ?? 0
+                            let minutesAway = TransitCountdown.minutes(until: date, from: now)
                             display = minutesAway <= 0 ? "Arriving" : "\(minutesAway) min"
                         } else {
                             continue

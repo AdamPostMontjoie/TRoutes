@@ -19,6 +19,24 @@ private func formatIslandTime(_ time: String) -> String {
     return time.replacingOccurrences(of: " min", with: "m")
 }
 
+// The overlay only uses space already left by the header's spacer.
+private struct JourneyETAView: View {
+    let arrival: Date?
+
+    var body: some View {
+        if let arrival {
+            ViewThatFits(in: .horizontal) {
+                Text(JourneyAttributes.etaText(arrival, relativeTo: Date()))
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Color.clear.frame(width: 0, height: 0)
+            }
+        }
+    }
+}
+
 struct JourneyLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JourneyAttributes.self) { context in
@@ -183,6 +201,11 @@ struct JourneyExpandedIslandView: View {
                     .foregroundStyle(.primary)
                 
                 Spacer()
+                    .overlay(alignment: .trailing) {
+                        if !state.shortRouteName.isEmpty || !state.currentLocationContext.isEmpty {
+                            JourneyETAView(arrival: state.journeyArrival)
+                        }
+                    }
             }
             
             // Bottom Level: Focus Data (ETAs + Train Logo)
@@ -317,6 +340,11 @@ struct JourneyLockScreenView: View {
                             .minimumScaleFactor(0.85)
                     }
                     Spacer()
+                        .overlay(alignment: .trailing) {
+                            if !state.shortRouteName.isEmpty || !state.routeDestination.isEmpty {
+                                JourneyETAView(arrival: state.journeyArrival)
+                            }
+                        }
                 }
                 
                 // Mid Level: Context

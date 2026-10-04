@@ -17,6 +17,7 @@ actor JourneyTimingEngine {
     private var refreshSessionId = UUID()
     private var generation: UInt64 = 0
     private(set) var latestSnapshot: RouteTimingSnapshot?
+    private var lastBoardingSnapshot: RouteTimingSnapshot?
     private var predictionHistory: RoutePredictionHistory?
 
     /// Runs the route-wide timing pipeline without mutating JourneyState.
@@ -59,12 +60,26 @@ actor JourneyTimingEngine {
             context: context,
             now: fetchedAt
         )
-        let mergedCalls = reconciliation.calls
+        var mergedCalls = reconciliation.calls
+        if context.isOnboard,
+           let tripId = context.onboardTripId,
+           let previous = lastBoardingSnapshot,
+           previous.resolvedRouteId == route.id,
+           previous.context.timingLegId == context.timingLegId,
+           let leg = queryPlan.legs.first(where: { $0.id == context.timingLegId }) {
+            mergedCalls = retainingConfirmedOnboardOrigin(
+                in: mergedCalls,
+                previousOptions: previous.optionsByLeg[leg.id] ?? [],
+                leg: leg,
+                tripId: tripId
+            )
+        }
 
         // Step 3: construct every valid same-trip option for every leg.
         let optionsByLeg = buildTripOptionsByLeg(
             queryPlan: queryPlan,
             mergedCalls: mergedCalls,
+            currentPredictionCalls: unmergedCalls.predictionCalls,
             context: context,
             now: fetchedAt
         )
@@ -111,6 +126,9 @@ actor JourneyTimingEngine {
         if sessionId == refreshSessionId,
            refreshGeneration == generation {
             latestSnapshot = snapshot
+            if !context.isOnboard {
+                lastBoardingSnapshot = snapshot
+            }
             predictionHistory = RoutePredictionHistory(
                 resolvedRouteId: route.id,
                 observations: reconciliation.observations
@@ -138,6 +156,7 @@ actor JourneyTimingEngine {
         generation &+= 1
         refreshSessionId = UUID()
         latestSnapshot = nil
+        lastBoardingSnapshot = nil
         predictionHistory = nil
         await PredictionManager.shared.clearScheduleCache()
     }

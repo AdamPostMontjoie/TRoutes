@@ -11,6 +11,7 @@ import SwiftUI
 struct ActiveJourneyDisplayView: View {
     let store: StoreOf<ActiveJourneyDisplayFeature>
     @State private var refreshRotation = 0.0
+    @State private var isTimingExpanded = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,7 +40,7 @@ struct ActiveJourneyDisplayView: View {
                     Spacer()
                     cancelButton
                 }
-                
+
                 // Mid Level: Context
                 ViewThatFits(in: .horizontal) {
                     // Fits horizontally
@@ -76,6 +77,15 @@ struct ActiveJourneyDisplayView: View {
                         foregroundColor: transitForegroundColor
                     )
                     .padding(.top, 4)
+                }
+
+                if store.presentation.journeyArrival != nil
+                    || store.presentation.currentLegArrival != nil
+                    || store.presentation.etaStatusText != nil
+                    || store.presentation.departureRecommendation != nil
+                    || store.presentation.timingWarning != nil {
+                    Divider()
+                    timingSection
                 }
                 
                 if store.journey?.pendingDepartureConfirmation == true {
@@ -152,6 +162,121 @@ struct ActiveJourneyDisplayView: View {
             return Color(hex: "#7C878E")
         }
         return store.presentation.currentTransitType?.color ?? Color.accentColor
+    }
+
+    private var timingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if store.presentation.journeyArrival != nil || store.presentation.currentLegArrival != nil {
+                TimelineView(.periodic(from: .now, by: 30)) { timeline in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            if let arrival = store.presentation.journeyArrival {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isTimingExpanded.toggle()
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "clock")
+                                        Text(JourneyPresentationState.etaText(arrival, relativeTo: timeline.date))
+                                        Image(systemName: isTimingExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.caption2)
+                                    }
+                                    .font(.subheadline.bold())
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityValue(isTimingExpanded ? "Expanded" : "Collapsed")
+                            }
+                            Spacer(minLength: 0)
+                            if let legArrival = store.presentation.currentLegArrival {
+                                Text(JourneyPresentationState.etaText(legArrival, relativeTo: timeline.date, isCurrentLeg: true))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                        }
+
+                        if isTimingExpanded && !store.presentation.timingSteps.isEmpty {
+                            VStack(alignment: .leading, spacing: 9) {
+                                ForEach(Array(store.presentation.timingSteps.enumerated()), id: \.offset) { _, step in
+                                    timingStepRow(step, at: timeline.date)
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+            }
+
+            if let status = store.presentation.etaStatusText {
+                Text(status)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let recommendation = store.presentation.departureRecommendation {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(recommendation.title).fontWeight(.semibold)
+                        Text(recommendation.detail)
+                    }
+                } icon: {
+                    Image(systemName: "checkmark.circle")
+                }
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let warning = store.presentation.timingWarning {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(warning.title).fontWeight(.semibold)
+                        Text(warning.detail)
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(.subheadline)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func timingStepRow(_ step: JourneyPresentationState.TimingStep, at now: Date) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            if let badge = step.badgeText, let type = step.transitType {
+                let color = badge.hasPrefix("SL") ? Color(hex: "#7C878E") : type.color
+                Text(badge)
+                    .font(.caption2.bold())
+                    .foregroundStyle(color.isLightBackground ? .black : .white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(color)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            } else {
+                Image(systemName: step.iconName)
+                    .font(.footnote)
+                    .foregroundStyle(step.transitType?.color ?? .secondary)
+                    .frame(width: 24)
+            }
+            Text(step.displayText(at: now))
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+            if let sourceBadge = step.sourceBadgeText {
+                Text(sourceBadge)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.secondary.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .fixedSize()
+            }
+        }
     }
     
     private var transferColor: Color {

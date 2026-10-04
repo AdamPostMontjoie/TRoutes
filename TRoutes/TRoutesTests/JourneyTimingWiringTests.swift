@@ -8,6 +8,118 @@ import Testing
 @testable import TRoutes
 
 struct JourneyTimingWiringTests {
+    @Test func sameStopTransferIncludesOneMinuteWalkingAllowance() {
+        let leg = makeRoute().legs[0]
+        let requirement = ConnectionTimingPolicy().transferRequirement(from: leg, to: leg)
+
+        #expect(requirement.minimumTransferTime == 60)
+        #expect(requirement.preferredReliabilityBuffer == 2 * 60)
+    }
+
+    @Test func boardingNoticeUsesEventRatherThanSourceForWording() throws {
+        let leg = makeRoute().legs[0]
+        let time = Date(timeIntervalSince1970: 50_000)
+        let boardingTime = SelectedStopTime(time: time, source: .prediction, event: .departure)
+        let recommendation = RecommendedDeparture(
+            resolvedLegId: leg.id, tripId: "trip", boardingTime: boardingTime
+        )
+        let timing = JourneyTimingPlan(
+            status: .current, selectedItinerary: nil, currentLeg: nil,
+            recommendedDeparture: recommendation, monitoredConnection: nil
+        )
+        let details = try #require(BoardingNoticeDetails(recommendation: recommendation, timingPlan: timing, legs: [leg]))
+
+        #expect(details.boardingTime == boardingTime)
+    }
+
+    @Test func approachingStopNoticeDoesNotCallDepartureAnArrival() throws {
+        let leg = makeRoute().legs[0]
+        let time = Date(timeIntervalSince1970: 55_000)
+        let boardingTime = SelectedStopTime(time: time, source: .prediction, event: .departure)
+        let fallbackLeg = JourneyLegTiming(
+            resolvedLegId: leg.id, tripId: "trip", routeId: leg.mbtaRouteId,
+            directionId: leg.mbtaDirectionId,
+            originStopId: leg.startStop.mbtaStopId,
+            destinationStopId: leg.endStop.mbtaStopId,
+            boardingTime: boardingTime,
+            arrivalTime: SelectedStopTime(
+                time: time.addingTimeInterval(300), source: .prediction,
+                event: .departure
+            )
+        )
+        let actualArrivalLeg = JourneyLegTiming(
+            resolvedLegId: leg.id, tripId: "trip", routeId: leg.mbtaRouteId,
+            directionId: leg.mbtaDirectionId,
+            originStopId: leg.startStop.mbtaStopId,
+            destinationStopId: leg.endStop.mbtaStopId,
+            boardingTime: boardingTime,
+            arrivalTime: SelectedStopTime(
+                time: time.addingTimeInterval(300), source: .prediction,
+                event: .arrival
+            )
+        )
+
+        #expect(UpcomingArrivalNoticeDetails(legTiming: fallbackLeg, connectionTiming: nil, legs: [leg])?.arrival == nil)
+        #expect(UpcomingArrivalNoticeDetails(legTiming: actualArrivalLeg, connectionTiming: nil, legs: [leg])?.arrival == actualArrivalLeg.arrival)
+    }
+
+    @Test func timingSnapshotRoundTripsSelectedStopTimes() throws {
+        var state = JourneyState(route: makeRoute())
+        let boardingTime = SelectedStopTime(
+            time: Date(timeIntervalSince1970: 60_000),
+            source: .prediction,
+            event: .arrival
+        )
+        let arrivalTime = SelectedStopTime(
+            time: Date(timeIntervalSince1970: 65_000),
+            source: .schedule,
+            event: .departure
+        )
+        state.timingState.timing = JourneyTimingPlan(
+            status: .current, selectedItinerary: nil,
+            currentLeg: JourneyLegTiming(
+                resolvedLegId: state.legOrder[0].id,
+                tripId: "trip", routeId: "route", directionId: 0,
+                originStopId: "boarding", destinationStopId: "final",
+                boardingTime: boardingTime, arrivalTime: arrivalTime
+            ),
+            recommendedDeparture: RecommendedDeparture(
+                resolvedLegId: state.legOrder[0].id,
+                tripId: "trip",
+                boardingTime: boardingTime
+            ),
+            monitoredConnection: nil
+        )
+
+        let encoded = try JSONEncoder().encode(state)
+        let restored = try JSONDecoder().decode(JourneyState.self, from: encoded)
+
+        #expect(restored.timingState.timing?.recommendedDeparture?.boardingTime == boardingTime)
+        #expect(restored.timingState.timing?.currentLegArrival == arrivalTime)
+    }
+
+    @Test func currentLegArrivalIsNilWithoutCurrentLegTiming() {
+        let emptyPlan = JourneyTimingPlan(
+            status: .unavailable, selectedItinerary: nil, currentLeg: nil,
+            recommendedDeparture: nil, monitoredConnection: nil
+        )
+
+        #expect(emptyPlan.currentLegArrival == nil)
+    }
+
+    @Test func malformedTimingSnapshotStillThrows() throws {
+        let encoded = try JSONEncoder().encode(JourneyState(route: makeRoute()))
+        var json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var timingJSON = try #require(json["timingState"] as? [String: Any])
+        timingJSON["generation"] = "not a number"
+        json["timingState"] = timingJSON
+        let malformed = try JSONSerialization.data(withJSONObject: json)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(JourneyState.self, from: malformed)
+        }
+    }
+
     @Test func timingUpdateHydratesExistingPredictionState() throws {
         var state = JourneyState(route: makeRoute())
         let context = try #require(state.timingContext)
@@ -425,12 +537,14 @@ struct JourneyTimingWiringTests {
             refreshSessionId: sessionId,
             generation: generation,
             fetchedAt: Date(timeIntervalSince1970: 1_000),
-            status: .current,
             predictionSlices: slices,
-            recommendedDeparture: nil,
-            currentLegArrival: nil,
-            destinationArrival: nil,
-            connection: nil
+            timing: JourneyTimingPlan(
+                status: .current,
+                selectedItinerary: nil,
+                currentLeg: nil,
+                recommendedDeparture: nil,
+                monitoredConnection: nil
+            )
         )
     }
 

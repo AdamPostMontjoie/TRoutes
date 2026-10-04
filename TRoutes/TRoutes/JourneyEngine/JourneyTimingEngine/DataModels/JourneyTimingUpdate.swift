@@ -20,10 +20,6 @@ struct JourneyTimingUpdate: Equatable, Sendable {
     let refreshSessionId: UUID
     let generation: UInt64
     let fetchedAt: Date
-    let status: JourneyTimingStatus
     let predictionSlices: [PredictionSlice]
-    let recommendedDeparture: RecommendedDeparture?
-    let currentLegArrival: Date?
-    let destinationArrival: Date?
-    let connection: TransferTiming?
+    let timing: JourneyTimingPlan
 }

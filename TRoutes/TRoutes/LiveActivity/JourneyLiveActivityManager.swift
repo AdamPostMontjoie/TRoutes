@@ -70,6 +70,7 @@ public actor LiveActivityManager {
             currentTransitForegroundColor: foregroundHex(for: presentation.currentTransitType, shortRouteName: presentation.shortRouteName),
             currentIconName: presentation.currentTransitType?.iconName,
             isEndOfJourney: presentation.isEndOfJourney,
+            journeyArrival: presentation.journeyArrival,
             activePredictions: presentation.activePredictions,
             activePredictionLoadingState: activeLoadingState,
             transferPredictions: presentation.transferPredictions,

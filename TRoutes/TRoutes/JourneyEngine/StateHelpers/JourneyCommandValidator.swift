@@ -67,8 +67,13 @@ struct JourneyCommandValidator {
             
         case let .missedVehicle(stopId: id):
             print("JourneyEngine missedVehicle for \(id)")
-            var effects: [JourneyEffect] = []
-            effects.append(.sendNotification("Missed vehicle at \(id)", user: "Looks like you missed this train. Recalculating next departure..."))
+            var effects: [JourneyEffect] = [.sendDebugNotification("Missed vehicle at \(id)")]
+            if let resolvedLeg = state.currentLeg {
+                let details = BoardingNoticeDetails(leg: resolvedLeg)
+                effects.append(.createNotification(intent: .missedVehicle(details)))
+            }
+            state.trackedVehicleId = nil
+            state.trackedTripId = nil
             effects.append(.resetTrackingState)
             
             if state.currentStop?.acceptableStopIds.contains(id) == true,
@@ -129,13 +134,16 @@ struct JourneyCommandValidator {
         case let .monitoringFailed(stopId: stopId, error: error, message: message):
             print("monitoring failed for \(stopId): \(error)\(message.map { " - \($0)" } ?? "")")
             let isSurface = state.monitoringMode == .surface
-            let userMessage = (isSurface && error == .locationUnknown) ? "GPS signal lost or inaccurate. Tracking may be degraded." : nil
             let notificationMessage = if let message, !message.isEmpty {
                 "monitoring failed for \(stopId): \(error) (\(message))"
             } else {
                 "monitoring failed for \(stopId): \(error)"
             }
-            return [.sendNotification(notificationMessage, user: userMessage)]
+            var effects: [JourneyEffect] = [.sendDebugNotification(notificationMessage)]
+            if isSurface && error == .locationUnknown {
+                effects.append(.createNotification(intent: .trackingDegraded))
+            }
+            return effects
 
         case let .vehicleSearchResult(vehicleId, tripId):
             guard state.monitoringMode == .surface,
@@ -163,7 +171,9 @@ struct JourneyCommandValidator {
             }
             return []
         }
-        
+
+        state.trackedVehicleId = nil
+        state.trackedTripId = nil
         var effects: [JourneyEffect] = [.resetTrackingState]
         
         if state.movementStatus == .atStop,

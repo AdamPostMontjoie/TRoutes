@@ -8,11 +8,11 @@
 import Foundation
 
 /// The progression facts JourneyTimingEngine uses in order to interpret times.
-struct JourneyTimingContext: Equatable, Sendable {
+struct JourneyTimingContext: Equatable, Codable, Sendable {
     let timingLegId: UUID
     let phase: Phase
 
-    enum Phase: Equatable, Sendable {
+    enum Phase: Equatable, Codable, Sendable {
         case approachingBoarding
         case atBoardingStop
         case onboard(tripId: String?)

@@ -19,9 +19,8 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
     let legId: UUID
     let origin: TripStopTiming
     let destination: TripStopTiming
-    let departure: Date
-    let arrival: Date
-    let departureTimeSource: TimingSource
+    let boardingTime: SelectedStopTime
+    let arrivalTime: SelectedStopTime
     let sourceComposition: TimingSourceComposition
 
     /// Rejects mismatched trip-stop timings before journey solving.
@@ -33,19 +32,17 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
         guard origin.key.tripId == destination.key.tripId,
               origin.routeId == destination.routeId,
               origin.directionId == destination.directionId,
-              let departure = origin.effectiveDeparture,
-              let departureTimeSource = origin.effectiveDepartureSource,
-              let arrival = destination.effectiveArrival,
-              arrival >= departure else {
+              let boardingTime = origin.selectedBoardingTime,
+              let arrivalTime = destination.selectedArrivalTime,
+              arrivalTime.time >= boardingTime.time else {
             return nil
         }
 
         self.legId = legId
         self.origin = origin
         self.destination = destination
-        self.departure = departure
-        self.arrival = arrival
-        self.departureTimeSource = departureTimeSource
+        self.boardingTime = boardingTime
+        self.arrivalTime = arrivalTime
 
         switch (origin.availability, destination.availability) {
         case (.predicted, .predicted):
@@ -59,6 +56,18 @@ struct LegTripOption: Equatable, Sendable, Identifiable {
 
     var tripId: String {
         origin.key.tripId
+    }
+
+    var departure: Date {
+        boardingTime.time
+    }
+
+    var arrival: Date {
+        arrivalTime.time
+    }
+
+    var arrivalTimeSource: TimingSource {
+        arrivalTime.source
     }
 
     var routeId: String {
@@ -198,5 +207,5 @@ struct RouteTimingSnapshot: Equatable, Sendable {
     let coverageByLeg: [UUID: LegTimingCoverage]
     let etaJourney: TimedJourney?
     let recommendedJourney: TimedJourney?
-    let connection: TransferTiming?
+    let monitoredConnection: JourneyConnectionTiming?
 }

@@ -10,6 +10,30 @@ import Testing
 struct JourneyPredictionSliceTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
+    @Test func countdownRoundsElapsedSecondsToNearestMinute() {
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(29), from: now) == 0)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(30), from: now) == 1)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(61), from: now) == 1)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(90), from: now) == 2)
+        #expect(TransitCountdown.minutes(until: now.addingTimeInterval(-30), from: now) == 0)
+    }
+
+    @Test func predictionDisplayUsesSharedCountdown() async {
+        let eventTime = now.addingTimeInterval(61)
+        let prediction = TripStopTiming(
+            key: TripStopKey(tripId: "trip", stopId: "boarding", stopSequence: 1),
+            routeId: "route", directionId: 0, vehicleId: "vehicle",
+            headsign: "Destination", isLastTrip: nil,
+            scheduleId: nil, predictionId: "prediction",
+            scheduled: nil, predicted: StopTimes(arrival: eventTime, departure: nil),
+            status: nil, scheduleRelationship: nil, availability: .predicted
+        )
+
+        let display = await JourneyTimingEngine.shared.makeTransitPrediction(from: prediction, now: now)?.display
+
+        #expect(display == "1 min")
+    }
+
     @Test func threeLiveCallsDoNotUseSchedules() async {
         let live = [
             call("live-3", minutesAway: 15, source: .prediction),
@@ -31,7 +55,7 @@ struct JourneyPredictionSliceTests {
         #expect(slice.displayPredictions.allSatisfy { $0.display.contains("min") })
     }
 
-    @Test func twoLiveCallsFillWithOneDistinctSchedule() async {
+    @Test func twoLiveCallsFillWithScheduleAfterLastPrediction() async {
         let raw = UnmergedTimingCalls(
             predictionCalls: [
                 call("live-1", minutesAway: 5, source: .prediction),
@@ -41,7 +65,10 @@ struct JourneyPredictionSliceTests {
                 call("live-1", minutesAway: 7, source: .schedule),
                 call("wrong-direction", minutesAway: 8, source: .schedule, direction: 1),
                 call("canceled", minutesAway: 9, source: .schedule, status: "Canceled"),
+                call("before-live", minutesAway: 3, source: .schedule),
                 call("schedule-1", minutesAway: 10, source: .schedule),
+                call("at-cutoff", minutesAway: 15, source: .schedule),
+                call("live-2", minutesAway: 25, source: .schedule),
                 call("schedule-2", minutesAway: 20, source: .schedule)
             ]
         )
@@ -50,11 +77,11 @@ struct JourneyPredictionSliceTests {
             for: target(), rawCalls: raw, now: now
         )
 
-        #expect(slice.displayPredictions.map(\.tripId) == ["live-1", "schedule-1", "live-2"])
+        #expect(slice.displayPredictions.map(\.tripId) == ["live-1", "live-2", "schedule-2"])
         #expect(slice.livePredictions.map(\.tripId) == ["live-1", "live-2"])
         #expect(slice.displayPredictions[0].display.contains("min"))
-        #expect(!slice.displayPredictions[1].display.contains("min"))
-        #expect(slice.displayPredictions[2].display.contains("min"))
+        #expect(slice.displayPredictions[1].display.contains("min"))
+        #expect(!slice.displayPredictions[2].display.contains("min"))
     }
 
     @Test func noLiveCallsUseOnlyFutureSchedulesUpToThree() async {

@@ -43,18 +43,17 @@ struct JourneySelectionPolicy {
         return journeySignature(candidate) < journeySignature(current)
     }
 
-    /// Before the first stop, a complete buffered journey is preferred over an
-    /// unbuffered one. Within that class, arrive earliest and take the latest
-    /// feeder that preserves the selected downstream service.
+    /// Before the first stop, prefer the earliest feasible arrival. For the
+    /// same arrival, favor buffered connections, then the latest safe feeder.
     private func isPreferredRecommendation(_ candidate: TimedJourney, over current: TimedJourney) -> Bool {
+        if candidate.destinationArrival != current.destinationArrival {
+            return candidate.destinationArrival < current.destinationArrival
+        }
+
         let candidateBuffered = meetsEveryReliabilityBuffer(candidate)
         let currentBuffered = meetsEveryReliabilityBuffer(current)
         if candidateBuffered != currentBuffered {
             return candidateBuffered
-        }
-
-        if candidate.destinationArrival != current.destinationArrival {
-            return candidate.destinationArrival < current.destinationArrival
         }
 
         if !candidateBuffered {

@@ -10,7 +10,7 @@ enum RouteFetchStrategy {
     case fetchRoutes(filterKey: String, filterValue: String)
 }
 
-enum TransitType: String, Codable, CaseIterable {
+enum TransitType: String, Codable, CaseIterable, Sendable {
     
     case redLine = "Red Line"
     case orangeLine = "Orange Line"

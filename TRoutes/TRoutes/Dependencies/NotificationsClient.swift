@@ -13,7 +13,8 @@ import UIKit
 struct NotificationsClient {
     var requestAuthorization: @Sendable () async -> Void
     var debugNotification: @Sendable (String) async -> Void
-    var userNotification:@Sendable (String) async -> Void
+    var userNotification:@Sendable (String, String, Bool) async -> Void
+    var clearDeliveredNotifications:@Sendable () -> Void
 }
 
 extension NotificationsClient: DependencyKey {
@@ -48,21 +49,15 @@ extension NotificationsClient: DependencyKey {
                 print("Failed to fire debug notif: \(error)")
             }
         },
-        userNotification: { message in
-            guard !DebugAvailability.isDebugActive else {
-                return
-            }
-
-            guard await UIApplication.shared.applicationState == .background else {
-                return
-            }
-            
+        userNotification: { title, message, isTimeSensitive in
             // Construct and present the user-facing alert notification
             let content = UNMutableNotificationContent()
-            content.title = "T Routes"
+            content.title = title
             content.body = message
             content.sound = .default
-            content.interruptionLevel = .timeSensitive
+            if isTimeSensitive {
+                content.interruptionLevel = .timeSensitive
+            }
             
             let request = UNNotificationRequest(
                 identifier: UUID().uuidString,
@@ -75,6 +70,9 @@ extension NotificationsClient: DependencyKey {
             } catch {
                 print("Failed to fire user notif: \(error)")
             }
+        },
+        clearDeliveredNotifications: {
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         }
     )
 }

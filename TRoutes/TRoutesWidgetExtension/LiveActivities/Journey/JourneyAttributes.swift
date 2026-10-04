@@ -6,6 +6,7 @@
 //
 
 import ActivityKit
+import Foundation
 
 struct JourneyAttributes: ActivityAttributes {
     public enum WidgetPredictionLoadingState: Codable, Hashable {
@@ -34,6 +35,7 @@ struct JourneyAttributes: ActivityAttributes {
         public let currentTransitForegroundColor: String // Hex string
         public let currentIconName: String? // Missing icon
         public let isEndOfJourney: Bool
+        public let journeyArrival: Date?
         
         public let activePredictions: [PredictionDisplay]
         public let activePredictionLoadingState: WidgetPredictionLoadingState?
@@ -47,4 +49,12 @@ struct JourneyAttributes: ActivityAttributes {
     
     // Any static properties (rarely change during a journey)
     public let journeyId: String
+
+    static func etaText(_ arrival: Date, relativeTo now: Date) -> String {
+        let remaining = arrival.timeIntervalSince(now)
+        if remaining < 3600 {
+            return "\(max(0, Int(ceil(remaining / 60))))m"
+        }
+        return arrival.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+    }
 }
