@@ -210,15 +210,19 @@ extension DatabaseClient: DependencyKey {
             },
             findNearbyStations: { latitude, longitude, limit in
                 let context = ModelContext(referenceContainer)
-                // Start with approx 800m radius (~0.008 degrees)
-                var latDelta = 0.008
-                var lonDelta = 0.008
+                let userLocation = CLLocation(latitude: latitude, longitude: longitude)
+                let maximumRadius: CLLocationDistance = 120 * 1_609.344
+                var radius: CLLocationDistance = 800
                 
                 var results: [Station] = []
                 var totalStops = 0
                 
-                // Expand until we find enough stops (equilibrium), up to ~50km
-                while totalStops < limit && latDelta <= 0.5 {
+                // Expand until we find enough stops, up to 120 miles.
+                while totalStops < limit {
+                    let searchRadius = min(radius, maximumRadius)
+                    let latDelta = searchRadius / 110_000
+                    let longitudeScale = max(0.01, cos((abs(latitude) + latDelta) * .pi / 180))
+                    let lonDelta = searchRadius / (110_000 * longitudeScale)
                     let minLat = latitude - latDelta
                     let maxLat = latitude + latDelta
                     let minLon = longitude - lonDelta
@@ -234,9 +238,10 @@ extension DatabaseClient: DependencyKey {
                     let dbStations = try context.fetch(descriptor)
                     
                     if !dbStations.isEmpty {
-                        // Sort by distance using CLLocation for accuracy
-                        let userLocation = CLLocation(latitude: latitude, longitude: longitude)
-                        let sortedDbStations = dbStations.sorted { s1, s2 in
+                        let sortedDbStations = dbStations.filter { station in
+                            let location = CLLocation(latitude: station.latitude, longitude: station.longitude)
+                            return location.distance(from: userLocation) <= searchRadius
+                        }.sorted { s1, s2 in
                             let loc1 = CLLocation(latitude: s1.latitude, longitude: s1.longitude)
                             let loc2 = CLLocation(latitude: s2.latitude, longitude: s2.longitude)
                             return loc1.distance(from: userLocation) < loc2.distance(from: userLocation)
@@ -270,10 +275,8 @@ extension DatabaseClient: DependencyKey {
                         }
                     }
                     
-                    if totalStops < limit {
-                        latDelta *= 2
-                        lonDelta *= 2
-                    }
+                    if searchRadius == maximumRadius { break }
+                    radius *= 2
                 }
                 
                 return results

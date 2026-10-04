@@ -50,6 +50,7 @@ struct StopsListFeature {
         var pinnedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var savedBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
         var nearbyBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
+        var hasLoadedNearbyStops = false
         var displayCoordinates: CLLocationCoordinate2D?
         var nearbyFilter: NearbyFilter = .all
         
@@ -68,6 +69,7 @@ struct StopsListFeature {
         
         case fetchNearby(latitude: Double, longitude: Double)
         case nearbyStopsResponse(Result<[Station], Never>)
+        case nearbyStopsFailed
         case displayCoordinatesUpdated(CLLocationCoordinate2D)
         case nearbyFilterChanged(NearbyFilter)
         
@@ -213,14 +215,19 @@ struct StopsListFeature {
                 return .none
                 
             case let .fetchNearby(latitude, longitude):
+                state.hasLoadedNearbyStops = false
                 return .run { send in
                     do {
                         let stations = try await databaseClient.findNearbyStations(latitude, longitude, 100)
                         await send(.nearbyStopsResponse(.success(stations)))
                     } catch {
-                        await send(.nearbyStopsResponse(.success([])))
+                        await send(.nearbyStopsFailed)
                     }
                 }
+
+            case .nearbyStopsFailed:
+                state.nearbyBanners = []
+                return .none
 
             case let .displayCoordinatesUpdated(coordinates):
                 state.displayCoordinates = coordinates
@@ -234,6 +241,7 @@ struct StopsListFeature {
                 return .none
                 
             case let .nearbyStopsResponse(.success(stations)):
+                state.hasLoadedNearbyStops = true
                 var newBanners: IdentifiedArrayOf<StopBannerFeature.State> = []
                 for station in stations {
                     for stop in station.stops {

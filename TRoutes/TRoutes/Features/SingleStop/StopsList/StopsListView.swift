@@ -62,6 +62,19 @@ struct StopsListView: View {
 
                 Section {
                     if store.isNearbyExpanded {
+                        if store.hasLoadedNearbyStops && store.nearbyBanners.isEmpty {
+                            emptyNearbyRow(
+                                title: "No MBTA stops nearby",
+                                detail: "None are within 120 miles of your location. Search for a station to view arrivals.",
+                                symbol: "location.slash"
+                            )
+                        } else if filteredNearbyStopsAreEmpty {
+                            emptyNearbyRow(
+                                title: "No \(filteredStopType) stops in your nearby list",
+                                detail: "Try All or search for a station.",
+                                symbol: "line.3.horizontal.decrease"
+                            )
+                        }
                         ForEach(
                             store.scope(state: \.nearbyBanners, action: \.nearbyBanners)
                         ) { bannerStore in
@@ -91,6 +104,47 @@ struct StopsListView: View {
                 store.send(.onDisappear)
             }
         }
+    }
+
+    private var filteredNearbyStopsAreEmpty: Bool {
+        store.hasLoadedNearbyStops
+            && !store.nearbyBanners.isEmpty
+            && store.nearbyFilter != .all
+            && !store.nearbyBanners.contains {
+                store.nearbyFilter.includes($0.target.transitType)
+            }
+    }
+
+    private var filteredStopType: String {
+        switch store.nearbyFilter {
+        case .all: "MBTA"
+        case .subway: "subway"
+        case .bus: "bus"
+        case .commuterRail: "Commuter Rail"
+        }
+    }
+
+    private func emptyNearbyRow(title: String, detail: String, symbol: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 36, height: 36)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .combine)
     }
 
     private func collapsibleHeader(
