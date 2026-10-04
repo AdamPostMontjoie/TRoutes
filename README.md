@@ -31,6 +31,10 @@ The Journey Engine is an actor that receives tracking update events and determin
 - **Surface Monitoring:** When a user is at an above ground stop, tracking is done via Core Location. `CLRegion`s are set around stops to increase monitoring frequency as user approaches in order to conserve battery
 - **Underground Monitoring:** When a user is underground, Core Location becomes less reliable, so the MBTA's API and Apple's CoreMotion are needed to assist. API Vehicle Position is used to determine where the user is, with Core Location being used to ensure we aren't tracking the wrong vehicle, and Core Motion assisting with detecting departures quicker and with greater accuracy.
 
+#### Journey Timing
+
+When timing is available during an active journey, T Routes shows an ETA for the destination and, after reaching a boarding stop, an ETA for the current leg when it differs. Expanding the ETA shows the selected journey's boarding and arrival times, transfer walks, and waits, with badges for scheduled times. Before the first boarding stop, the app looks for the earliest arrival, then favors the latest train that gets you there without making a transfer less reliable. For a direct journey, that usually means the next train; a recommendation appears when waiting for a later one makes sense. The app highlights transfers that would mean a long wait or no further service if missed, with a stronger warning when the connection is tight or at risk. The Live Activity shows the whole-journey ETA on the Lock Screen and in the expanded Dynamic Island.
+
 ### Stops
 
 While the Journey Engine handles complex, multi-leg tracking, the Stops tab is designed for the daily commuter who just needs immediate answers. Built on top of a local SwiftData store of the entire MBTA network, it provides instant access to transit data without needing to build a route.
@@ -55,6 +59,10 @@ graph TD
     UGM["UndergroundManager<br/>(CoreLocation & Vehicle API)"] -->|"JourneyCommand<br/>AsyncStream"| JE
     MM["MotionManager<br/>(CoreMotion)"] -->|"JourneyCommand<br/>AsyncStream"| JE
     JE["Journey Engine<br/>(Actor)"]
+    JE -->|"Route + progression context"| JTE["JourneyTimingEngine<br/>(ETAs and journey selection)"]
+    JTE -->|"Timing query"| PM["PredictionManager<br/>(requests and schedule cache)"]
+    PM -->|"Timing calls"| JTE
+    JTE -->|"JourneyTimingUpdate"| JE
     JE -->|"JourneyUpdate<br/>AsyncStream"| TCA["TCA UI"]
     JE -->|"JourneyUpdate<br/>AsyncStream"| LA["LiveActivityManager<br/>(Lock Screen / Dynamic Island)"]
 ```
@@ -62,6 +70,7 @@ graph TD
 ## Technical Highlights
 
 - **Journey Engine Streaming:** When a journey is active, Journey Engine receives new commands via `AsyncStream` from either the Surface or Underground Manager, depending on which mode the state determines it needs. When it receives a new event, it validates it, mutates `JourneyState` based on what needs to happen, saves `JourneyState` to User Defaults, and then runs any effects that the command creates. When `JourneyState` is saved, the TCA UI and Live Activities are updated via `AsyncStream` subscribed to the Journey Engine.
+- **Journey Timing Engine:** The timing pipeline uses predictions and schedules for the remaining legs to pair boarding and arrival times by trip and account for transfer walking time. It selects a complete feasible journey when one meets the current phase's rules. Live predictions take priority at a trip's stops. Schedule-only boarding times remain eligible after the last predicted service, or when no prediction is available. An onboard ETA is withheld without a known trip ID, and a timing request failure does not interrupt journey tracking.
 - **Core Motion Jolt Detection:** While underground, it is difficult to say if the user actually boarded the next train if GPS information is determined to be unreliable. To increase the speed of state evaluation, T Routes uses CMMotionManager accelerometer data at 50Hz to physically detect when a train departs a station. It utilizes a custom 1-second rolling low-pass vector averager to cancel out the noise of human walking, calculates variance to distinguish bouncing from smooth train acceleration, and tracks a "leaky bucket" confidence score over a 4-second window to prevent false positives.
 - **Serverless Setup:** T Routes is fully serverless in order to eliminate server costs and keep the app completely free. A prebuilt SwiftData reference store is bundled with each release and copied locally on first launch. Since the app needs to track user position during a journey, we are able to keep the app alive in the background during tracking. This allows `JourneyState` to be updated seamlessly at all times during a journey, and for the Live Activities to remain accurate even with a locked phone.
 - **Rate Limit Queue:** The MBTA's API allows for 20 requests per minute without an API key, and the Rate Limit Queue is used to ensure we do not go over that limit. Requests are prioritized based on their type, and will be delayed or dropped entirely if the queue is reaching or is over that limit. Routes remain usable without a key, while users can add a free MBTA developer key for the higher-volume Stops feature.
