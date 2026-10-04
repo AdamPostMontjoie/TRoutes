@@ -4,13 +4,14 @@
 [![Swift 6](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Architecture: TCA](https://img.shields.io/badge/Architecture-TCA-lightgrey.svg)](https://github.com/pointfreeco/swift-composable-architecture)
 **A serverless iOS app to track journeys along the T** 
-### 🚀 [Try the Beta on TestFlight!](https://testflight.apple.com/join/PuzRsdkz)
+### [Try on the App Store!](https://apps.apple.com/us/app/t-routes/id6790171706)
 
 <p align="center">
-<img width="250"   alt="IMG_0022" src="https://github.com/user-attachments/assets/956effcd-dd2d-4f7e-9746-d102f78ef878" />
+<img width="250" alt="Screenshot iPhone 17 Pro 10-04-2026 at 12 34 21 PM" src="https://github.com/user-attachments/assets/e11f5e49-5747-49cc-8736-20399a6194a8" />
   &nbsp;&nbsp;&nbsp;&nbsp;
 
-<img width="250"   alt="IMG_0023" src="https://github.com/user-attachments/assets/926d5d8b-1afa-477a-922a-1807b82749f0" />
+<img width="250" alt="Screenshot iPhone 17 Pro 10-04-2026 at 12 38 15 PM" src="https://github.com/user-attachments/assets/8b751b70-3c64-4d30-93f8-9cff74d739a6" />
+
 
 <img width="250"  alt="IMG_1491" src="https://github.com/user-attachments/assets/02f5b258-7533-42b3-b121-406717eb9dba" />
 </p>
